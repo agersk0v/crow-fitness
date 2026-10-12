@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PageEntrance } from "@/components/page-entrance";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ConnectionStatus } from "@/components/connection-status";
 
@@ -18,7 +19,7 @@ export default function Home() {
         <ThemeToggle />
       </header>
 
-      <section className="flex flex-1 flex-col justify-center gap-8 py-16">
+      <PageEntrance className="flex flex-1 flex-col justify-center gap-8 py-16">
         <div className="max-w-2xl">
           <p className="mb-4 text-sm font-medium uppercase tracking-widest text-highlight">
             Your training. Your progress.
@@ -40,7 +41,7 @@ export default function Home() {
           Browse exercises
         </Link>
         <ConnectionStatus />
-      </section>
+      </PageEntrance>
 
       <footer className="border-t border-border pt-6 text-sm text-muted-foreground">
         One person. No accounts. Built for keeping things simple.
