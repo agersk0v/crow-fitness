@@ -38,11 +38,11 @@ export function ExerciseLibrary({
           Exercise library
         </h2>
         {exercises.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-white/15 p-6 text-slate-400">
+          <p className="rounded-2xl border border-dashed border-border p-6 text-muted-foreground">
             No exercises yet. Add your first exercise using the form.
           </p>
         ) : (
-          <ul className="divide-y divide-white/10 rounded-2xl border border-white/10 bg-white/[0.03]">
+          <ul className="divide-y divide-border rounded-2xl border border-border bg-card">
             {exercises.map((exercise) => (
               <li
                 key={exercise.id}
@@ -56,7 +56,7 @@ export function ExerciseLibrary({
       </section>
       <section
         aria-labelledby="add-exercise-heading"
-        className="self-start rounded-2xl border border-white/10 bg-white/[0.03] p-5"
+        className="self-start rounded-2xl border border-border bg-card p-5"
       >
         <h2 id="add-exercise-heading" className="text-xl font-semibold">
           Add an exercise
@@ -79,29 +79,29 @@ export function ExerciseLibrary({
             aria-describedby={
               error ? "exercise-help exercise-error" : "exercise-help"
             }
-            className="min-h-12 w-full rounded-lg border border-white/20 bg-slate-950 px-3 text-base focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lime-300"
+            className="min-h-12 w-full rounded-lg border border-input bg-background px-3 text-base focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             placeholder="e.g. Overhead press"
           />
-          <p id="exercise-help" className="text-sm text-slate-400">
+          <p id="exercise-help" className="text-sm text-muted-foreground">
             Choose a name you will recognize in your workouts.
           </p>
           {error && (
             <p
               id="exercise-error"
               role="alert"
-              className="text-sm text-red-300"
+              className="text-sm text-destructive"
             >
               {error}
             </p>
           )}
           <Button
             type="submit"
-            className="mt-2 min-h-12 rounded-lg bg-lime-300 px-4 py-3 font-semibold text-slate-950 hover:bg-lime-200"
+            className="mt-2 min-h-12 rounded-lg bg-primary px-4 py-3 font-semibold text-primary-foreground hover:bg-primary/90"
           >
             Add exercise
           </Button>
         </form>
-        <p role="status" className="mt-3 text-sm text-lime-300">
+        <p role="status" className="mt-3 text-sm text-highlight">
           {announcement}
         </p>
       </section>

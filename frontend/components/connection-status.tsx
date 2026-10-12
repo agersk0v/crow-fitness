@@ -62,13 +62,13 @@ export function ConnectionStatus() {
 
   return (
     <section
-      className="max-w-xl rounded-2xl border border-white/10 bg-white/5 p-6"
+      className="max-w-xl rounded-2xl border border-border bg-card p-6"
       aria-label="Local setup status"
     >
       <div className="mb-5 flex items-center justify-between gap-4">
         <h2 className="text-lg font-semibold">Connection check</h2>
         <button
-          className="rounded-lg border border-white/15 px-3 py-2 text-sm transition hover:bg-white/10 disabled:opacity-50"
+          className="rounded-lg border border-border px-3 py-2 text-sm transition hover:bg-accent disabled:opacity-50"
           onClick={() => setAttempt((value) => value + 1)}
           disabled={checking}
         >
@@ -81,14 +81,14 @@ export function ConnectionStatus() {
           { label: "Database", status: database },
         ].map(({ label, status }) => (
           <div key={label} className="flex justify-between gap-4">
-            <dt className="text-slate-300">{label}</dt>
+            <dt className="text-muted-foreground">{label}</dt>
             <dd
               className={
                 status === "connected"
-                  ? "text-lime-300"
+                  ? "text-highlight"
                   : status === "unavailable"
-                    ? "text-amber-300"
-                    : "text-slate-400"
+                    ? "text-warning"
+                    : "text-muted-foreground"
               }
             >
               {labels[status]}
@@ -97,7 +97,7 @@ export function ConnectionStatus() {
         ))}
       </dl>
       {!checking && (api !== "connected" || database !== "connected") && (
-        <p className="mt-4 text-sm leading-relaxed text-amber-200">
+        <p className="mt-4 text-sm leading-relaxed text-warning">
           Part of the local setup could not be reached. Check the running
           services, then try again.
         </p>

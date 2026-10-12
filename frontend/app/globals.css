@@ -3,20 +3,16 @@
 
 @custom-variant dark (&:is(.dark *));
 
-:root {
-  color-scheme: dark;
-}
-
 body {
   margin: 0;
-  background: #0c1110;
-  color: #f2f5ee;
+  background: var(--background);
+  color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
 
 button:focus-visible,
 a:focus-visible {
-  outline: 2px solid #b7ef77;
+  outline: 2px solid var(--ring);
   outline-offset: 4px;
 }
 
@@ -39,6 +35,8 @@ a:focus-visible {
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-highlight: var(--highlight);
+  --color-warning: var(--warning);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -46,7 +44,32 @@ a:focus-visible {
 }
 
 :root {
+  color-scheme: light;
   --radius: 0.5rem;
+  --background: #f8faf5;
+  --foreground: #172019;
+  --card: #ffffff;
+  --card-foreground: #172019;
+  --popover: #ffffff;
+  --popover-foreground: #172019;
+  --primary: #bef264;
+  --primary-foreground: #020617;
+  --secondary: #e7ede3;
+  --secondary-foreground: #172019;
+  --muted: #e7ede3;
+  --muted-foreground: #52604f;
+  --accent: #e7ede3;
+  --accent-foreground: #172019;
+  --destructive: #b91c1c;
+  --border: #ced8c8;
+  --input: #9aa992;
+  --ring: #426b16;
+  --highlight: #426b16;
+  --warning: #92400e;
+}
+
+.dark {
+  color-scheme: dark;
   --background: #0c1110;
   --foreground: #f2f5ee;
   --card: #141918;
@@ -65,4 +88,6 @@ a:focus-visible {
   --border: #ffffff1a;
   --input: #ffffff33;
   --ring: #b7ef77;
+  --highlight: #bef264;
+  --warning: #fcd34d;
 }
