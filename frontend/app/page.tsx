@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ConnectionStatus } from "@/components/connection-status";
 
 export default function Home() {
@@ -30,6 +31,12 @@ export default function Home() {
             next. This first version checks that your local setup is connected.
           </p>
         </div>
+        <Link
+          href="/exercises"
+          className="self-start rounded-lg bg-lime-300 px-5 py-3 font-semibold text-slate-950 hover:bg-lime-200"
+        >
+          Browse exercises
+        </Link>
         <ConnectionStatus />
       </section>
 

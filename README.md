@@ -4,7 +4,7 @@ A simple workout tracker for one person, with no authentication or accounts.
 
 ## Current status
 
-The runnable foundation is implemented: a Next.js frontend with TypeScript and Tailwind CSS, a Go API, PostgreSQL connectivity, and CI checks. The home page checks the API and database connection. Workout templates, logging, and exercise progress are planned and are not implemented yet.
+The runnable foundation is implemented: a Next.js frontend with TypeScript and Tailwind CSS, a Go API, PostgreSQL connectivity, and CI checks. The home page checks the API and database connection and links to an `/exercises` preview. The preview starts with a simple array of sample exercises and lets you add names to an in-memory list. Names are trimmed and blank names show an inline error. Refreshing restores the sample data; API integration and durable exercise storage are still pending in #11. Workout templates, logging, and exercise progress are planned and are not implemented yet.
 
 See [product requirements](docs/PRODUCT.md), [architecture](docs/ARCHITECTURE.md), and [agent instructions](AGENTS.md).
 
