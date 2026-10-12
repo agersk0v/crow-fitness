@@ -2,7 +2,7 @@
 
 ## Status and purpose
 
-Crow Fitness is a minimal workout tracker for one person: create a reusable workout template, start a session, record weight and reps, and inspect exercise progress. The application is not implemented yet.
+Crow Fitness is a minimal workout tracker for one person: create a reusable workout template, start a session, record weight and reps, and inspect exercise progress. The runnable infrastructure and connection-check page are implemented; workout features are not implemented yet.
 
 The [README](../README.md) gives the overview. [ARCHITECTURE.md](ARCHITECTURE.md) describes a proposed implementation. This document separates confirmed requirements from proposed MVP behavior; the decisions below remain open until the owner explicitly approves them. Merging a technical proposal does not by itself resolve product choices.
 
@@ -16,7 +16,7 @@ The [README](../README.md) gives the overview. [ARCHITECTURE.md](ARCHITECTURE.md
 | R4 | Record weight and reps for performed sets. |
 | R5 | Browse recorded sets by exercise to track progress. |
 | R6 | Treat all data as belonging to one implicit user, with no authentication, accounts, or multiple-user support. |
-| R7 | Build the frontend with Next.js and TypeScript, the REST API with Go, and persistence with PostgreSQL. |
+| R7 | Build the frontend with Next.js, TypeScript, and Tailwind CSS, the REST API with Go, and persistence with PostgreSQL. |
 
 The technology stack is a constraint; the rest of this document describes user-visible behavior rather than API or database details.
 

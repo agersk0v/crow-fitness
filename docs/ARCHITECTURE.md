@@ -2,15 +2,15 @@
 
 ## Status and scope
 
-Crow Fitness is a simple workout tracker for one implicit user. The application is not implemented yet. Next.js with TypeScript, a Go REST API, PostgreSQL, and no authentication or user accounts are the agreed direction. There are no user tables or user IDs.
+Crow Fitness is a simple workout tracker for one implicit user. The runnable foundation is implemented with Next.js, TypeScript, Tailwind CSS, a Go REST API, and PostgreSQL. Workout features and their data model remain proposals. There is no authentication, no user accounts, and no user IDs.
 
-Everything below is a proposed implementation design for review, not a claim about existing functionality. The current [README](../README.md) describes the project. `docs/PRODUCT.md` is planned in issue #4 and is not available yet; reconcile this document with it before implementing affected behavior.
+The current [README](../README.md) documents setup and checks; [PRODUCT.md](PRODUCT.md) defines requirements and open product decisions. The local foundation described below is implemented. Workout component responsibilities, schema, lifecycle, and REST endpoints are proposed designs; reconcile them with approved product decisions before implementing affected behavior.
 
 ## Components and responsibilities
 
 | Component | Responsibility | Proposed approach |
 | --- | --- | --- |
-| Frontend | Templates, workout entry, history, progress, loading and save states | Next.js App Router, TypeScript, small client components for interactive forms |
+| Frontend | Connection-check page now; templates, workout entry, history, and progress planned | Next.js App Router, TypeScript, Tailwind CSS, and small client components |
 | API | Validation, workout rules, snapshots, history queries | Go `net/http`, with handlers calling services and repositories |
 | Database | Durable records, relationships, constraints and transactions | PostgreSQL accessed through `pgx` and a connection pool |
 
@@ -34,7 +34,7 @@ Use one frontend, one backend, and one database. Background workers, queues, mic
 | `docs/` | Product requirements and technical design |
 | `docker-compose.yml` | Proposed local services and persistent database volume |
 
-These paths describe future work; this issue adds only this document.
+The foundation adds the frontend routes/components, Go entrypoint, configuration and health packages, Dockerfiles, Compose, and CI. Domain service/repository/models packages, migrations, and workout pages are future work.
 
 ## Proposed data model
 
@@ -183,7 +183,9 @@ Use Docker Compose for the frontend, Go API, and PostgreSQL. Publish the fronten
 
 Run migrations explicitly before serving traffic and check database readiness rather than relying only on container startup order. A database volume provides persistence, not a backup; define a simple export/restore procedure before storing important workout history. With no authentication, the intended deployment is local or on a private network; anyone who can reach the app can change its data.
 
-Compose files, images, migrations, setup commands, and health checks do not exist yet. Document their exact invocation and verification in the README when they are implemented.
+The local foundation uses npm, Node.js 24.19.0, Go 1.27.2, and PostgreSQL 18.6. The user selected a local Docker run with rebuilds after changes, without hot reload. The Next.js server forwards only `/api/health` and `/api/ready` to Go using a runtime server-only `API_INTERNAL_URL`; additional routes will be added with workout features. The Go server uses `net/http` and a `pgx` pool, a database-independent liveness endpoint, and a two-second database readiness check. Database connection details are constructed from server-only environment variables. The frontend is published on localhost; Go and PostgreSQL stay on the internal Compose network. PostgreSQL data uses a named volume mounted at `/var/lib/postgresql` for the PostgreSQL 18 image layout.
+
+Dockerfiles, Compose configuration, health checks, and setup/check commands now exist and are documented in the README. There are no workout migrations yet because the workout schema and product choices still need review. CI performs frontend checks/build, Go checks/tests/build, and an isolated stack smoke check covering readiness failure/recovery and database restart persistence. It requests only read access to repository contents.
 
 ## Validation planned for implementation
 
@@ -193,7 +195,7 @@ Compose files, images, migrations, setup commands, and health checks do not exis
 - A browser flow that creates exercises/template, starts a session, records a set, refreshes, completes the workout, and verifies history and next-session references. Verify suggested rows are not recorded and failed saves remain visible.
 - Frontend type checking/build and Go formatting/tests once the project tooling exists. Use a separate test database and never reset the user's workout database for tests.
 
-This document is reviewed against issue #5; no application test suite exists to run for the documentation change.
+The existing Go tests cover configuration validation, credential encoding, health responses, and readiness timeout behavior. The Docker smoke check covers the implemented stack. The workout-oriented tests above remain planned until those features exist.
 
 ## Product decisions still needed
 

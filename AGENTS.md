@@ -40,7 +40,7 @@ These are agent working instructions, not a security boundary. GitHub permission
 
 ## Validation and documentation
 
-Use the repository's actual tools and commands. At the initial documentation stage, the application, package manifests, Go module, Compose configuration, and application tests do not exist.
+Use the repository's actual tools and commands. The runnable foundation includes frontend package scripts, a Go module with health/configuration tests, Docker Compose, and CI. Workout features and their tests are not implemented yet. The README documents the supported setup and check commands.
 
 Do not invent setup, build, or test commands, or claim checks passed when they did not run. As tooling is implemented, document working commands in the README and use the relevant checks for each change.
 
