@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PageEntrance } from "@/components/page-entrance";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ExerciseLibrary } from "@/components/exercise-library";
 import { staticExercises } from "@/lib/static-exercises";
@@ -15,7 +16,7 @@ export default function ExercisesPage() {
         </Link>
         <ThemeToggle />
       </header>
-      <section className="py-10 sm:py-16">
+      <PageEntrance className="py-10 sm:py-16">
         <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
           Exercises
         </h1>
@@ -27,7 +28,7 @@ export default function ExercisesPage() {
           page.
         </p>
         <ExerciseLibrary initialExercises={staticExercises} />
-      </section>
+      </PageEntrance>
     </main>
   );
 }

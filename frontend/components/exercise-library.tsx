@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
+import { ExerciseRow } from "@/components/exercise-row";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import type { Exercise } from "@/lib/static-exercises";
@@ -44,12 +45,15 @@ export function ExerciseLibrary({
         ) : (
           <ul className="divide-y divide-border rounded-2xl border border-border bg-card">
             {exercises.map((exercise) => (
-              <li
+              <ExerciseRow
                 key={exercise.id}
-                className="break-words px-5 py-4 font-medium"
-              >
-                {exercise.name}
-              </li>
+                exercise={exercise}
+                animateEntrance={
+                  !initialExercises.some(
+                    (initial) => initial.id === exercise.id,
+                  )
+                }
+              />
             ))}
           </ul>
         )}

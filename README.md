@@ -119,7 +119,7 @@ npx shadcn@4.21.4 add <component-name>
 
 Review generated source, dependencies, and stylesheet changes, then run the frontend checks. Import components from `@/components/ui/<component-name>`. shadcn/ui copies editable source into the repository; it is not a single runtime component library. Use the shared tokens and retain accessible labels and visible keyboard focus.
 
-Motion for React is installed for future animations (#17); this setup adds no page animations. Import `motion` and `useReducedMotion` from `motion/react` inside a component with `"use client"`. Keep animations brief and use opacity/transforms. Respect reduced-motion preferences by omitting movement or rendering immediately; animations must not block actions or hide content. Commit package and lockfile changes whenever dependencies change.
+Motion for React provides brief 180 ms entrance animations for the home/exercises content and newly added exercise rows. Existing rows do not replay their entrance on form updates. The shared `useEntranceAnimation` hook uses opacity and a 6 px translation after mounting, leaving server-rendered content visible. Reduced-motion preferences skip the animation; cleanup restores the visible state if the preference changes during an animation. Import `motion` and `useReducedMotion` from `motion/react` inside a component with `"use client"`. Keep animations brief and use opacity/transforms. Respect reduced-motion preferences by omitting movement or rendering immediately; animations must not block actions or hide content. Commit package and lockfile changes whenever dependencies change.
 
 ## Planned features
 
