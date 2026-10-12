@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { toast } from "sonner";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import type { Exercise } from "@/lib/static-exercises";
 
@@ -12,14 +14,12 @@ export function ExerciseLibrary({
   const [exercises, setExercises] = useState(initialExercises);
   const [name, setName] = useState("");
   const [error, setError] = useState("");
-  const [announcement, setAnnouncement] = useState("");
 
   function addExercise(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmedName = name.trim();
     if (!trimmedName) {
       setError("Enter an exercise name.");
-      setAnnouncement("");
       return;
     }
     setExercises((current) => [
@@ -28,7 +28,7 @@ export function ExerciseLibrary({
     ]);
     setName("");
     setError("");
-    setAnnouncement(`${trimmedName} added.`);
+    toast.success(`${trimmedName} added.`);
   }
 
   return (
@@ -86,13 +86,10 @@ export function ExerciseLibrary({
             Choose a name you will recognize in your workouts.
           </p>
           {error && (
-            <p
-              id="exercise-error"
-              role="alert"
-              className="text-sm text-destructive"
-            >
-              {error}
-            </p>
+            <Alert variant="destructive">
+              <AlertTitle>Could not add exercise</AlertTitle>
+              <AlertDescription id="exercise-error">{error}</AlertDescription>
+            </Alert>
           )}
           <Button
             type="submit"
@@ -101,9 +98,6 @@ export function ExerciseLibrary({
             Add exercise
           </Button>
         </form>
-        <p role="status" className="mt-3 text-sm text-highlight">
-          {announcement}
-        </p>
       </section>
     </div>
   );
