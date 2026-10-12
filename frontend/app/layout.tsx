@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 
 export const metadata: Metadata = {
@@ -13,7 +14,17 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
       <body>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          {children}
+          <Toaster
+            position="top-center"
+            closeButton
+            duration={6000}
+            toastOptions={{
+              classNames: { title: "break-words whitespace-normal" },
+            }}
+          />
+        </ThemeProvider>
       </body>
     </html>
   );
