@@ -109,7 +109,7 @@ It uses port `13000`; set `SMOKE_PORT` to another available port if necessary. N
 
 ## UI components and animations
 
-The frontend uses shadcn/ui source components in `frontend/components/ui/`, with shared class merging in `frontend/lib/utils.ts`. The configuration in `frontend/components.json` uses the existing `@/` alias, App Router, TypeScript, and Tailwind CSS v4. The Button component is used by the exercise form. Theme tokens in `app/globals.css` preserve the dark/lime appearance; light-mode switching is separate work in #15.
+The frontend uses shadcn/ui source components in `frontend/components/ui/`, with shared class merging in `frontend/lib/utils.ts`. The configuration in `frontend/components.json` uses the existing `@/` alias, App Router, TypeScript, and Tailwind CSS v4. The Button component is used by the exercise form. Theme tokens in `app/globals.css` preserve the dark/lime appearance; the header theme toggle switches between dark and light mode. Dark is the default; `next-themes` saves the choice in browser local storage across navigation and refresh. The provider applies the saved theme before the page paints, while the toggle waits for mounting to avoid hydration mismatches.
 
 From `frontend/`, add only the components needed for a feature:
 
