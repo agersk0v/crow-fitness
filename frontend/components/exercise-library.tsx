@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { Button } from "@/components/ui/button";
 import type { Exercise } from "@/lib/static-exercises";
 
 export function ExerciseLibrary({
@@ -93,12 +94,12 @@ export function ExerciseLibrary({
               {error}
             </p>
           )}
-          <button
+          <Button
             type="submit"
             className="mt-2 min-h-12 rounded-lg bg-lime-300 px-4 py-3 font-semibold text-slate-950 hover:bg-lime-200"
           >
             Add exercise
-          </button>
+          </Button>
         </form>
         <p role="status" className="mt-3 text-sm text-lime-300">
           {announcement}

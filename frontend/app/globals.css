@@ -1,4 +1,7 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
 
 :root {
   color-scheme: dark;
@@ -15,4 +18,51 @@ button:focus-visible,
 a:focus-visible {
   outline: 2px solid #b7ef77;
   outline-offset: 4px;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.5rem;
+  --background: #0c1110;
+  --foreground: #f2f5ee;
+  --card: #141918;
+  --card-foreground: #f2f5ee;
+  --popover: #141918;
+  --popover-foreground: #f2f5ee;
+  --primary: #bef264;
+  --primary-foreground: #020617;
+  --secondary: #1e293b;
+  --secondary-foreground: #f2f5ee;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+  --accent: #1e293b;
+  --accent-foreground: #f2f5ee;
+  --destructive: #f87171;
+  --border: #ffffff1a;
+  --input: #ffffff33;
+  --ring: #b7ef77;
 }
