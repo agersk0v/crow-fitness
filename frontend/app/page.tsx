@@ -30,8 +30,8 @@ export default function Home() {
             to track your workouts.
           </h1>
           <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
-            Workout templates, set logging, and exercise history are coming
-            next. This first version checks that your local setup is connected.
+            Create exercises and reusable workout templates. Set logging and
+            exercise history are coming next.
           </p>
         </div>
         <Link
@@ -39,6 +39,12 @@ export default function Home() {
           className="self-start rounded-lg bg-primary px-5 py-3 font-semibold text-primary-foreground hover:bg-primary/90"
         >
           Browse exercises
+        </Link>
+        <Link
+          href="/templates"
+          className="self-start rounded-lg border border-border px-5 py-3 font-semibold text-highlight hover:bg-primary/5"
+        >
+          Browse templates
         </Link>
         <ConnectionStatus />
       </PageEntrance>

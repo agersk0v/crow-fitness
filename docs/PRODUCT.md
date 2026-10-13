@@ -2,7 +2,7 @@
 
 ## Status and purpose
 
-Crow Fitness is a minimal workout tracker for one person: create a reusable workout template, start a session, record weight and reps, and inspect exercise progress. The runnable infrastructure and connection-check page are implemented; workout features are not implemented yet.
+Crow Fitness is a minimal workout tracker for one person: create a reusable workout template, start a session, record weight and reps, and inspect exercise progress. The runnable infrastructure and connection-check page are implemented; exercise and template creation/browsing are implemented; workout sessions and logging remain planned.
 
 The [README](../README.md) gives the overview. [ARCHITECTURE.md](ARCHITECTURE.md) describes a proposed implementation. This document separates confirmed requirements from proposed MVP behavior; the decisions below remain open until the owner explicitly approves them. Merging a technical proposal does not by itself resolve product choices.
 
@@ -40,7 +40,7 @@ The criteria below define the proposed MVP flows. Criteria involving an open dec
 
 ### 1. Create and maintain a template
 
-Create/select exercises from a shared library, name the template, and arrange exercises in the desired order. Under D2, give each exercise a positive planned set count. Templates define exercises and planned rows; they do not prescribe target weights or reps in this proposal.
+Select exercises from your personal library, name the template, and arrange exercises in the desired order. Each occurrence has a required positive working-set count, optional rep range (equal bounds for a fixed target), and optional nonnegative target RIR. Targets apply to every working set of that occurrence; warm-up sets and individual-set targets are excluded. Templates do not prescribe target weights. Create/list/reopen are implemented for #23; editing and deletion remain proposals.
 
 - A template with a name and at least one exercise can be saved and reopened with the same order and configuration.
 - Missing/blank names, missing exercises, and invalid planned set counts show useful validation messages without losing the form input.
@@ -99,7 +99,7 @@ These defaults match the current architecture proposal. They are recommendations
 | ID | Decision | Proposed default |
 | --- | --- | --- |
 | D1 | Initial weight/reps | Prefill from previous completed performance as unrecorded suggestions; unmatched rows stay blank |
-| D2 | Planned sets | A positive planned set count per template exercise; allow extra performed sets |
+| D2 | Planned sets | Positive working-set counts per template exercise are approved in #23; extra performed sets in sessions remain proposed |
 | D3 | Active workouts | Only one active session at a time |
 | D4 | Weight units | Kilograms with at most two decimal places, including zero |
 | D5 | Save behavior | Explicitly record new sets; autosave valid edits to recorded sets; no offline draft guarantee |
@@ -125,3 +125,7 @@ Local or private-network use is the proposed deployment scope for this applicati
 ## Approved exercise ownership (#11)
 
 The owner approved personal exercises with one internal local owner on 2026-10-13. Go selects that owner for every create/list operation; browser-supplied identity is not accepted. Exercises are not shared across future users. The internal owner does not provide authentication or access protection.
+
+## Approved template targets (#23)
+
+A template has a nonblank name and at least one ordered saved exercise. Working-set counts are required. Rep ranges and target RIR are optional and belong to the exercise occurrence within the template, so different templates or repeated occurrences can use different targets. One target applies across its working sets; no individual-set targets or warm-up sets. Target RIR is distinct from performed RIR. Notes, rest times, planned weights, editing/deletion, sessions, and logging are deferred. Zero RIR is valid; decimals are accepted without a product-specific upper limit or rounding rule.

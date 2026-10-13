@@ -12,9 +12,14 @@ async function forward(
   if (
     !(
       request.method === "GET" &&
-      ["health", "ready", "exercises"].includes(endpoint)
+      (["health", "ready", "exercises", "templates"].includes(endpoint) ||
+        (path.length === 2 &&
+          path[0] === "templates" &&
+          /^[1-9][0-9]*$/.test(path[1])))
     ) &&
-    !(request.method === "POST" && endpoint === "exercises")
+    !(
+      request.method === "POST" && ["exercises", "templates"].includes(endpoint)
+    )
   ) {
     return Response.json(
       { error: { code: "not_found", message: "Not found." } },
@@ -40,6 +45,9 @@ async function forward(
       headers: {
         "Content-Type": "application/json",
         "Cache-Control": "no-store",
+        ...(upstream.headers.get("Location")
+          ? { Location: upstream.headers.get("Location")! }
+          : {}),
       },
     });
   } catch {

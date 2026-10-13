@@ -13,6 +13,12 @@ export default function ExercisesPage() {
         >
           ← Back to home
         </Link>
+        <Link
+          href="/templates"
+          className="text-sm font-medium text-highlight hover:text-highlight/80"
+        >
+          Templates
+        </Link>
         <ThemeToggle />
       </header>
       <PageEntrance className="py-10 sm:py-16">
