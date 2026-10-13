@@ -5,7 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import type { CompletedSet } from "@/lib/sessions";
 
-export function CompletedSets() {
+export function CompletedSets({
+  query = "",
+  filtered = false,
+}: {
+  query?: string;
+  filtered?: boolean;
+}) {
   const [items, setItems] = useState<CompletedSet[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -16,7 +22,7 @@ export function CompletedSets() {
     setError("");
     async function load() {
       try {
-        const response = await fetch("/api/sets", {
+        const response = await fetch(`/api/sets${query ? `?${query}` : ""}`, {
           cache: "no-store",
           signal: controller.signal,
         });
@@ -32,7 +38,7 @@ export function CompletedSets() {
     }
     void load();
     return () => controller.abort();
-  }, [retry]);
+  }, [retry, query]);
   if (loading) return <p role="status">Loading completed sets…</p>;
   if (error)
     return (
@@ -46,6 +52,17 @@ export function CompletedSets() {
           Try again
         </Button>
       </Alert>
+    );
+  if (!items.length && filtered)
+    return (
+      <div className="space-y-3">
+        <p className="text-muted-foreground">
+          No matching completed sets. Try different criteria or clear filters.
+        </p>
+        <Link href="/history?tab=sets" className="text-highlight underline">
+          Clear filters
+        </Link>
+      </div>
     );
   if (!items.length)
     return (

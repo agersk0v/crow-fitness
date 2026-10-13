@@ -153,7 +153,7 @@ func TestPostgresPrevious(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	historyBefore, err := store.CompletedSets(ctx, 81)
+	historyBefore, err := store.CompletedSets(ctx, 81, HistoryFilter{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +185,7 @@ func TestPostgresPrevious(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(before, after) {
 		t.Fatal("reference read changed current sets", after, err)
 	}
-	historyAfter, err := store.CompletedSets(ctx, 81)
+	historyAfter, err := store.CompletedSets(ctx, 81, HistoryFilter{})
 	if err != nil || !reflect.DeepEqual(historyBefore, historyAfter) {
 		t.Fatal("reference read changed history", err)
 	}

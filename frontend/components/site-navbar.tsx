@@ -4,6 +4,13 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { ThemeToggle } from "@/components/theme-toggle";
 
+function historyHref(section: string, search: string) {
+  const params = new URLSearchParams(search);
+  if (section === "sets") params.set("tab", "sets");
+  else params.delete("tab");
+  return `/history${params.size ? `?${params}` : ""}`;
+}
+
 const destinations = [
   { label: "Home", href: "/", section: "home" },
   { label: "Exercises", href: "/exercises", section: "exercises" },
@@ -12,7 +19,13 @@ const destinations = [
   { label: "Sets", href: "/history?tab=sets", section: "sets" },
 ];
 
-export function Navbar({ selected = "" }: { selected?: string }) {
+export function Navbar({
+  selected = "",
+  historySearch = "",
+}: {
+  selected?: string;
+  historySearch?: string;
+}) {
   return (
     <header className="mx-auto max-w-5xl px-6 pt-8 sm:px-12">
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
@@ -20,7 +33,11 @@ export function Navbar({ selected = "" }: { selected?: string }) {
           {destinations.map(({ label, href, section }) => (
             <Link
               key={section}
-              href={href}
+              href={
+                section === "history" || section === "sets"
+                  ? historyHref(section, historySearch)
+                  : href
+              }
               aria-current={selected === section ? "page" : undefined}
               className={`inline-flex min-h-11 items-center rounded-lg px-3 text-sm text-highlight hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${selected === section ? "bg-primary/10 font-semibold underline underline-offset-4" : ""}`}
             >
@@ -49,5 +66,10 @@ export function SiteNavbar() {
             : pathname.startsWith("/history")
               ? "history"
               : "";
-  return <Navbar selected={selected} />;
+  return (
+    <Navbar
+      selected={selected}
+      historySearch={pathname === "/history" ? searchParams.toString() : ""}
+    />
+  );
 }

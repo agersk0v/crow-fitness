@@ -156,12 +156,16 @@ func readSets(ctx context.Context, tx pgx.Tx, owner int64, id string) ([]SavedSe
 	}
 	return items, rows.Err()
 }
-func (p Postgres) CompletedSets(ctx context.Context, owner int64) ([]CompletedSet, error) {
+func (p Postgres) CompletedSets(ctx context.Context, owner int64, filter HistoryFilter) ([]CompletedSet, error) {
 	rows, err := p.Pool.Query(ctx, `SELECT ss.id::text,ss.exercise_position,ss.weight::text,ss.reps,s.id::text,se.name,s.completed_at
  FROM session_sets ss JOIN workout_sessions s ON s.owner_id=ss.owner_id AND s.id=ss.session_id
  JOIN session_exercises se ON se.session_id=ss.session_id AND se.owner_id=ss.owner_id AND se.position=ss.exercise_position
  WHERE ss.owner_id=$1 AND s.completed_at IS NOT NULL AND NOT ss.deleted
- ORDER BY s.completed_at DESC,s.id DESC,ss.exercise_position,ss.saved_at,ss.id`, owner)
+ AND ($2::text='' OR strpos(lower(se.name),lower($2))>0 OR strpos(lower(s.name),lower($2))>0)
+ AND ($3::text='' OR se.exercise_id::text=$3)
+ AND ($4::timestamptz IS NULL OR s.completed_at >= $4)
+ AND ($5::timestamptz IS NULL OR s.completed_at < $5)
+ ORDER BY s.completed_at DESC,s.id DESC,ss.exercise_position,ss.saved_at,ss.id`, owner, filter.Query, filter.Exercise, filter.From, filter.Until)
 	if err != nil {
 		return nil, err
 	}

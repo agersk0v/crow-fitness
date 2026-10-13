@@ -53,7 +53,7 @@ func (f *fakeStore) SaveSet(_ context.Context, owner int64, sessionID, id string
 func (f *fakeStore) DeleteSet(ctx context.Context, owner int64, sessionID, id string) error {
 	return f.End(ctx, owner, sessionID)
 }
-func (f *fakeStore) CompletedSets(_ context.Context, owner int64) ([]CompletedSet, error) {
+func (f *fakeStore) CompletedSets(_ context.Context, owner int64, filter HistoryFilter) ([]CompletedSet, error) {
 	f.owner = owner
 	return nil, f.err
 }
@@ -63,7 +63,7 @@ func (f *fakeStore) Previous(_ context.Context, owner int64, id string) ([]Previ
 	f.id = id
 	return nil, f.err
 }
-func (f *fakeStore) CompletedSessions(_ context.Context, owner int64) ([]CompletedSession, error) {
+func (f *fakeStore) CompletedSessions(_ context.Context, owner int64, filter HistoryFilter) ([]CompletedSession, error) {
 	f.owner = owner
 	return nil, f.err
 }
@@ -144,4 +144,9 @@ func TestHTTP(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (f *fakeStore) HistoryExercises(_ context.Context, owner int64) ([]HistoryExercise, error) {
+	f.owner = owner
+	return []HistoryExercise{}, f.err
 }
