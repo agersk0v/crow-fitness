@@ -19,9 +19,8 @@ func TestTags(t *testing.T) {
 		t.Fatal("unknown tag accepted")
 	}
 	input = Input{Name: "Press"}
-	Validate(&input)
-	if input.MuscleGroups == nil {
-		t.Fatal("missing tags did not become empty array")
+	if Validate(&input)["muscle_groups"] != "Select at least one muscle group." {
+		t.Fatal("missing tags accepted")
 	}
 }
 func TestManagementHTTP(t *testing.T) {
@@ -59,7 +58,7 @@ func TestManagementHTTP(t *testing.T) {
 		if method == "GET" {
 			path += "/templates"
 		}
-		w = call(method, path, `{"name":"Press"}`)
+		w = call(method, path, `{"name":"Press","muscle_groups":["chest"]}`)
 		if w.Code != 404 {
 			t.Fatal(w.Body)
 		}
@@ -76,9 +75,30 @@ func TestManagementHTTP(t *testing.T) {
 		t.Fatal(w.Body)
 	}
 	for _, method := range []string{"PUT", "DELETE"} {
-		w = call(method, "/api/exercises/not-an-id", `{"name":"Press"}`)
+		w = call(method, "/api/exercises/not-an-id", `{"name":"Press","muscle_groups":["chest"]}`)
 		if w.Code != 400 {
 			t.Fatal(w.Body)
+		}
+	}
+}
+
+func TestRequiresMuscleGroupOnCreateAndUpdate(t *testing.T) {
+	for _, method := range []string{"POST", "PUT"} {
+		for _, body := range []string{`{"name":"Press"}`, `{"name":"Press","muscle_groups":null}`, `{"name":"Press","muscle_groups":[]}`} {
+			store := &fakeStore{}
+			mux := http.NewServeMux()
+			Register(mux, store)
+			path := "/api/exercises"
+			if method == "PUT" {
+				path += "/1"
+			}
+			req := httptest.NewRequest(method, path, strings.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+			if w.Code != 400 || !strings.Contains(w.Body.String(), "Select at least one muscle group.") || store.name != "" {
+				t.Fatalf("%s %s: %d %s", method, body, w.Code, w.Body)
+			}
 		}
 	}
 }

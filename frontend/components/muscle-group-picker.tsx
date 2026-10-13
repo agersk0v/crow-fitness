@@ -16,10 +16,13 @@ export function MuscleGroupPicker({
   const id = useId();
   return (
     <fieldset
+      aria-invalid={Boolean(error)}
       aria-describedby={error ? `${id}-error` : undefined}
       className="space-y-3"
     >
-      <legend className="text-sm font-medium">Muscle groups (optional)</legend>
+      <legend className="text-sm font-medium">
+        Muscle groups (select at least one)
+      </legend>
       <div className="flex flex-wrap gap-2">
         {groups.map((group) => (
           <label

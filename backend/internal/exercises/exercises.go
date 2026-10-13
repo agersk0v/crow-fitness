@@ -50,6 +50,9 @@ func Validate(input *Input) ValidationError {
 			delete(selected, tag)
 		}
 	}
+	if len(normalized) == 0 {
+		fields["muscle_groups"] = "Select at least one muscle group."
+	}
 	if len(selected) > 0 {
 		fields["muscle_groups"] = "Choose muscle groups from the predefined list."
 	}
@@ -211,7 +214,7 @@ func decode(w http.ResponseWriter, r *http.Request, input *Input) bool {
 		if errors.As(err, &oversized) {
 			problem(w, 413, "body_too_large", "Request is too large.", nil)
 		} else {
-			problem(w, 400, "validation_error", "Send an exercise name and optional muscle-group tags as JSON.", nil)
+			problem(w, 400, "validation_error", "Send an exercise name and at least one muscle-group tag as JSON.", nil)
 		}
 		return false
 	}

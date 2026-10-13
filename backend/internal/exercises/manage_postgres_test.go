@@ -64,7 +64,7 @@ func TestManagementPersistence(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, owner := range []int64{28} {
-		if _, err = store.Update(ctx, owner, item.ID, ex.Input{Name: "Foreign"}); !errors.Is(err, ex.ErrNotFound) {
+		if _, err = store.Update(ctx, owner, item.ID, ex.Input{Name: "Foreign", MuscleGroups: []string{"chest"}}); !errors.Is(err, ex.ErrNotFound) {
 			t.Fatal(err)
 		}
 		if _, err = store.Usage(ctx, owner, item.ID); !errors.Is(err, ex.ErrNotFound) {
@@ -80,7 +80,7 @@ func TestManagementPersistence(t *testing.T) {
 	if _, err = pool.Exec(ctx, "UPDATE exercises SET muscle_groups=ARRAY['unknown'] WHERE id=$1", item.ID); err == nil {
 		t.Fatal("database accepted unknown tags")
 	}
-	free, err := store.Create(ctx, 27, ex.Input{Name: "Free"})
+	free, err := store.Create(ctx, 27, ex.Input{Name: "Free", MuscleGroups: []string{"chest"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestManagementPersistence(t *testing.T) {
 	}
 	// Template creation holds a KEY SHARE lock until it commits. A real deletion
 	// request must wait, then see the new reference and refuse deletion.
-	concurrent, err := store.Create(ctx, 27, ex.Input{Name: "Concurrent"})
+	concurrent, err := store.Create(ctx, 27, ex.Input{Name: "Concurrent", MuscleGroups: []string{"chest"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +126,7 @@ func TestManagementPersistence(t *testing.T) {
 	}
 	// If deletion holds the lock first, actual template creation waits and fails
 	// validation after deletion commits, leaving no partially saved template.
-	removed, err := store.Create(ctx, 27, ex.Input{Name: "Deleted first"})
+	removed, err := store.Create(ctx, 27, ex.Input{Name: "Deleted first", MuscleGroups: []string{"chest"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,8 +227,21 @@ func TestTagMigrationPreservesExistingExercises(t *testing.T) {
 	if err = migrations.Apply(ctx, pool); err != nil {
 		t.Fatal(err)
 	}
+	store := ex.Postgres{Pool: pool}
 	items, err := (ex.Postgres{Pool: pool}).List(ctx, 1)
 	if err != nil || len(items) != 1 || items[0].ID != id || items[0].Name != "Existing squat" || len(items[0].MuscleGroups) != 0 {
 		t.Fatal(items, err)
+	}
+
+	if _, err = store.Update(ctx, 1, id, ex.Input{Name: "Renamed without tags"}); err == nil {
+		t.Fatal("untagged legacy edit accepted")
+	}
+	items, err = store.List(ctx, 1)
+	if err != nil || len(items) != 1 || items[0].Name != "Existing squat" || len(items[0].MuscleGroups) != 0 {
+		t.Fatal("failed edit changed legacy record", items, err)
+	}
+	updated, err := store.Update(ctx, 1, id, ex.Input{Name: "Updated squat", MuscleGroups: []string{"quadriceps"}})
+	if err != nil || updated.ID != id || updated.Name != "Updated squat" || !reflect.DeepEqual(updated.MuscleGroups, []string{"quadriceps"}) {
+		t.Fatal(updated, err)
 	}
 }

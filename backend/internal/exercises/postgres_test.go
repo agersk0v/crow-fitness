@@ -25,7 +25,7 @@ func TestPostgresPersistence(t *testing.T) {
 		t.Fatal(err)
 	}
 	store := Postgres{Pool: pool}
-	item, err := store.Create(ctx, LocalOwnerID, Input{Name: "Persistence test"})
+	item, err := store.Create(ctx, LocalOwnerID, Input{Name: "Persistence test", MuscleGroups: []string{"chest"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +55,7 @@ func TestPostgresPersistence(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pool.Exec(ctx, "DELETE FROM owners WHERE id=2")
-	other, err := store.Create(ctx, 2, Input{Name: "Other owner exercise"})
+	other, err := store.Create(ctx, 2, Input{Name: "Other owner exercise", MuscleGroups: []string{"chest"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func TestPostgresPersistence(t *testing.T) {
 	if err != nil || len(items) != 0 {
 		t.Fatalf("owner isolation: %v %v", items, err)
 	}
-	if _, err = store.Create(ctx, 999, Input{Name: "Unknown owner"}); err == nil {
+	if _, err = store.Create(ctx, 999, Input{Name: "Unknown owner", MuscleGroups: []string{"chest"}}); err == nil {
 		t.Fatal("missing owner accepted")
 	}
 	if _, err = pool.Exec(ctx, "INSERT INTO exercises(owner_id,name) VALUES($1,'')", LocalOwnerID); err == nil {
