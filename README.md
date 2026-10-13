@@ -97,7 +97,9 @@ go build -o bin/api ./cmd/api
 
 `gofmt -l .` should print no files. `npm run format` and `gofmt -w .` apply formatting when needed.
 
-CI runs those checks on PRs and commits to `main`, then builds and checks the full Docker stack. The smoke check tests frontend-to-API routing, database readiness failure/recovery, and persistence through a database restart. It uses a separate randomly named Compose project with disposable data and removes only that project's test volume afterward.
+CI runs frontend formatting and Go formatting, vet, and race tests (including disposable PostgreSQL tests) on PRs and commits to `main`. Its stack job builds both production Docker images and runs the smoke check; the Next.js build also checks TypeScript. Standalone build/typecheck commands above remain available locally.
+
+The smoke check covers representative exercise/template create, list, and detail requests through Next.js, one validation error, readiness outage/recovery, and persistence through database and whole-stack restarts. Page fetches verify routes render, not interactive form behavior. Each run owns a randomly named Compose project and removes only its disposable test volume afterward.
 
 To run the same integration check locally, use Bash with Docker running:
 
@@ -137,13 +139,13 @@ The API applies embedded SQL migrations from `backend/internal/migrations/` befo
 
 Exercise records reference seeded local owner 1. Go selects it; clients cannot choose an owner. This implements personal ownership without authentication. Anyone who can reach the local app can operate on this owner's data.
 
-For PostgreSQL tests, set `TEST_DATABASE_URL` to a **separate disposable test database**, then run `go test -race ./...` from `backend/`. Never use your workout database. Without the variable, PostgreSQL tests are explicitly skipped. The Docker smoke check uses its own disposable volume and tests create/list, validation, page reload, database restart, and whole-stack restart with migration reruns.
+For PostgreSQL tests, set `TEST_DATABASE_URL` to a **separate disposable test database**, then run `go test -race ./...` from `backend/`. Never use your workout database. Without the variable, PostgreSQL tests are explicitly skipped. See Development checks above for the isolated stack smoke workflow.
 
 ## Workout templates
 
 Open `/templates` from home or exercises. Give the template a name, add saved exercises, and use **Move up / Move down** to arrange them. Each occurrence requires a positive whole-number working-set count. Rep bounds are optional: leave both blank, use a positive minimum/maximum range, or equal values for a fixed target. Target RIR is optional and accepts nonnegative decimals, including zero. One rep/RIR target applies to all working sets of an occurrence; warm-up sets are excluded. The same exercise may appear more than once with different targets. Saving persists the entire ordered configuration atomically; select a saved template to reopen it. Editing, deleting, starting workouts, and recording sets are not included yet.
 
-Go selects local owner 1 and rejects missing/foreign-owner exercises. Migration `002_templates.sql` runs automatically through the same repeatable startup process described above, preserving existing exercises and templates.
+Migration `002_templates.sql` uses the same startup process described above. Template writes reject missing or foreign-owner exercises.
 
 - `GET /api/templates`: `200` with `{"items":[{"id":"1","name":"Push day"}]}`.
 - `POST /api/templates`: `application/json`, with a trimmed nonblank name and at least one exercise. Returns `201` with the full resource and a `Location` header.
@@ -163,4 +165,4 @@ Example create body:
 
 Array order determines `position` in the response. Each returned occurrence also includes its exercise name. Absent optional values are returned as `null`; zero RIR remains zero. Counts/reps must be whole numbers; RIR is a JSON number stored as a decimal without a fixed rounding scale or product-specific ceiling. PostgreSQL's numeric storage limits still apply. Requests are limited to 64 KiB and unknown fields are rejected. Invalid values return `400` with `error.message` and, for business validation, `error.fields` keyed by `name`, `exercises`, or e.g. `exercises.0.set_count`, `exercises.0.rep_range`, `exercises.0.target_rir`, and `exercises.0.exercise_id`. Responses are uncached; transport/media/size/persistence errors use the same status conventions as exercises.
 
-The disposable PostgreSQL tests and stack smoke check also verify template ordering, optional/fixed targets, owner isolation, invalid references, and preservation through migration reruns and restarts.
+PostgreSQL tests cover template ordering, optional/fixed targets, ownership, constraints, rollback, and migration reruns. The smoke check covers transport and restart persistence.

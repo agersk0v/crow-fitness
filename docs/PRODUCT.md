@@ -2,9 +2,9 @@
 
 ## Status and purpose
 
-Crow Fitness is a minimal workout tracker for one person: create a reusable workout template, start a session, record weight and reps, and inspect exercise progress. The runnable infrastructure and connection-check page are implemented; exercise and template creation/browsing are implemented; workout sessions and logging remain planned.
+Crow Fitness is a minimal workout tracker for one person: create a reusable workout template, start a session, record weight and reps, and inspect exercise progress. Connection checks, exercise creation/browsing, and template creation/browsing are implemented. Workout sessions and logging remain planned.
 
-The [README](../README.md) gives the overview. [ARCHITECTURE.md](ARCHITECTURE.md) describes a proposed implementation. This document separates confirmed requirements from proposed MVP behavior; the decisions below remain open until the owner explicitly approves them. Merging a technical proposal does not by itself resolve product choices.
+The [README](../README.md) gives the overview. [ARCHITECTURE.md](ARCHITECTURE.md) separates the implemented design from future proposals. This document separates confirmed requirements from proposed MVP behavior; the decisions below remain open until the owner explicitly approves them. Merging a technical proposal does not by itself resolve product choices.
 
 ## Confirmed requirements
 
@@ -20,16 +20,24 @@ The [README](../README.md) gives the overview. [ARCHITECTURE.md](ARCHITECTURE.md
 
 The technology stack is a constraint; the rest of this document describes user-visible behavior rather than API or database details.
 
-## Proposed pages and navigation
+## Approved exercise ownership (#11)
 
-All pages and routes here are proposals for review.
+The owner approved personal exercises with one internal local owner on 2026-10-13. Go selects that owner for every create/list operation; browser-supplied identity is not accepted. Exercises are not shared across future users. The internal owner does not provide authentication or access protection.
+
+## Approved template targets (#23)
+
+A template has a nonblank name and at least one ordered saved exercise. Working-set counts are required. Rep ranges and target RIR are optional and belong to the exercise occurrence within the template, so different templates or repeated occurrences can use different targets. One target applies across its working sets; no individual-set targets or warm-up sets. Target RIR is distinct from performed RIR. Notes, rest times, planned weights, editing/deletion, sessions, and logging are deferred. Zero RIR is valid; decimals are accepted without a product-specific upper limit or rounding rule.
+
+## Pages and navigation
+
+Home links to exercises and templates, with navigation between those pages. Session, history, and progress routes below remain proposals.
 
 | Page | Route | Purpose |
 | --- | --- | --- |
-| Workout templates | `/templates` | List, create, edit, delete, and start workouts from templates |
+| Workout templates | `/templates`, `/templates/[id]` | Create, list, and reopen (implemented); edit/delete/start are proposed |
 | Workout session | `/sessions/[id]` | View exercises, reference previous performance, and record sets |
 | Workout history | `/sessions` | List active/completed sessions and open a workout to review |
-| Exercises | `/exercises` | Browse the exercise library |
+| Exercises | `/exercises` | Create and browse personal exercises (implemented) |
 | Exercise progress | `/exercises/[id]` | View all recorded sets for one exercise, grouped by workout |
 
 Use simple navigation between templates, workout history, and exercises. An empty page explains how to create the first exercise/template or record the first workout. Workout entry should be usable on a phone, with clearly labeled fields and actions.
@@ -40,7 +48,7 @@ The criteria below define the proposed MVP flows. Criteria involving an open dec
 
 ### 1. Create and maintain a template
 
-Select exercises from your personal library, name the template, and arrange exercises in the desired order. Each occurrence has a required positive working-set count, optional rep range (equal bounds for a fixed target), and optional nonnegative target RIR. Targets apply to every working set of that occurrence; warm-up sets and individual-set targets are excluded. Templates do not prescribe target weights. Create/list/reopen are implemented for #23; editing and deletion remain proposals.
+Create/list/reopen follow the approved template targets above. Editing and deletion below remain proposals; templates do not prescribe target weights.
 
 - A template with a name and at least one exercise can be saved and reopened with the same order and configuration.
 - Missing/blank names, missing exercises, and invalid planned set counts show useful validation messages without losing the form input.
@@ -94,7 +102,7 @@ History lists sessions by date, copied template name, and active/completed statu
 
 ## Decisions requiring review
 
-These defaults match the current architecture proposal. They are recommendations, not approved requirements.
+The remaining session defaults are recommendations, not approved requirements. The template working-set count is already approved; D2 now concerns extra performed sets.
 
 | ID | Decision | Proposed default |
 | --- | --- | --- |
@@ -109,23 +117,15 @@ These defaults match the current architecture proposal. They are recommendations
 
 A partial previous workout supplies suggestions only for matching rows. If an exercise occurs more than once in that workout, preserve the source occurrence/order when displaying references; confirm how to map those sets into suggestions before implementing prefilling.
 
-The owner should approve or revise D1-D8 before implementation of affected flows. Exercise renaming/deletion, session cancellation/deletion, and corrections to completed workouts need separate requirements if requested. The proposed MVP supports reopening an existing active session, but does not define a separate pause/cancel state.
+Resolve the remaining decisions before implementing affected session flows. Exercise renaming/deletion, session cancellation/deletion, and corrections to completed workouts need separate requirements if requested. The proposed MVP supports reopening an existing active session, but does not define a separate pause/cancel state.
 
 ## Outside the proposed MVP
 
 - Authentication, accounts, multiple users, and sharing/social features.
-- RPE/RIR, rest timers, supersets, exercise instructions, and advanced programming.
+- Performed RPE/RIR, rest timers, supersets, exercise instructions, and advanced programming. Optional template target RIR is already approved and implemented.
 - Notifications, wearable integrations, imports, and external services.
 - Offline synchronization, live collaboration, and multi-device conflict resolution.
 - Required charts, personal-record calculations, and estimated one-rep max.
 - Editing/deleting completed sessions or deleting referenced exercises.
 
 Local or private-network use is the proposed deployment scope for this application without authentication; the technical setup belongs in the architecture and eventual README.
-
-## Approved exercise ownership (#11)
-
-The owner approved personal exercises with one internal local owner on 2026-10-13. Go selects that owner for every create/list operation; browser-supplied identity is not accepted. Exercises are not shared across future users. The internal owner does not provide authentication or access protection.
-
-## Approved template targets (#23)
-
-A template has a nonblank name and at least one ordered saved exercise. Working-set counts are required. Rep ranges and target RIR are optional and belong to the exercise occurrence within the template, so different templates or repeated occurrences can use different targets. One target applies across its working sets; no individual-set targets or warm-up sets. Target RIR is distinct from performed RIR. Notes, rest times, planned weights, editing/deletion, sessions, and logging are deferred. Zero RIR is valid; decimals are accepted without a product-specific upper limit or rounding rule.

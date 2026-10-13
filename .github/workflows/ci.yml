@@ -32,8 +32,6 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run format:check
-      - run: npm run typecheck
-      - run: npm run build
 
   backend:
     runs-on: ubuntu-latest
@@ -75,8 +73,8 @@ jobs:
           fi
       - run: go vet ./...
       - run: go test -race ./...
-      - run: go build -o bin/api ./cmd/api
 
+  # Dockerfiles run the production builds; Next.js also checks TypeScript.
   stack:
     needs: [frontend, backend]
     runs-on: ubuntu-latest
