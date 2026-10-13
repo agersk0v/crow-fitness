@@ -4,7 +4,7 @@ A simple workout tracker for one person, with no authentication or accounts.
 
 ## Current status
 
-The Next.js frontend, Go API, and PostgreSQL support creating, searching, tagging, renaming, and safely deleting personal exercises at `/exercises`. Names are trimmed and validated in Go. Saved exercises survive refresh and stack restart. Go selects one internal local owner; the app has no login or authentication. You can also create, edit, duplicate, archive, and restore persistent workout templates at `/templates`. Start a workout from an active template, continue the saved session from home, save weight/reps, or cancel it. Completing preserves its sets on the simple `/sets` page. Previous-performance references and exercise progress remain planned.
+The Next.js frontend, Go API, and PostgreSQL support creating, searching, tagging, renaming, and safely deleting personal exercises at `/exercises`. Names are trimmed and validated in Go. Saved exercises survive refresh and stack restart. Go selects one internal local owner; the app has no login or authentication. You can also create, edit, duplicate, archive, and restore persistent workout templates at `/templates`. Start a workout from an active template, continue the saved session from home, save weight/reps, or cancel it. Completing preserves its sets on the simple `/sets` page. Active exercises show previous completed performance without prefilling; detailed history and exercise progress remain planned.
 
 See [product requirements](docs/PRODUCT.md), [architecture](docs/ARCHITECTURE.md), and [agent instructions](AGENTS.md).
 
@@ -125,7 +125,7 @@ Motion for React provides brief 180 ms entrance animations for the home/exercise
 
 ## Planned features
 
-- Previous performance references.
+- Optional previous-performance prefilling (requires separate decisions).
 - A detailed workout-history interface and exercise progress.
 
 The product document lists decisions to confirm before implementing these flows. This setup is intended for your own computer; it has no authentication and is not configured for public hosting.
@@ -205,3 +205,11 @@ Focused PostgreSQL tests cover snapshots, null/zero/decimal targets, owner isola
 On a session page, **Add set** opens blank weight/reps fields; **Save set** persists them to the active workout. Saved rows offer Edit/Save/Cancel and Delete. They appear on **Browse sets** from home only after completion. The Sets page is a plain list of exercise name, kilograms, reps, and workout completion date in the browser's local timezone.
 
 Completion is disabled while a set draft, write, or unresolved error exists. Save or explicitly discard a new draft, cancel an unsubmitted edit, or retry a failed edit/delete before completing. A new set whose save response was lost can be retried with the same UUID or discarded with a server deletion. A failed edit must be resolved by retrying Save before cancelling the edit, because the server may already have saved it. Cancel session still discards the entire active workout after confirmation. Refresh restores successful saves; unsaved drafts have no offline persistence guarantee.
+
+## Previous performance in an active session
+
+Each exercise shows its latest completed workout with saved sets, across any template. Exercise identity connects history through renames. Empty workouts, deleted sets, and active/cancelled sessions are excluded. Repeated source occurrences retain their captured names and are labeled separately in source occurrence/set order; repeated current occurrences may share the same reference. Exact weight/reps and a local-time completion date are displayed read-only. No eligible history shows **No previous performance yet**.
+
+Reference requests run independently from current-set entry. **Retry previous performance** reloads only the references, preserving current drafts and controls. Refresh/Continue session reload references and saved current sets. Previous results never prefill, create, or complete any current set.
+
+- `GET /api/sessions/{id}/previous`: uncached `200` with `{"items":[...]}` for the owner's active session. A reference contains string `exercise_id`, string source `session_id`, UTC `completed_at`, and `occurrences` with source `position`, captured `name`, and `sets` using the existing saved-set shape. Exercises without history are omitted; no history returns `{"items":[]}`. Missing/completed/cancelled/foreign sessions return `404`; invalid IDs return `400`. Persistence/forwarding failures use the existing generic `500`/`502` conventions. Completion time/session ID and occurrence/saved timestamp/UUID provide stable tie-breaking.

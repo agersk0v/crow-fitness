@@ -185,6 +185,14 @@ with open(sys.argv[1]) as f: items=json.load(f)['items']
 assert len(items)==1 and items[0]['exercise_name']=='Smoke squat' and items[0]['weight']=='12.50' and items[0]['reps']==8,items
 CHECK
 session_id="$(curl --fail --silent --show-error "$base_url/api/sessions" -H 'Content-Type: application/json' --data "{\"template_id\":\"$template_id\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+# Check previous-performance forwarding against the just-completed workout.
+curl --fail --silent --show-error "$base_url/api/sessions/$session_id/previous" --output "$response_file"
+python3 - "$response_file" "$exercise_id" <<'CHECK'
+import json,sys
+with open(sys.argv[1]) as f: items=json.load(f)['items']
+assert len(items)==1 and items[0]['exercise_id']==sys.argv[2],items
+assert items[0]['occurrences'][0]['sets'][0]['weight']=='12.50',items
+CHECK
 curl --fail --silent --show-error "$base_url/api/sessions/$session_id/sets/11111111-1111-4111-8111-111111111111" -X PUT -H 'Content-Type: application/json' --data '{"exercise_position":1,"weight":"0","reps":5}' --output "$response_file"
 code="$(curl --silent --show-error --output "$response_file" --write-out '%{http_code}' "$base_url/api/sessions/$session_id/cancel" -X POST)"
 [[ "$code" == 204 ]]

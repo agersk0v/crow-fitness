@@ -2,7 +2,7 @@
 
 ## Status and purpose
 
-Crow Fitness is a minimal workout tracker for one person: create a reusable workout template, start a session, record weight and reps, and inspect exercise progress. Connection checks, exercise management, and template management are implemented. One persisted active session can be started, continued, cancelled, or completed. Active-session set entry and a simple list of completed sets are implemented; previous performance and detailed history/progress remain planned.
+Crow Fitness is a minimal workout tracker for one person: create a reusable workout template, start a session, record weight and reps, and inspect exercise progress. Connection checks, exercise management, and template management are implemented. One persisted active session can be started, continued, cancelled, or completed. Active-session set entry, a simple completed-set list, and previous-performance references are implemented. Detailed history/progress remain planned.
 
 The [README](../README.md) gives the overview. [ARCHITECTURE.md](ARCHITECTURE.md) separates the implemented design from future proposals. This document separates confirmed requirements from proposed MVP behavior; the decisions below remain open until the owner explicitly approves them. Merging a technical proposal does not by itself resolve product choices.
 
@@ -50,7 +50,7 @@ Start a workout from an active template and allow only one active session for th
 
 Home shows Continue session when one exists. Refresh, reopening the app, and database/stack restarts retain it. The session page displays its copied configuration and offers Continue later, Cancel session, and Complete session. Cancel requires confirmation; dismissing it preserves the session. Confirmed cancellation discards the session/sets; completion now retains them under #33 and returns home, allowing another workout to start. Failed requests show retryable errors; ending an old session cannot clear a newer one.
 
-Previous performance, changing exercises/targets during a session, timers, and a detailed workout-history interface remain outside this increment. Future proposals below do not override the approved lifecycle.
+Previous performance follows #35 below. Changing exercises/targets during a session, timers, and a detailed workout-history interface remain outside this increment. Future proposals below do not override the approved lifecycle.
 
 ## Approved session sets and completion (#33)
 
@@ -61,6 +61,14 @@ Sets belong to a specific captured exercise occurrence, including repeated exerc
 Completion waits for successful pending changes. Open drafts and failed changes remain available and block completion until saved, explicitly discarded, or resolved. Retrying uncertain writes must not duplicate sets or recreate deleted sets. Completed sets cannot be edited through active-session endpoints, and stale cancellation cannot delete a completed workout or newer session.
 
 Home links to a simple Sets page: only completed-workout sets, newest workouts first, showing copied exercise name, weight, reps, and workout completion date. Empty completed workouts produce no set rows. No filters, charts, timers, actual RIR, reference suggestions, session exercise editing, or detailed history interface in this issue. Later template/exercise changes or archiving preserve completed snapshots/results.
+
+## Approved previous performance (#35)
+
+The owner confirmed the selection rule: use the latest completed workout containing at least one nondeleted saved set for the same exercise identity, across any template. Active/cancelled sessions and completed workouts with no eligible sets for that exercise are excluded. Completion time and session identity break recency ties. Renaming an exercise does not disconnect its history.
+
+Each active exercise occurrence has a read-only Previous performance section with the source completion date and exact weight/reps. Repeated source occurrences are shown separately in their original occurrence/set order; repeated current occurrences may share the same reference. An exercise without eligible history shows No previous performance yet. Previous results are visually separate from current sets and template targets.
+
+References load independently of current-session data. Failed loads show retry while set controls and drafts remain usable. Retry does not reload/reset current input; refresh and Continue session load references alongside saved current sets. Reading or completing never copies previous results into current records. Prefilling, copying, and progression recommendations remain separate work.
 
 ## Pages and navigation
 
@@ -93,11 +101,11 @@ Template creation and management follow the approved sections above. Templates d
 
 ### 2. Start or resume a workout
 
-The approved #31 lifecycle above is implemented. Start Workout opens a saved snapshot; Continue session from home reopens it. There are no performed sets to restore yet. Retries while a session exists offer that same session instead of creating a duplicate.
+The approved #31 lifecycle above is implemented. Start Workout opens a saved snapshot; Continue session from home reopens it. Saved current sets and previous-performance references are restored. Retries while a session exists offer that same session instead of creating a duplicate.
 
 ### 3. Save sets in the active session
 
-The approved #33 behavior above is implemented. Add/Save records weight/reps in the active session; Edit/Save replaces values and Delete removes the set. Previous-performance references and suggested values remain future work.
+The approved #33 behavior above is implemented. Add/Save records weight/reps in the active session; Edit/Save replaces values and Delete removes the set. Read-only references follow #35; suggested/prefilled values remain future work.
 
 ### 4. Complete a workout
 
@@ -122,7 +130,6 @@ The following logging/history defaults remain recommendations, not approved requ
 | --- | --- | --- |
 | D1 | Initial weight/reps | Prefill from previous completed performance as unrecorded suggestions; unmatched rows stay blank |
 | D2 | Planned sets | Positive working-set counts per template exercise are approved in #23; extra performed sets in sessions remain proposed |
-| D6 | Previous performance | Most recent completed session with recorded sets for the exercise, regardless of template |
 | D8 | Future exercise progress scope | Include active/completed sets with labels remains proposed; the current Sets page includes completed sets only |
 
 A partial previous workout supplies suggestions only for matching rows. If an exercise occurs more than once in that workout, preserve the source occurrence/order when displaying references; confirm how to map those sets into suggestions before implementing prefilling.

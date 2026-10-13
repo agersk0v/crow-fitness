@@ -101,6 +101,25 @@ func Register(mux *http.ServeMux, store Store) {
 		}
 		write(w, 200, map[string]any{"items": items})
 	})
+	mux.HandleFunc("GET /api/sessions/{id}/previous", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		if !validID(id) {
+			problem(w, 400, "validation_error", "Invalid session ID.")
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+		items, err := store.Previous(ctx, exercises.LocalOwnerID, id)
+		if err != nil {
+			operationError(w, err)
+			return
+		}
+		if items == nil {
+			items = []PreviousPerformance{}
+		}
+		write(w, 200, map[string]any{"items": items})
+	})
+
 	for _, method := range []string{"PUT", "DELETE"} {
 		mux.HandleFunc(method+" /api/sessions/{id}/sets/{setID}", func(w http.ResponseWriter, r *http.Request) {
 			id, setID := r.PathValue("id"), r.PathValue("setID")

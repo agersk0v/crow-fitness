@@ -58,6 +58,12 @@ func (f *fakeStore) CompletedSets(_ context.Context, owner int64) ([]CompletedSe
 	return nil, f.err
 }
 
+func (f *fakeStore) Previous(_ context.Context, owner int64, id string) ([]PreviousPerformance, error) {
+	f.owner = owner
+	f.id = id
+	return nil, f.err
+}
+
 func TestHTTP(t *testing.T) {
 	for _, tc := range []struct {
 		name, method, path, body, content string

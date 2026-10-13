@@ -39,6 +39,7 @@ type Store interface {
 	SaveSet(context.Context, int64, string, string, SetInput) (SavedSet, error)
 	DeleteSet(context.Context, int64, string, string) error
 	CompletedSets(context.Context, int64) ([]CompletedSet, error)
+	Previous(context.Context, int64, string) ([]PreviousPerformance, error)
 }
 type Postgres struct{ Pool *pgxpool.Pool }
 

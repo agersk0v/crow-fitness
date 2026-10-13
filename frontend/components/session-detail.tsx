@@ -5,11 +5,16 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import {
+  PreviousPerformanceView,
+  usePreviousPerformance,
+} from "@/components/previous-performance";
 import { SessionSets } from "@/components/session-sets";
 import type { Session } from "@/lib/sessions";
 
 export function SessionDetail({ id }: { id: string }) {
   const router = useRouter();
+  const previous = usePreviousPerformance(id);
   const modal = useRef<HTMLDialogElement>(null);
   const dialogID = useId();
   const blockers = useRef(new Set<number>());
@@ -124,6 +129,15 @@ export function SessionDetail({ id }: { id: string }) {
         configuration you started with. Saved sets stay in this active session
         until you complete the workout. Cancellation discards them.
       </p>
+      {previous.error && (
+        <Alert variant="destructive">
+          <AlertTitle>Could not load previous performance</AlertTitle>
+          <AlertDescription>{previous.error}</AlertDescription>
+          <Button className="col-start-2 mt-3" onClick={previous.retry}>
+            Retry previous performance
+          </Button>
+        </Alert>
+      )}
       <ol className="space-y-4">
         {session.exercises.map((entry) => (
           <li
@@ -147,6 +161,14 @@ export function SessionDetail({ id }: { id: string }) {
               <dt>Target RIR</dt>
               <dd>{entry.target_rir ?? "Not specified"}</dd>
             </dl>
+            <PreviousPerformanceView
+              label={`${entry.position}. ${entry.name}`}
+              reference={previous.items.find(
+                (item) => item.exercise_id === entry.exercise_id,
+              )}
+              loading={previous.loading}
+              failed={!!previous.error}
+            />
             <SessionSets
               key={`${id}-${entry.position}`}
               sessionID={id}
