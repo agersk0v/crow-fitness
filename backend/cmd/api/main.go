@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/agersk0v/crow-fitness/backend/internal/config"
+	"github.com/agersk0v/crow-fitness/backend/internal/devdata"
 	"github.com/agersk0v/crow-fitness/backend/internal/exercises"
 	"github.com/agersk0v/crow-fitness/backend/internal/health"
 	"github.com/agersk0v/crow-fitness/backend/internal/migrations"
@@ -61,6 +62,7 @@ func run() error {
 	exercises.Register(mux, exercises.Postgres{Pool: pool})
 	templates.Register(mux, templates.Postgres{Pool: pool})
 	sessions.Register(mux, sessions.Postgres{Pool: pool})
+	devdata.Register(mux, devdata.Postgres{Pool: pool}, cfg.EnableDevReset)
 	mux.Handle("/", health.NewHandler(pool))
 
 	server := &http.Server{

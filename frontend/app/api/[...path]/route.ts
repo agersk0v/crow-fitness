@@ -9,6 +9,8 @@ async function forward(
 ) {
   const { path } = await params;
   const endpoint = path.join("/");
+  const reset =
+    endpoint === "dev/reset" && process.env.ENABLE_DEV_RESET === "true";
   const resource =
     path.length === 2 &&
     path[0] === "exercises" &&
@@ -75,6 +77,7 @@ async function forward(
         previous)) ||
     (request.method === "POST" &&
       (["exercises", "templates", "sessions"].includes(endpoint) ||
+        reset ||
         templateAction ||
         sessionAction)) ||
     (["PUT", "DELETE"].includes(request.method) && resource) ||
@@ -95,11 +98,19 @@ async function forward(
         cache: "no-store",
         method: request.method,
         headers: hasBody
-          ? { "Content-Type": request.headers.get("content-type") ?? "" }
+          ? {
+              "Content-Type": request.headers.get("content-type") ?? "",
+              ...(reset
+                ? {
+                    "X-Confirm-Reset":
+                      request.headers.get("x-confirm-reset") ?? "",
+                  }
+                : {}),
+            }
           : undefined,
         body: hasBody ? request.body : undefined,
         ...(hasBody ? { duplex: "half" } : {}),
-        signal: AbortSignal.timeout(4000),
+        signal: AbortSignal.timeout(reset ? 9000 : 4000),
       },
     );
     return new Response(
