@@ -1,16 +1,16 @@
 # Architecture
 
-[PRODUCT.md](PRODUCT.md) owns approved requirements and unresolved product decisions. [README.md](../README.md) owns setup, API examples, and check commands. The implemented design below reflects the current repository; active-session persistence is implemented, while logging/history design remains a proposal.
+[PRODUCT.md](PRODUCT.md) owns approved requirements and unresolved product decisions. [README.md](../README.md) owns setup, API examples, and check commands. The implemented design below reflects the current repository; session/set persistence and a plain completed-sets list are implemented; reference performance and detailed history/progress remain proposals.
 
 ## Implemented components
 
 | Component | Responsibility | Location |
 | --- | --- | --- |
-| Next.js / TypeScript / Tailwind | Connection checks, exercise search/tags/edit/delete, template creation/edit/duplicate/archive/restore, active sessions, themes and accessible UI | `frontend/app/`, `frontend/components/`, `frontend/lib/` |
+| Next.js / TypeScript / Tailwind | Connection checks, exercise search/tags/edit/delete, template creation/edit/duplicate/archive/restore, sessions and set entry/list, themes and accessible UI | `frontend/app/`, `frontend/components/`, `frontend/lib/` |
 | Go `net/http` | Configuration, HTTP decoding, validation, ownership, persistence and graceful shutdown | `backend/cmd/api/`, `backend/internal/config/`, `health/`, `exercises/`, `templates/`, `sessions/` |
 | PostgreSQL / `pgx` pool | Durable records, foreign keys, constraints and transactions | SQL in the Go feature packages; `backend/internal/migrations/` |
 
-The browser calls relative `/api` URLs. The server-only Next.js forwarding route uses runtime `API_INTERNAL_URL` and allows exercise/template collection GET/POST, template-detail GET/PUT and duplicate/archive/restore POST, exercise PUT/DELETE and template-usage GET, session start POST, active/detail GET and cancel/complete POST, and health/readiness GET. Responses are uncached. Only Go accesses PostgreSQL; database credentials stay server-side. Go sets request deadlines and server timeouts, and returns generic persistence errors while logging diagnostic details.
+The browser calls relative `/api` URLs. The server-only Next.js forwarding route uses runtime `API_INTERNAL_URL` and allows exercise/template collection GET/POST, template-detail GET/PUT and duplicate/archive/restore POST, exercise PUT/DELETE and template-usage GET, session start POST, active/detail GET and cancel/complete POST, session-set PUT/DELETE and completed-sets GET, and health/readiness GET. Responses are uncached. Only Go accesses PostgreSQL; database credentials stay server-side. Go sets request deadlines and server timeouts, and returns generic persistence errors while logging diagnostic details.
 
 The local Docker stack publishes only the frontend on localhost. Go and PostgreSQL remain on the internal Compose network; PostgreSQL 18 data uses a named volume at `/var/lib/postgresql`. Dockerfiles and CI pin the supported runtime versions. Rebuilds, rather than source mounts, apply local code changes. With no login or authentication, anyone who can reach this app can operate on its data. The internal owner is not an access-control mechanism.
 
@@ -33,13 +33,15 @@ Exercise create/update requires at least one predefined muscle group, normalizes
 
 Embedded numbered SQL migrations run before Go serves traffic. A transaction and PostgreSQL advisory lock serialize concurrent starts; `schema_migrations` records applied versions. Reruns skip applied files and preserve records. Migration failure stops startup. Operational commands and data-preservation guidance are in README.md; add new migrations rather than changing applied SQL. A volume provides persistence, not backup; define an export/restore procedure before storing important workout history.
 
-## Implemented active sessions (#31)
+## Implemented sessions and sets (#31 / #33)
 
-Migration 005 adds `active_sessions` (generated ID, unique owner, source template reference, copied name, UTC start time) and `active_session_exercises` (copied exercise ID/name, occurrence position, working-set count, optional rep bounds/RIR). Composite foreign keys keep template/session ownership consistent. Occurrence targets use the same constraints as templates. Snapshot exercise IDs deliberately have no live exercise foreign key: removing an unused library record does not remove or prevent reading its captured name/configuration.
+Migration 005 introduced active snapshots. Migration 006 renames them to `workout_sessions` / `session_exercises`, adds nullable `completed_at`, and replaces owner uniqueness with a partial unique index for unfinished sessions. Existing active rows and their identities/configuration are preserved. Migration 007 adds `session_sets`: composite `(session_id, UUID)` identity, captured occurrence reference, exact decimal weight, positive reps, saved order timestamp, and a deletion marker. Foreign keys enforce snapshot membership and owner/session consistency. Cancelling cascades sets and occurrence rows.
 
-Start locks the owner row to serialize starts/endings, checks for an existing session, and locks the source template `FOR SHARE` against edits/archiving. It inserts the session and copies all occurrences/names/targets in one SQL statement in the same transaction. Empty/missing/archived sources are rejected, with no partial session. The unique owner constraint independently prevents two active sessions. An existing session yields a 409 with its full snapshot for continuation, including a retry after an uncertain start response. No request ledger is retained after ending a session.
+Start locks the owner with `FOR NO KEY UPDATE`, compatible with template creation/duplication foreign-key checks, then locks the source template `FOR SHARE` against edits/archiving. It copies names/configuration atomically. An existing active session yields 409 and its snapshot for continuation. Active/detail reads use repeatable read and return saved sets from the same snapshot.
 
-Active/detail reads use a read-only repeatable-read transaction so concurrent cancellation cannot produce a partial snapshot. Cancellation and completion both lock the owner and delete only the supplied session ID, cascading its occurrence rows. They return 204 even if that ID is already gone or belongs to another owner; retries/stale tabs cannot clear a newer session. No completed status, finish time, history, or performed sets are stored. Next.js renders the saved snapshot and offers native cancel confirmation; home loads the active session without caching.
+Set PUT locks the parent session, requires active state, validates occurrence ownership and decimal-string weight (up to two fractional digits), and inserts/replaces by the same UUID. Position is immutable for an existing set. Numeric has no fixed scale or product-specific ceiling; constraints reject excess scale instead of rounding. Deleted rows remain as tombstones so delayed PUT retries cannot recreate a removed set. Active concurrent edits apply in commit order; there is no draft merging. Frontend drafts keep their UUID until Save succeeds or server deletion confirms discard.
+
+Completion locks the owner and updates the parent session once, ordering against set writes/deletion. It preserves the first completion time and snapshot/results and releases the active slot. Writes that race afterward are rejected. Cancel deletes only the supplied owner's active session; repeated/stale endings cannot affect a completed workout or newer active session. A completed-set query joins copied occurrence names and includes only nondeleted sets from completed workouts, with stable completion/session/occurrence/set ordering. The UI blocks completion for drafts/pending/failed writes, offers native cancel confirmation, and has a plain `/sets` list. Completed detail routes, analytics, previous performance, and editing completed records remain outside scope.
 
 ## Current validation coverage
 
@@ -47,9 +49,9 @@ Go tests cover configuration, credential encoding, health/readiness timeouts, HT
 
 CI retains formatting, Go vet/race tests, and a Docker stack job. The Dockerfiles perform the production builds; Next.js checks TypeScript during its build. The smoke script checks a representative exercise/template/session flow through forwarding, a validation response, health/readiness outage recovery, and persistence through database and whole-stack restarts. HTTP page fetches are not interactive browser tests. Local commands and test-database setup are in README.md.
 
-## Proposed future logging and history
+## Proposed future reference performance and history
 
-This section proposes a later expansion beyond the implemented active-only lifecycle. Resolve the remaining PRODUCT.md decisions before implementing the affected behavior. Keep one frontend, one Go API, and one database; introduce additional services only for an approved need.
+This section proposes later expansion beyond the implemented set-entry/completion flow. The remaining proposals do not override #33. Resolve the remaining PRODUCT.md decisions before implementing the affected behavior. Keep one frontend, one Go API, and one database; introduce additional services only for an approved need.
 
 ### Proposed records and history retention
 

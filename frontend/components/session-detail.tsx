@@ -5,12 +5,15 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { SessionSets } from "@/components/session-sets";
 import type { Session } from "@/lib/sessions";
 
 export function SessionDetail({ id }: { id: string }) {
   const router = useRouter();
   const modal = useRef<HTMLDialogElement>(null);
   const dialogID = useId();
+  const blockers = useRef(new Set<number>());
+  const [blocked, setBlocked] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [missing, setMissing] = useState(false);
@@ -52,7 +55,7 @@ export function SessionDetail({ id }: { id: string }) {
     else modal.current?.close();
   }, [confirming]);
   async function end(action: "cancel" | "complete") {
-    if (busy) return;
+    if (busy || (action === "complete" && blockers.current.size)) return;
     setBusy(action);
     setActionError("");
     try {
@@ -118,8 +121,8 @@ export function SessionDetail({ id }: { id: string }) {
       </p>
       <p className="my-6 text-muted-foreground">
         Your workout is saved for you to continue later. These targets are the
-        configuration you started with. Set logging and workout history are
-        coming later; completing or cancelling clears this session.
+        configuration you started with. Saved sets stay in this active session
+        until you complete the workout. Cancellation discards them.
       </p>
       <ol className="space-y-4">
         {session.exercises.map((entry) => (
@@ -144,11 +147,34 @@ export function SessionDetail({ id }: { id: string }) {
               <dt>Target RIR</dt>
               <dd>{entry.target_rir ?? "Not specified"}</dd>
             </dl>
+            <SessionSets
+              key={`${id}-${entry.position}`}
+              sessionID={id}
+              position={entry.position}
+              initial={session.sets.filter(
+                (set) => set.exercise_position === entry.position,
+              )}
+              disabled={!!busy}
+              onBlocked={(position, isBlocked) => {
+                if (isBlocked) blockers.current.add(position);
+                else blockers.current.delete(position);
+                setBlocked(blockers.current.size > 0);
+              }}
+            />
           </li>
         ))}
       </ol>
+      {blocked && (
+        <p role="status" className="mt-5 text-sm text-muted-foreground">
+          Save or discard open drafts and resolve failed changes before
+          completing.
+        </p>
+      )}
       <div className="my-6 flex flex-wrap gap-3">
-        <Button disabled={!!busy} onClick={() => void end("complete")}>
+        <Button
+          disabled={!!busy || blocked}
+          onClick={() => void end("complete")}
+        >
           {busy === "complete" ? "Completing…" : "Complete session"}
         </Button>
         <Button
@@ -191,8 +217,9 @@ export function SessionDetail({ id }: { id: string }) {
           Cancel {session.name}?
         </h2>
         <p className="mt-4 text-sm text-muted-foreground">
-          This clears your active session. You can start a new workout from a
-          template afterward.
+          This discards your active session and all its saved sets. These sets
+          will not appear on the Sets page. You can start another workout
+          afterward.
         </p>
         {actionError && (
           <Alert variant="destructive" className="mt-4">

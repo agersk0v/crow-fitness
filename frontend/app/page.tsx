@@ -32,7 +32,7 @@ export default function Home() {
           </h1>
           <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
             Create exercises, reusable workout templates, and start a workout.
-            Set logging and exercise history are coming next.
+            Save your sets and complete your workout to keep the results.
           </p>
         </div>
         <ActiveSession />
@@ -47,6 +47,12 @@ export default function Home() {
           className="self-start rounded-lg border border-border px-5 py-3 font-semibold text-highlight hover:bg-primary/5"
         >
           Browse templates
+        </Link>
+        <Link
+          href="/sets"
+          className="self-start rounded-lg border border-border px-5 py-3 font-semibold text-highlight hover:bg-primary/5"
+        >
+          Browse sets
         </Link>
         <ConnectionStatus />
       </PageEntrance>

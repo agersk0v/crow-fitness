@@ -74,7 +74,13 @@ func Register(mux *http.ServeMux, store Store) {
 			}
 			ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 			defer cancel()
-			if err := store.End(ctx, exercises.LocalOwnerID, id); err != nil {
+			var err error
+			if action == "complete" {
+				err = store.Complete(ctx, exercises.LocalOwnerID, id)
+			} else {
+				err = store.End(ctx, exercises.LocalOwnerID, id)
+			}
+			if err != nil {
 				operationError(w, err)
 				return
 			}
@@ -82,6 +88,50 @@ func Register(mux *http.ServeMux, store Store) {
 			w.WriteHeader(http.StatusNoContent)
 		})
 	}
+	mux.HandleFunc("GET /api/sets", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+		items, err := store.CompletedSets(ctx, exercises.LocalOwnerID)
+		if err != nil {
+			operationError(w, err)
+			return
+		}
+		if items == nil {
+			items = []CompletedSet{}
+		}
+		write(w, 200, map[string]any{"items": items})
+	})
+	for _, method := range []string{"PUT", "DELETE"} {
+		mux.HandleFunc(method+" /api/sessions/{id}/sets/{setID}", func(w http.ResponseWriter, r *http.Request) {
+			id, setID := r.PathValue("id"), r.PathValue("setID")
+			if !validID(id) || !uuidPattern.MatchString(setID) {
+				problem(w, 400, "validation_error", "Invalid session or set ID.")
+				return
+			}
+			ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+			defer cancel()
+			if r.Method == "DELETE" {
+				if err := store.DeleteSet(ctx, exercises.LocalOwnerID, id, setID); err != nil {
+					operationError(w, err)
+					return
+				}
+				w.Header().Set("Cache-Control", "no-store")
+				w.WriteHeader(204)
+				return
+			}
+			var input SetInput
+			if !decode(w, r, &input) {
+				return
+			}
+			item, err := store.SaveSet(ctx, exercises.LocalOwnerID, id, setID, input)
+			if err != nil {
+				operationError(w, err)
+				return
+			}
+			write(w, 200, item)
+		})
+	}
+
 }
 func decode(w http.ResponseWriter, r *http.Request, input any) bool {
 	media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
@@ -108,7 +158,7 @@ func decode(w http.ResponseWriter, r *http.Request, input any) bool {
 		if errors.As(err, &oversized) {
 			problem(w, 413, "body_too_large", "Request is too large.")
 		} else {
-			problem(w, 400, "validation_error", "Send valid session JSON with a template ID.")
+			problem(w, 400, "validation_error", "Send valid JSON with the required fields.")
 		}
 		return false
 	}
@@ -116,9 +166,18 @@ func decode(w http.ResponseWriter, r *http.Request, input any) bool {
 }
 func operationError(w http.ResponseWriter, err error) {
 	var conflict ActiveConflict
+	var fields ValidationError
 	switch {
 	case errors.As(err, &conflict):
 		write(w, 409, map[string]any{"error": map[string]any{"code": "active_session_exists", "message": conflict.Error(), "session": conflict.Session}})
+	case errors.As(err, &fields):
+		write(w, 400, map[string]any{"error": map[string]any{"code": "validation_error", "message": fields.Error(), "fields": fields}})
+	case errors.Is(err, ErrCompleted):
+		problem(w, 409, "session_completed", "This workout has been completed. Its sets cannot be changed.")
+	case errors.Is(err, ErrDeleted):
+		problem(w, 409, "set_deleted", "This set was deleted. Add a new set instead.")
+	case errors.Is(err, ErrOccurrence):
+		problem(w, 409, "set_occurrence_conflict", "This set belongs to a different exercise occurrence.")
 	case errors.Is(err, ErrNotFound):
 		problem(w, 404, "not_found", "Session or template not found.")
 	case errors.Is(err, ErrArchived):

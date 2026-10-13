@@ -6,4 +6,18 @@ export type Session = {
   name: string;
   started_at: string;
   exercises: TemplateExercise[];
+  sets: SavedSet[];
+  completed_at: string | null;
+};
+
+export type SavedSet = {
+  id: string;
+  exercise_position: number;
+  weight: string;
+  reps: number;
+};
+export type CompletedSet = SavedSet & {
+  session_id: string;
+  exercise_name: string;
+  completed_at: string;
 };

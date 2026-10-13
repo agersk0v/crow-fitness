@@ -36,9 +36,19 @@ async function forward(
     path[0] === "sessions" &&
     /^[1-9][0-9]*$/.test(path[1]) &&
     ["cancel", "complete"].includes(path[2]);
+  const sessionSet =
+    path.length === 4 &&
+    path[0] === "sessions" &&
+    /^[1-9][0-9]*$/.test(path[1]) &&
+    path[2] === "sets" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+      path[3],
+    );
   const allowed =
     (request.method === "GET" &&
-      (["health", "ready", "exercises", "templates"].includes(endpoint) ||
+      (["health", "ready", "exercises", "templates", "sets"].includes(
+        endpoint,
+      ) ||
         usage ||
         template ||
         endpoint === "sessions/active" ||
@@ -48,7 +58,8 @@ async function forward(
         templateAction ||
         sessionAction)) ||
     (["PUT", "DELETE"].includes(request.method) && resource) ||
-    (request.method === "PUT" && template);
+    (request.method === "PUT" && template) ||
+    (["PUT", "DELETE"].includes(request.method) && sessionSet);
   if (!allowed)
     return Response.json(
       { error: { code: "not_found", message: "Not found." } },

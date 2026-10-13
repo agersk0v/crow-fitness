@@ -42,6 +42,22 @@ func (f *fakeStore) End(_ context.Context, owner int64, id string) error {
 	return f.err
 }
 
+func (f *fakeStore) Complete(ctx context.Context, owner int64, id string) error {
+	return f.End(ctx, owner, id)
+}
+func (f *fakeStore) SaveSet(_ context.Context, owner int64, sessionID, id string, input SetInput) (SavedSet, error) {
+	f.owner = owner
+	f.calls++
+	return SavedSet{ID: id, Position: input.Position, Weight: input.Weight, Reps: input.Reps}, f.err
+}
+func (f *fakeStore) DeleteSet(ctx context.Context, owner int64, sessionID, id string) error {
+	return f.End(ctx, owner, sessionID)
+}
+func (f *fakeStore) CompletedSets(_ context.Context, owner int64) ([]CompletedSet, error) {
+	f.owner = owner
+	return nil, f.err
+}
+
 func TestHTTP(t *testing.T) {
 	for _, tc := range []struct {
 		name, method, path, body, content string
