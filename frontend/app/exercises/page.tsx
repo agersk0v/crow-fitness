@@ -19,6 +19,12 @@ export default function ExercisesPage() {
         >
           Templates
         </Link>
+        <Link
+          href="/history"
+          className="text-sm font-medium text-highlight hover:text-highlight/80"
+        >
+          Workout history
+        </Link>
         <ThemeToggle />
       </header>
       <PageEntrance className="py-10 sm:py-16">

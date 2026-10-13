@@ -17,6 +17,7 @@ export default async function TemplatePage({
         >
           <Link href="/templates">← Templates</Link>
           <Link href="/exercises">Exercises</Link>
+          <Link href="/history">Workout history</Link>
           <Link href="/">Home</Link>
         </nav>
         <ThemeToggle />

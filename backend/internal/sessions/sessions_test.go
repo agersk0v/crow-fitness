@@ -63,6 +63,13 @@ func (f *fakeStore) Previous(_ context.Context, owner int64, id string) ([]Previ
 	f.id = id
 	return nil, f.err
 }
+func (f *fakeStore) CompletedSessions(_ context.Context, owner int64) ([]CompletedSession, error) {
+	f.owner = owner
+	return nil, f.err
+}
+func (f *fakeStore) GetCompleted(ctx context.Context, owner int64, id string) (Session, error) {
+	return f.Get(ctx, owner, id)
+}
 
 func TestHTTP(t *testing.T) {
 	for _, tc := range []struct {

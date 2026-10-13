@@ -9,10 +9,11 @@ export default function TemplatesPage() {
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-6">
         <nav
           aria-label="Main navigation"
-          className="flex gap-4 text-sm text-highlight"
+          className="flex flex-wrap gap-4 text-sm text-highlight"
         >
           <Link href="/">Home</Link>
           <Link href="/exercises">Exercises</Link>
+          <Link href="/history">Workout history</Link>
         </nav>
         <ThemeToggle />
       </header>

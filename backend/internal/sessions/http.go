@@ -101,6 +101,35 @@ func Register(mux *http.ServeMux, store Store) {
 		}
 		write(w, 200, map[string]any{"items": items})
 	})
+	mux.HandleFunc("GET /api/history/sessions", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+		items, err := store.CompletedSessions(ctx, exercises.LocalOwnerID)
+		if err != nil {
+			operationError(w, err)
+			return
+		}
+		if items == nil {
+			items = []CompletedSession{}
+		}
+		write(w, 200, map[string]any{"items": items})
+	})
+	mux.HandleFunc("GET /api/history/sessions/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		if !validID(id) {
+			problem(w, 400, "validation_error", "Invalid session ID.")
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+		item, err := store.GetCompleted(ctx, exercises.LocalOwnerID, id)
+		if err != nil {
+			operationError(w, err)
+			return
+		}
+		write(w, 200, item)
+	})
+
 	mux.HandleFunc("GET /api/sessions/{id}/previous", func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
 		if !validID(id) {

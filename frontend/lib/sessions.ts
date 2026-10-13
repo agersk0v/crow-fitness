@@ -21,3 +21,9 @@ export type CompletedSet = SavedSet & {
   exercise_name: string;
   completed_at: string;
 };
+
+export type CompletedSession = {
+  id: string;
+  name: string;
+  completed_at: string;
+};

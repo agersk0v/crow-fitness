@@ -207,7 +207,22 @@ import json,sys
 with open(sys.argv[1]) as f: items=json.load(f)['items']
 assert len(items)==1 and items[0]['weight']=='12.50',items
 CHECK
-curl --fail --silent --show-error "$base_url/sets" --output "$response_file"
+curl --fail --silent --show-error "$base_url/api/history/sessions" --output "$response_file"
+python3 - "$response_file" <<'CHECK'
+import json,sys
+with open(sys.argv[1]) as f: items=json.load(f)['items']
+assert len(items)==1 and items[0]['name']=='Smoke routine',items
+CHECK
+completed_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["items"][0]["id"])' "$response_file")"
+curl --fail --silent --show-error "$base_url/api/history/sessions/$completed_id" --output "$response_file"
+python3 - "$response_file" <<'CHECK'
+import json,sys
+with open(sys.argv[1]) as f: saved=json.load(f)
+assert saved['completed_at'] and saved['sets'][0]['weight']=='12.50' and saved['exercises'][0]['name']=='Smoke squat',saved
+CHECK
+curl --fail --silent --show-error "$base_url/history/$completed_id" --output "$response_file"
+grep -q 'Loading completed session' "$response_file"
+curl --fail --silent --show-error --location "$base_url/sets" --output "$response_file"
 grep -q 'Loading completed sets' "$response_file"
 assert_response /api/ready 200 ok
 echo "Stack smoke check passed: frontend, API, exercise/template/session routing, validation, readiness recovery, and restart persistence."

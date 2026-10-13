@@ -40,6 +40,8 @@ type Store interface {
 	DeleteSet(context.Context, int64, string, string) error
 	CompletedSets(context.Context, int64) ([]CompletedSet, error)
 	Previous(context.Context, int64, string) ([]PreviousPerformance, error)
+	CompletedSessions(context.Context, int64) ([]CompletedSession, error)
+	GetCompleted(context.Context, int64, string) (Session, error)
 }
 type Postgres struct{ Pool *pgxpool.Pool }
 
@@ -113,12 +115,15 @@ func lockOwner(ctx context.Context, tx pgx.Tx, owner int64) error {
 	return err
 }
 func (p Postgres) read(ctx context.Context, owner int64, id string) (Session, error) {
+	return p.readState(ctx, owner, id, false)
+}
+func (p Postgres) readState(ctx context.Context, owner int64, id string, completed bool) (Session, error) {
 	tx, err := p.Pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
 		return Session{}, err
 	}
 	defer tx.Rollback(ctx)
-	item, err := get(ctx, tx, owner, id)
+	item, err := getSnapshot(ctx, tx, owner, id, completed)
 	if err != nil {
 		return Session{}, err
 	}
@@ -141,9 +146,12 @@ func (p Postgres) Get(ctx context.Context, owner int64, id string) (Session, err
 	return p.read(ctx, owner, id)
 }
 func get(ctx context.Context, tx pgx.Tx, owner int64, id string) (Session, error) {
+	return getSnapshot(ctx, tx, owner, id, false)
+}
+func getSnapshot(ctx context.Context, tx pgx.Tx, owner int64, id string, completed bool) (Session, error) {
 	var item Session
 	err := tx.QueryRow(ctx, `SELECT id::text,template_id::text,name,started_at,completed_at FROM workout_sessions
- WHERE owner_id=$1 AND completed_at IS NULL AND ($2='' OR id::text=$2)`, owner, id).Scan(&item.ID, &item.TemplateID, &item.Name, &item.StartedAt, &item.CompletedAt)
+ WHERE owner_id=$1 AND (completed_at IS NOT NULL)=$3 AND ($2='' OR id::text=$2)`, owner, id, completed).Scan(&item.ID, &item.TemplateID, &item.Name, &item.StartedAt, &item.CompletedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return item, ErrNotFound
 	}

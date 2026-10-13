@@ -17,7 +17,7 @@ export default async function SessionPage({
         >
           <Link href="/">Home</Link>
           <Link href="/templates">Templates</Link>
-          <Link href="/sets">Sets</Link>
+          <Link href="/history">Workout history</Link>
           <Link href="/exercises">Exercises</Link>
         </nav>
         <ThemeToggle />
