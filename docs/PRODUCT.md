@@ -92,7 +92,7 @@ Home links to exercises and templates and offers continuation of an active sessi
 | --- | --- | --- |
 | Workout templates | `/templates`, `/templates/[id]` | Create, edit, duplicate, archive, inspect, restore, start (implemented) |
 | Workout session | `/sessions/[id]` | View the active snapshot, add/edit/delete sets, continue later, cancel, or complete (implemented) |
-| Completed sets | `/history?tab=sets`; `/sets` redirects | Plain completed-set list (implemented) |
+| Completed sets | `/history?tab=sets`; `/sets` redirects | Completed sets grouped by workout and occurrence (implemented) |
 | Exercise history | `/exercises/[id]/history` | Completed sets grouped by workout and occurrence (implemented) |
 | Workout history | `/history`, `/history/[id]` | Completed session cards and read-only snapshots (implemented) |
 | Exercises | `/exercises` | Create, search/filter, tag, rename, and safely delete personal exercises (implemented) |
@@ -157,7 +157,7 @@ Local or private-network use is the proposed deployment scope for this applicati
 
 ## Approved shared navigation (#41)
 
-All pages share Home, Exercises, Templates, Workout history, and Sets links in that order, plus the light/dark toggle. Sets opens the existing history tab. Current destinations are highlighted using the URL; detail pages highlight their parent section, with active sessions under Templates. Keep contextual back/continue actions in page content. Navigation must work with keyboard, phone/desktop layouts, refresh/back/forward, and retained theme preferences.
+All pages share Home, Exercises, Templates, and Workout history links in that order, plus the light/dark toggle; #45 removes the separate Sets navbar link. Sets opens the existing history tab. Current destinations are highlighted using the URL; detail pages highlight their parent section, with active sessions under Templates. Keep contextual back/continue actions in page content. Navigation must work with keyboard, phone/desktop layouts, refresh/back/forward, and retained theme preferences.
 
 ## Approved history search and filters (#43)
 
@@ -168,3 +168,9 @@ The owner confirmed all proposed defaults: case-insensitive captured-name substr
 The owner confirmed 12 weeks of history (48 completed workouts / 1,032 sets), one active session with a few saved sets, and replacing workout data within the existing schema. Home's Browse exercises / Browse templates / Workout history content links are removed; navbar navigation stays available. An explicitly enabled testing button requires confirmation naming the replaced data, offers Cancel, blocks duplicate submissions while busy, reports success/failure, and refreshes active-session continuation after success. The feature is disabled by default in both UI and Go.
 
 The seed uses Upper 1, Lower 1, Upper 2, Lower 2 with the issue's ordered working-set counts, shared exercise IDs and predefined muscle tags. Optional rep-range/RIR targets remain unset; pipes do not introduce supersets. Dummy past completions and valid varied weights/reps support ordinary history/filter/reference flows. Active sets stay active-only. Reset and seed are atomic, preserve schema/migration metadata, and replace rather than accumulate data. This is a temporary local testing tool, not an ordinary workout workflow.
+
+## Approved exercise-card navigation and grouped Sets history (#45)
+
+Exercise-library cards link by stable identity to `/history?tab=sets&exercise=<id>` without unrelated criteria. Replace the separate View history button; Edit/Delete and their forms/dialogs remain independent. Remove Sets from the shared navbar and highlight Workout history for both tabs. Retain the Sets tab, URL criteria, legacy redirect, dedicated exercise-history route, and completed-detail links.
+
+Group Sets results by captured workout and then exercise occurrence, with local completion dates, exact recorded values, and completed-detail navigation. Preserve newest-workout and source occurrence/set order, distinguish repeated names/occurrences, and group only rows matching the existing criteria. Active/cancelled workouts, deleted sets, and empty result groups stay excluded. The view remains read-only, with useful empty/no-match and retry states.

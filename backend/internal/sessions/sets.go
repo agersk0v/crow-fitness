@@ -22,6 +22,8 @@ type SavedSet struct {
 }
 type CompletedSet struct {
 	SavedSet
+	SessionName  string    `json:"session_name"`
+	ExerciseID   string    `json:"exercise_id"`
 	SessionID    string    `json:"session_id"`
 	ExerciseName string    `json:"exercise_name"`
 	CompletedAt  time.Time `json:"completed_at"`
@@ -157,7 +159,7 @@ func readSets(ctx context.Context, tx pgx.Tx, owner int64, id string) ([]SavedSe
 	return items, rows.Err()
 }
 func (p Postgres) CompletedSets(ctx context.Context, owner int64, filter HistoryFilter) ([]CompletedSet, error) {
-	rows, err := p.Pool.Query(ctx, `SELECT ss.id::text,ss.exercise_position,ss.weight::text,ss.reps,s.id::text,se.name,s.completed_at
+	rows, err := p.Pool.Query(ctx, `SELECT ss.id::text,ss.exercise_position,ss.weight::text,ss.reps,s.id::text,se.name,s.completed_at,s.name,se.exercise_id::text
  FROM session_sets ss JOIN workout_sessions s ON s.owner_id=ss.owner_id AND s.id=ss.session_id
  JOIN session_exercises se ON se.session_id=ss.session_id AND se.owner_id=ss.owner_id AND se.position=ss.exercise_position
  WHERE ss.owner_id=$1 AND s.completed_at IS NOT NULL AND NOT ss.deleted
@@ -173,7 +175,7 @@ func (p Postgres) CompletedSets(ctx context.Context, owner int64, filter History
 	items := []CompletedSet{}
 	for rows.Next() {
 		var item CompletedSet
-		if err = rows.Scan(&item.ID, &item.Position, &item.Weight, &item.Reps, &item.SessionID, &item.ExerciseName, &item.CompletedAt); err != nil {
+		if err = rows.Scan(&item.ID, &item.Position, &item.Weight, &item.Reps, &item.SessionID, &item.ExerciseName, &item.CompletedAt, &item.SessionName, &item.ExerciseID); err != nil {
 			return nil, err
 		}
 		items = append(items, item)

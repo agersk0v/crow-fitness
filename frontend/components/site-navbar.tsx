@@ -4,19 +4,11 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { ThemeToggle } from "@/components/theme-toggle";
 
-function historyHref(section: string, search: string) {
-  const params = new URLSearchParams(search);
-  if (section === "sets") params.set("tab", "sets");
-  else params.delete("tab");
-  return `/history${params.size ? `?${params}` : ""}`;
-}
-
 const destinations = [
   { label: "Home", href: "/", section: "home" },
   { label: "Exercises", href: "/exercises", section: "exercises" },
   { label: "Templates", href: "/templates", section: "templates" },
   { label: "Workout history", href: "/history", section: "history" },
-  { label: "Sets", href: "/history?tab=sets", section: "sets" },
 ];
 
 export function Navbar({
@@ -34,8 +26,8 @@ export function Navbar({
             <Link
               key={section}
               href={
-                section === "history" || section === "sets"
-                  ? historyHref(section, historySearch)
+                section === "history" && historySearch
+                  ? `/history?${historySearch}`
                   : href
               }
               aria-current={selected === section ? "page" : undefined}
@@ -61,11 +53,9 @@ export function SiteNavbar() {
         ? "exercises"
         : pathname.startsWith("/templates") || pathname.startsWith("/sessions")
           ? "templates"
-          : pathname === "/history" && searchParams.get("tab") === "sets"
-            ? "sets"
-            : pathname.startsWith("/history")
-              ? "history"
-              : "";
+          : pathname.startsWith("/history")
+            ? "history"
+            : "";
   return (
     <Navbar
       selected={selected}

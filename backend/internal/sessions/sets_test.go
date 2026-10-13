@@ -176,7 +176,7 @@ func TestPostgresSets(t *testing.T) {
 		t.Fatal(err)
 	}
 	listed, err = store.CompletedSets(ctx, 71, HistoryFilter{})
-	if err != nil || len(listed) != 2 || listed[0].ExerciseName != "Captured press" || listed[0].Weight != "0" || !listed[0].CompletedAt.Equal(completed) || listed[1].Position != 2 {
+	if err != nil || len(listed) != 2 || listed[0].ExerciseName != "Captured press" || listed[0].ExerciseID != exercise.ID || listed[0].SessionName != template.Name || listed[0].Weight != "0" || !listed[0].CompletedAt.Equal(completed) || listed[1].Position != 2 {
 		t.Fatal("completed list", listed, err)
 	}
 	if foreign, err := store.CompletedSets(ctx, 72, HistoryFilter{}); err != nil || len(foreign) != 0 {

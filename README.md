@@ -203,7 +203,7 @@ Session resources contain string `id` and `template_id`, copied `name`, UTC `sta
 
 Focused PostgreSQL tests cover snapshots, null/zero/decimal targets, owner isolation, concurrent starts, atomic failed starts, migration reruns/reconnection, clearing rows, and stale end requests. The stack smoke also checks session forwarding and persistence through database/full-stack restarts.
 
-On a session page, **Add set** opens blank weight/reps fields; **Save set** persists them to the active workout. Saved rows offer Edit/Save/Cancel and Delete. They appear in **Workout history → Sets** only after completion. The Sets tab is a plain list of exercise name, kilograms, reps, and workout completion date in the browser's local timezone.
+On a session page, **Add set** opens blank weight/reps fields; **Save set** persists them to the active workout. Saved rows offer Edit/Save/Cancel and Delete. They appear in **Workout history → Sets** only after completion. The Sets tab groups recorded sets by workout and exercise occurrence, with exact kilograms/reps and browser-local completion dates.
 
 Completion is disabled while a set draft, write, or unresolved error exists. Save or explicitly discard a new draft, cancel an unsubmitted edit, or retry a failed edit/delete before completing. A new set whose save response was lost can be retried with the same UUID or discarded with a server deletion. A failed edit must be resolved by retrying Save before cancelling the edit, because the server may already have saved it. Cancel session still discards the entire active workout after confirmation. Refresh restores successful saves; unsaved drafts have no offline persistence guarantee.
 
@@ -219,7 +219,7 @@ Reference requests run independently from current-set entry. **Retry previous pe
 
 Open **Workout history** from home, exercises, templates, or an active session. `/history` starts with **Sessions**: template-style cards for completed workouts, newest first, using the captured name and a local-time completion date. Selecting a card opens `/history/[id]`, a read-only snapshot with ordered exercise occurrences, template targets, and completed sets in separate sections. Repeated workouts are separate cards, and repeated exercises remain separate occurrences. Empty completed workouts still have a card and detail; they add no set rows.
 
-**Sets** keeps the plain completed-set list. Tabs use `/history?tab=sessions` or `?tab=sets` so refresh/back restores selection. Arrow keys, Home, and End move and activate tab focus; Tab enters the selected panel. `/sets` redirects to the Sets tab, preserving existing links. Active/cancelled workouts are excluded from both views. Loading failures offer retry, and missing/foreign/noncompleted detail IDs show not found. No editing, deletion, duplication, or template-creation actions are exposed on completed detail.
+**Sets** groups completed sets by workout and exercise occurrence. Tabs use `/history?tab=sessions` or `?tab=sets` so refresh/back restores selection. Arrow keys, Home, and End move and activate tab focus; Tab enters the selected panel. `/sets` redirects to the Sets tab, preserving existing links. Active/cancelled workouts are excluded from both views. Loading failures offer retry, and missing/foreign/noncompleted detail IDs show not found. No editing, deletion, duplication, or template-creation actions are exposed on completed detail.
 
 - `GET /api/history/sessions`: uncached `200`, `{"items":[{"id":"1","name":"Push day","completed_at":"..."}]}`. Completion time and numeric session ID sort descending, including workouts with no sets.
 - `GET /api/history/sessions/{id}`: uncached `200` with the saved session resource, including nonnull `completed_at`, copied `exercises`, and nondeleted `sets`. Missing, foreign, active, or cancelled sessions return `404`; invalid IDs return `400`. Existing generic persistence/forwarding errors apply. The active `/api/sessions/{id}` endpoint remains active-only.
@@ -238,7 +238,7 @@ No migration, dependencies, or environment changes are required. Focused tests c
 
 ## Shared navigation (#41)
 
-Every page uses the same navbar: Home, Exercises, Templates, Workout history, and Sets (the existing history tab). The current section is highlighted; exercise/template/completed-workout details select their parent section, and active workouts select Templates. Detail pages retain contextual back links. Navigation wraps on small screens and supports keyboard focus. The shared light/dark toggle keeps the existing saved theme across navigation and refresh.
+Every page uses the same navbar: Home, Exercises, Templates, and Workout history. Sets remains available as a history tab. The current section is highlighted; exercise/template/completed-workout details select their parent section, and active workouts select Templates. Both history tabs select Workout history in the navbar. Detail pages retain contextual back links. Navigation wraps on small screens and supports keyboard focus. The shared light/dark toggle keeps the existing saved theme across navigation and refresh.
 
 ## Search and filter workout history (#43)
 
@@ -261,3 +261,11 @@ The dataset contains 26 tagged exercise identities, Upper 1 / Lower 1 / Upper 2 
 - `POST /api/dev/reset`: available only when `ENABLE_DEV_RESET=true` in Go and the forwarding frontend. Requires `X-Confirm-Reset: replace-workout-data`; no request body is needed. Returns uncached `200` with `exercises`, `templates`, `completed_sessions`, `completed_sets`, `active_session_id`, and `active_sets`. Missing confirmation returns `400`; persistence failures return generic `500`, forwarding failures `502`. When disabled, it returns `404`.
 
 If a response is lost, refresh to inspect the current data before confirming another replacement. Repeating a successful reset replaces the dataset rather than accumulating it. The tool is temporary and isolated in `backend/internal/devdata/` and the Home component; remove its registration/configuration/UI when testing no longer needs it. Tests always use a separate disposable database/schema.
+
+## Exercise cards and grouped Sets history (#45)
+
+Click an exercise's name or card background to open `/history?tab=sets&exercise=<id>`. The card is an ordinary link with keyboard focus/new-tab support; Edit and Delete retain their independent dialogs, validation, and template-usage blocking. The separate library View history button is removed. Dedicated `/exercises/[id]/history` pages and completed-detail links remain available.
+
+Sets history now groups matching completed sets by workout, then source exercise occurrence, matching the dedicated exercise-history presentation. Each group shows its captured workout name, browser-local date, and completed-detail link; occurrences keep captured names and exact weight/reps in source order. Repeated workout names and exercise occurrences stay separate by IDs/positions. Existing search/exercise/date criteria are applied before grouping, so empty groups and excluded sets do not appear. Loading, retry, and empty/no-match behavior remain intact.
+
+`GET /api/sets` keeps its existing collection/query behavior and adds string `session_name` (captured workout name) and `exercise_id` to every item. Both tabs highlight Workout history; the separate Sets navbar link is removed, while the Sets tab and legacy `/sets` redirect remain. No schema, dependencies, or environment changes are needed.
