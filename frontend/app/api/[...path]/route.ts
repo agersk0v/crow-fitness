@@ -27,13 +27,26 @@ async function forward(
     path[0] === "templates" &&
     /^[1-9][0-9]*$/.test(path[1]) &&
     ["duplicate", "archive", "restore"].includes(path[2]);
+  const session =
+    path.length === 2 &&
+    path[0] === "sessions" &&
+    /^[1-9][0-9]*$/.test(path[1]);
+  const sessionAction =
+    path.length === 3 &&
+    path[0] === "sessions" &&
+    /^[1-9][0-9]*$/.test(path[1]) &&
+    ["cancel", "complete"].includes(path[2]);
   const allowed =
     (request.method === "GET" &&
       (["health", "ready", "exercises", "templates"].includes(endpoint) ||
         usage ||
-        template)) ||
+        template ||
+        endpoint === "sessions/active" ||
+        session)) ||
     (request.method === "POST" &&
-      (["exercises", "templates"].includes(endpoint) || templateAction)) ||
+      (["exercises", "templates", "sessions"].includes(endpoint) ||
+        templateAction ||
+        sessionAction)) ||
     (["PUT", "DELETE"].includes(request.method) && resource) ||
     (request.method === "PUT" && template);
   if (!allowed)

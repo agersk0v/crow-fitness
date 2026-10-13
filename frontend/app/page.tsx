@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PageEntrance } from "@/components/page-entrance";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { ActiveSession } from "@/components/active-session";
 import { ConnectionStatus } from "@/components/connection-status";
 
 export default function Home() {
@@ -30,10 +31,11 @@ export default function Home() {
             to track your workouts.
           </h1>
           <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
-            Create exercises and reusable workout templates. Set logging and
-            exercise history are coming next.
+            Create exercises, reusable workout templates, and start a workout.
+            Set logging and exercise history are coming next.
           </p>
         </div>
+        <ActiveSession />
         <Link
           href="/exercises"
           className="self-start rounded-lg bg-primary px-5 py-3 font-semibold text-primary-foreground hover:bg-primary/90"

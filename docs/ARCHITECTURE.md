@@ -1,16 +1,16 @@
 # Architecture
 
-[PRODUCT.md](PRODUCT.md) owns approved requirements and unresolved product decisions. [README.md](../README.md) owns setup, API examples, and check commands. The implemented design below reflects the current repository; the session design is a proposal, not an implementation commitment.
+[PRODUCT.md](PRODUCT.md) owns approved requirements and unresolved product decisions. [README.md](../README.md) owns setup, API examples, and check commands. The implemented design below reflects the current repository; active-session persistence is implemented, while logging/history design remains a proposal.
 
 ## Implemented components
 
 | Component | Responsibility | Location |
 | --- | --- | --- |
-| Next.js / TypeScript / Tailwind | Connection checks, exercise search/tags/edit/delete, template creation/edit/duplicate/archive/restore, themes and accessible UI | `frontend/app/`, `frontend/components/`, `frontend/lib/` |
-| Go `net/http` | Configuration, HTTP decoding, validation, ownership, persistence and graceful shutdown | `backend/cmd/api/`, `backend/internal/config/`, `health/`, `exercises/`, `templates/` |
+| Next.js / TypeScript / Tailwind | Connection checks, exercise search/tags/edit/delete, template creation/edit/duplicate/archive/restore, active sessions, themes and accessible UI | `frontend/app/`, `frontend/components/`, `frontend/lib/` |
+| Go `net/http` | Configuration, HTTP decoding, validation, ownership, persistence and graceful shutdown | `backend/cmd/api/`, `backend/internal/config/`, `health/`, `exercises/`, `templates/`, `sessions/` |
 | PostgreSQL / `pgx` pool | Durable records, foreign keys, constraints and transactions | SQL in the Go feature packages; `backend/internal/migrations/` |
 
-The browser calls relative `/api` URLs. The server-only Next.js forwarding route uses runtime `API_INTERNAL_URL` and allows exercise/template collection GET/POST, template-detail GET/PUT and duplicate/archive/restore POST, exercise PUT/DELETE and template-usage GET, and health/readiness GET. Responses are uncached. Only Go accesses PostgreSQL; database credentials stay server-side. Go sets request deadlines and server timeouts, and returns generic persistence errors while logging diagnostic details.
+The browser calls relative `/api` URLs. The server-only Next.js forwarding route uses runtime `API_INTERNAL_URL` and allows exercise/template collection GET/POST, template-detail GET/PUT and duplicate/archive/restore POST, exercise PUT/DELETE and template-usage GET, session start POST, active/detail GET and cancel/complete POST, and health/readiness GET. Responses are uncached. Only Go accesses PostgreSQL; database credentials stay server-side. Go sets request deadlines and server timeouts, and returns generic persistence errors while logging diagnostic details.
 
 The local Docker stack publishes only the frontend on localhost. Go and PostgreSQL remain on the internal Compose network; PostgreSQL 18 data uses a named volume at `/var/lib/postgresql`. Dockerfiles and CI pin the supported runtime versions. Rebuilds, rather than source mounts, apply local code changes. With no login or authentication, anyone who can reach this app can operate on its data. The internal owner is not an access-control mechanism.
 
@@ -33,15 +33,23 @@ Exercise create/update requires at least one predefined muscle group, normalizes
 
 Embedded numbered SQL migrations run before Go serves traffic. A transaction and PostgreSQL advisory lock serialize concurrent starts; `schema_migrations` records applied versions. Reruns skip applied files and preserve records. Migration failure stops startup. Operational commands and data-preservation guidance are in README.md; add new migrations rather than changing applied SQL. A volume provides persistence, not backup; define an export/restore procedure before storing important workout history.
 
+## Implemented active sessions (#31)
+
+Migration 005 adds `active_sessions` (generated ID, unique owner, source template reference, copied name, UTC start time) and `active_session_exercises` (copied exercise ID/name, occurrence position, working-set count, optional rep bounds/RIR). Composite foreign keys keep template/session ownership consistent. Occurrence targets use the same constraints as templates. Snapshot exercise IDs deliberately have no live exercise foreign key: removing an unused library record does not remove or prevent reading its captured name/configuration.
+
+Start locks the owner row to serialize starts/endings, checks for an existing session, and locks the source template `FOR SHARE` against edits/archiving. It inserts the session and copies all occurrences/names/targets in one SQL statement in the same transaction. Empty/missing/archived sources are rejected, with no partial session. The unique owner constraint independently prevents two active sessions. An existing session yields a 409 with its full snapshot for continuation, including a retry after an uncertain start response. No request ledger is retained after ending a session.
+
+Active/detail reads use a read-only repeatable-read transaction so concurrent cancellation cannot produce a partial snapshot. Cancellation and completion both lock the owner and delete only the supplied session ID, cascading its occurrence rows. They return 204 even if that ID is already gone or belongs to another owner; retries/stale tabs cannot clear a newer session. No completed status, finish time, history, or performed sets are stored. Next.js renders the saved snapshot and offers native cancel confirmation; home loads the active session without caching.
+
 ## Current validation coverage
 
 Go tests cover configuration, credential encoding, health/readiness timeouts, HTTP decoding, business validation, ownership selection, and generic errors. Disposable PostgreSQL tests cover constraints, owner isolation, ordered target readback, migration reruns, and transaction rollback.
 
-CI retains formatting, Go vet/race tests, and a Docker stack job. The Dockerfiles perform the production builds; Next.js checks TypeScript during its build. The smoke script checks a representative exercise/template flow through forwarding, a validation response, health/readiness outage recovery, and persistence through database and whole-stack restarts. HTTP page fetches are not interactive browser tests. Local commands and test-database setup are in README.md.
+CI retains formatting, Go vet/race tests, and a Docker stack job. The Dockerfiles perform the production builds; Next.js checks TypeScript during its build. The smoke script checks a representative exercise/template/session flow through forwarding, a validation response, health/readiness outage recovery, and persistence through database and whole-stack restarts. HTTP page fetches are not interactive browser tests. Local commands and test-database setup are in README.md.
 
-## Proposed sessions and logging
+## Proposed future logging and history
 
-Nothing in this section is implemented. Resolve the remaining PRODUCT.md decisions before implementing the affected behavior. Keep one frontend, one Go API, and one database; introduce additional services only for an approved need.
+This section proposes a later expansion beyond the implemented active-only lifecycle. Resolve the remaining PRODUCT.md decisions before implementing the affected behavior. Keep one frontend, one Go API, and one database; introduce additional services only for an approved need.
 
 ### Proposed records and history retention
 
@@ -49,13 +57,13 @@ Nothing in this section is implemented. Resolve the remaining PRODUCT.md decisio
 - `session_exercises`: session reference, stable exercise ID, copied exercise name/configuration, and occurrence position. Copy the approved template targets rather than rereading a template later.
 - `performed_sets`: session-exercise reference, set number, weight, reps, and client request UUID. Enforce unique occurrence/set numbers and occurrence/request UUIDs.
 
-Store timestamps in UTC and display them in the browser's local timezone. Require a finish timestamp only for completed sessions, no earlier than the start. If one active session is approved, enforce it per owner with a partial unique index. If kilograms with two decimal places is approved, `numeric(8,2)` and decimal-string JSON are proposed for weights; reject excess precision/range rather than silently rounding. Add indexes for real history joins and queries.
+Store timestamps in UTC and display them in the browser's local timezone. Require a finish timestamp only for completed sessions, no earlier than the start. When retaining completed sessions, preserve the approved one-active rule per owner with a partial unique index. If kilograms with two decimal places is approved, `numeric(8,2)` and decimal-string JSON are proposed for weights; reject excess precision/range rather than silently rounding. Add indexes for real history joins and queries.
 
-Session snapshots preserve history through template changes. Template archiving retains references; future sessions must keep their copied configuration. Permanent deletion requires a separate approved requirement. Block deletion of referenced exercises. Session deletion and editing completed sessions require separate requirements.
+Session snapshots preserve history through template changes. Template archiving retains references; future sessions must keep their copied configuration. Permanent deletion requires a separate approved requirement. Future recorded history needs its own retention/reference rules. Current active snapshots survive deletion of otherwise unused exercises. Editing/deleting completed sessions requires separate requirements.
 
 ### Proposed transactions
 
-1. **Start:** accept a template ID and request UUID. Lock the owner's template, read its ordered configuration, and create the session and snapshot in one transaction. Template edits and archive operations already use this parent lock. Reject missing/empty templates. A retry of the same request must reuse the existing session, compare the template ID, and never recopy a changed template.
+1. **Future start replay:** consider accepting a template ID and request UUID when introducing retained sessions. Lock the owner's template, read its ordered configuration, and create the session and snapshot in one transaction. Template edits and archive operations already use this parent lock. Reject missing/empty templates. A retry of the same request must reuse the existing session, compare the template ID, and never recopy a changed template.
 2. **Reference performance:** if approved, select the most recent completed session containing recorded sets for each exercise, ordered by completion time then session ID. Include repeated occurrences in source occurrence/set order. Resolve the mapping into suggestions before implementing prefilling.
 3. **Record:** lock the parent session, verify ownership, active status and occurrence membership, then insert valid weight/reps. A request UUID identifies a logical write; replay the same payload, reject changed payloads, and enforce uniqueness. Replay lookup precedes the active-status check so a lost response can be recovered after completion.
 4. **Edit/remove:** acquire the same parent-session lock and require active status. Preserve other set numbers. If autosave is approved, serialize valid edits per set and retain failed drafts for retry.
