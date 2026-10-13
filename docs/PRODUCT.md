@@ -2,7 +2,7 @@
 
 ## Status and purpose
 
-Crow Fitness is a minimal workout tracker for one person: create a reusable workout template, start a session, record weight and reps, and inspect exercise progress. Connection checks, exercise management, and template management are implemented. One persisted active session can be started, continued, cancelled, or completed. Active-session set entry, workout history with a Sets tab, and previous-performance references are implemented. Exercise-specific history/progress remain planned.
+Crow Fitness is a minimal workout tracker for one person: create a reusable workout template, start a session, record weight and reps, and inspect exercise progress. Connection checks, exercise management, and template management are implemented. One persisted active session can be started, continued, cancelled, or completed. Active-session set entry, workout history with a Sets tab, and previous-performance references are implemented. Exercise-specific completed-set history is implemented; progress charts remain planned.
 
 The [README](../README.md) gives the overview. [ARCHITECTURE.md](ARCHITECTURE.md) separates the implemented design from future proposals. This document separates confirmed requirements from proposed MVP behavior; the decisions below remain open until the owner explicitly approves them. Merging a technical proposal does not by itself resolve product choices.
 
@@ -70,6 +70,12 @@ Each active exercise occurrence has a read-only Previous performance section wit
 
 References load independently of current-session data. Failed loads show retry while set controls and drafts remain usable. Retry does not reload/reset current input; refresh and Continue session load references alongside saved current sets. Reading or completing never copies previous results into current records. Prefilling, copying, and progression recommendations remain separate work.
 
+## Approved exercise set history (#36)
+
+Exercise-library history links open `/exercises/[id]/history`, showing completed, nondeleted sets for the same exercise identity across all templates. Group by workout, newest first, using captured workout names and browser-local dates. Distinguish repeated occurrences in their original occurrence/set order and display exact weight/reps, including zero kilograms. Active/cancelled workouts and workouts without eligible sets are excluded.
+
+The page is read-only, with useful empty/not-found/loading states, retry, and navigation to exercises and completed workouts. Renames preserve identity; template changes/archives and removal of an unused library exercise preserve snapshots and the historical URL. Completed-workout detail also links to exercise history. Missing or foreign identities are not found. Filters, charts, editing, progression, and active-session changes remain outside scope.
+
 ## Approved workout history (#37)
 
 The owner confirmed Sessions as the first tab. Home's Workout history link opens `/history`; Sessions and Sets tabs store selection in the URL for refresh and back navigation. Sessions lists completed workouts as template-style cards using captured names and local completion dates, newest first. Repeated workouts remain separate records. Sets retains the plain completed-set list. Active and cancelled sessions appear in neither tab.
@@ -87,9 +93,10 @@ Home links to exercises and templates and offers continuation of an active sessi
 | Workout templates | `/templates`, `/templates/[id]` | Create, edit, duplicate, archive, inspect, restore, start (implemented) |
 | Workout session | `/sessions/[id]` | View the active snapshot, add/edit/delete sets, continue later, cancel, or complete (implemented) |
 | Completed sets | `/history?tab=sets`; `/sets` redirects | Plain completed-set list (implemented) |
+| Exercise history | `/exercises/[id]/history` | Completed sets grouped by workout and occurrence (implemented) |
 | Workout history | `/history`, `/history/[id]` | Completed session cards and read-only snapshots (implemented) |
 | Exercises | `/exercises` | Create, search/filter, tag, rename, and safely delete personal exercises (implemented) |
-| Exercise progress | `/exercises/[id]` | View all recorded sets for one exercise, grouped by workout |
+| Exercise progress | To be defined | Future charts and progress views |
 
 Use simple navigation between templates, workout history, and exercises. An empty page explains how to create the first exercise/template or record the first workout. Workout entry should be usable on a phone, with clearly labeled fields and actions.
 
@@ -121,7 +128,7 @@ The approved #33 behavior above is implemented. Complete retains the workout and
 
 ### 5. Inspect workout history and exercise progress
 
-Workout history follows the approved #37 behavior above. Completed sessions and sets are read-only. Exercise-specific history/progress remains separate work; charts and strength estimates are not required.
+Workout history follows the approved #37 behavior above. Completed sessions and sets are read-only. Exercise-specific history follows #36 above; charts and strength estimates remain separate work.
 
 ## Decisions requiring review
 

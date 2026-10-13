@@ -61,6 +61,12 @@ Go tests cover configuration, credential encoding, health/readiness timeouts, HT
 
 CI retains formatting, Go vet/race tests, and a Docker stack job. The Dockerfiles perform the production builds; Next.js checks TypeScript during its build. The smoke script checks a representative exercise/template/session flow through forwarding, a validation response, health/readiness outage recovery, and persistence through database and whole-stack restarts. HTTP page fetches are not interactive browser tests. Local commands and test-database setup are in README.md.
 
+## Implemented exercise set history (#36)
+
+`GET /api/exercises/{id}/history` reads the local owner's exercise identity and all completed nondeleted sets in a read-only repeatable-read transaction. The library name takes precedence; a completed snapshot supplies a fallback identity/name after library removal. Active-only snapshots do not expose a removed identity. Completed snapshots with no eligible sets remain readable as empty history.
+
+The query scopes ownership and stable exercise ID, orders workouts by completion time and numeric session ID descending, then occurrences by source position and sets by saved time/UUID. Grouping preserves captured workout/occurrence names and decimal-string weights. No schema change or mutation is needed. `/exercises/[id]/history` presents the groups read-only, with local dates, retry/empty/not-found states, and navigation from library and completed-workout detail. Identity and snapshot retention tests cover renames, template edits/archives, removal, reconnect, exclusions, and unchanged active data.
+
 ## Proposed future reference performance and history
 
 This section proposes later expansion beyond the implemented set-entry/completion flow. The remaining proposals do not override #33. Resolve the remaining PRODUCT.md decisions before implementing the affected behavior. Keep one frontend, one Go API, and one database; introduce additional services only for an approved need.
@@ -94,7 +100,6 @@ Suggested values remain separate from performed records. Template updates alread
 | POST | `/api/sessions/{id}/sets` | Record a set |
 | PATCH, DELETE | `/api/sets/{id}` | Edit/remove an active-session set |
 | POST | `/api/sessions/{id}/complete` | Complete a session |
-| GET | `/api/exercises/{id}/history` | Sets grouped by workout |
 
 Use JSON and the existing collection/resource/error conventions. Proposed history pagination uses a default limit of 50, maximum 100, and an opaque cursor with stable session-time/ID, occurrence-position and set-number ordering. Future progress scope and prefilling remain conditional on PRODUCT.md approval; reference selection is approved in #35.
 

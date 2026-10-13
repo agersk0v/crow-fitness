@@ -54,12 +54,18 @@ async function forward(
     path[0] === "history" &&
     path[1] === "sessions" &&
     /^[1-9][0-9]*$/.test(path[2]);
+  const exerciseHistory =
+    path.length === 3 &&
+    path[0] === "exercises" &&
+    /^[1-9][0-9]*$/.test(path[1]) &&
+    path[2] === "history";
   const allowed =
     (request.method === "GET" &&
       (["health", "ready", "exercises", "templates", "sets"].includes(
         endpoint,
       ) ||
         usage ||
+        exerciseHistory ||
         template ||
         endpoint === "sessions/active" ||
         endpoint === "history/sessions" ||

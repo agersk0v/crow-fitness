@@ -4,7 +4,7 @@ A simple workout tracker for one person, with no authentication or accounts.
 
 ## Current status
 
-The Next.js frontend, Go API, and PostgreSQL support creating, searching, tagging, renaming, and safely deleting personal exercises at `/exercises`. Names are trimmed and validated in Go. Saved exercises survive refresh and stack restart. Go selects one internal local owner; the app has no login or authentication. You can also create, edit, duplicate, archive, and restore persistent workout templates at `/templates`. Start a workout from an active template, continue the saved session from home, save weight/reps, or cancel it. Completing preserves its sets in Workout history at `/history`. Active exercises show previous completed performance without prefilling; exercise-specific history/progress remain planned.
+The Next.js frontend, Go API, and PostgreSQL support creating, searching, tagging, renaming, and safely deleting personal exercises at `/exercises`. Names are trimmed and validated in Go. Saved exercises survive refresh and stack restart. Go selects one internal local owner; the app has no login or authentication. You can also create, edit, duplicate, archive, and restore persistent workout templates at `/templates`. Start a workout from an active template, continue the saved session from home, save weight/reps, or cancel it. Completing preserves its sets in Workout history at `/history`. Active exercises show previous completed performance without prefilling; exercise-specific completed-set history is available from the exercise library. Progress charts remain planned.
 
 See [product requirements](docs/PRODUCT.md), [architecture](docs/ARCHITECTURE.md), and [agent instructions](AGENTS.md).
 
@@ -126,7 +126,7 @@ Motion for React provides brief 180 ms entrance animations for the home/exercise
 ## Planned features
 
 - Optional previous-performance prefilling (requires separate decisions).
-- Exercise-specific history and progress.
+- Exercise progress charts.
 
 The product document lists decisions to confirm before implementing these flows. This setup is intended for your own computer; it has no authentication and is not configured for public hosting.
 
@@ -224,3 +224,13 @@ Open **Workout history** from home, exercises, templates, or an active session. 
 - `GET /api/history/sessions/{id}`: uncached `200` with the saved session resource, including nonnull `completed_at`, copied `exercises`, and nondeleted `sets`. Missing, foreign, active, or cancelled sessions return `404`; invalid IDs return `400`. Existing generic persistence/forwarding errors apply. The active `/api/sessions/{id}` endpoint remains active-only.
 
 No schema/environment changes are required. Completed-history reads preserve copied names, targets, exact weights/reps, and source order after template/library changes. Focused tests cover filtering, empty/repeated workouts, ownership, deterministic ordering, preserved snapshots, and reconnect; browser checks cover tabs, keyboard focus, read-only details, retry, and legacy navigation.
+
+## Exercise set history (#36)
+
+Choose **View history** in the exercise library or **View exercise history** in a completed workout. `/exercises/[id]/history` groups completed, nondeleted sets across all templates by workout, newest first. Each group links to its completed workout and shows the captured workout name, browser-local completion date, and separate exercise occurrences in source order, with exact kilograms/reps. Active, cancelled, and empty results do not appear. The view is read-only, with loading, empty, not-found, and retry states.
+
+History uses exercise identity, so renaming does not split results. The page title uses the current library name, or the latest completed snapshot name after removal. Removing an otherwise unused library exercise preserves its history URL and links from completed workouts. Template edits and archives never rewrite captured results.
+
+- `GET /api/exercises/{id}/history`: uncached `200` with string `id`, `name`, and `workouts`. Each workout contains string `session_id`, captured `name`, UTC `completed_at`, and ordered `occurrences` with `position`, captured `name`, and existing saved-set resources. Workouts sort by completion time then numeric session ID descending; sets sort by saved time then UUID within each occurrence. An owned library exercise or retained completed snapshot with no eligible sets returns `workouts: []`. Missing/foreign identities return `404`, invalid IDs `400`; generic persistence/forwarding errors use `500`/`502`.
+
+No migration, dependencies, or environment changes are required. Focused tests cover identity/ownership, exclusions, ordering, repeated occurrences, exact values, retention, reconnect, and unchanged active data.
