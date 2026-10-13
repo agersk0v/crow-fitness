@@ -152,7 +152,7 @@ func TestPostgresSets(t *testing.T) {
 	if err != nil || len(active.Sets) != 2 || active.Sets[0].Weight != "0" || active.Sets[1].Position != 2 {
 		t.Fatal("active readback", active, err)
 	}
-	listed, err := store.CompletedSets(ctx, 71)
+	listed, err := store.CompletedSets(ctx, 71, HistoryFilter{})
 	if err != nil || len(listed) != 0 {
 		t.Fatal("active sets published", listed, err)
 	}
@@ -175,11 +175,11 @@ func TestPostgresSets(t *testing.T) {
 	if err = store.Complete(ctx, 71, session.ID); err != nil {
 		t.Fatal(err)
 	}
-	listed, err = store.CompletedSets(ctx, 71)
+	listed, err = store.CompletedSets(ctx, 71, HistoryFilter{})
 	if err != nil || len(listed) != 2 || listed[0].ExerciseName != "Captured press" || listed[0].Weight != "0" || !listed[0].CompletedAt.Equal(completed) || listed[1].Position != 2 {
 		t.Fatal("completed list", listed, err)
 	}
-	if foreign, err := store.CompletedSets(ctx, 72); err != nil || len(foreign) != 0 {
+	if foreign, err := store.CompletedSets(ctx, 72, HistoryFilter{}); err != nil || len(foreign) != 0 {
 		t.Fatal("foreign history exposed", foreign, err)
 	}
 	if _, err = store.SaveSet(ctx, 71, session.ID, setID, input); !errors.Is(err, ErrCompleted) {
@@ -191,7 +191,7 @@ func TestPostgresSets(t *testing.T) {
 	if err = store.End(ctx, 71, session.ID); err != nil {
 		t.Fatal(err)
 	}
-	if after, err := store.CompletedSets(ctx, 71); err != nil || !reflect.DeepEqual(after, listed) {
+	if after, err := store.CompletedSets(ctx, 71, HistoryFilter{}); err != nil || !reflect.DeepEqual(after, listed) {
 		t.Fatal("stale cancel changed completed history", after, err)
 	}
 	if _, err = ts.SetArchived(ctx, 71, template.ID, false); err != nil {
@@ -219,7 +219,7 @@ func TestPostgresSets(t *testing.T) {
 	if err = store.Complete(ctx, 71, empty.ID); err != nil {
 		t.Fatal(err)
 	}
-	if after, err := store.CompletedSets(ctx, 71); err != nil || !reflect.DeepEqual(after, listed) {
+	if after, err := store.CompletedSets(ctx, 71, HistoryFilter{}); err != nil || !reflect.DeepEqual(after, listed) {
 		t.Fatal("empty completion published sets", after, err)
 	}
 	// Simultaneous set saves and completion either include the whole write or reject it.
@@ -257,7 +257,7 @@ func TestPostgresSets(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer fresh.Close()
-	after, err := (Postgres{Pool: fresh}).CompletedSets(ctx, 71)
+	after, err := (Postgres{Pool: fresh}).CompletedSets(ctx, 71, HistoryFilter{})
 	if err != nil || len(after) != len(listed)+count {
 		t.Fatal("history lost on reconnect", after, err)
 	}

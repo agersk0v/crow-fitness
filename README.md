@@ -238,3 +238,13 @@ No migration, dependencies, or environment changes are required. Focused tests c
 ## Shared navigation (#41)
 
 Every page uses the same navbar: Home, Exercises, Templates, Workout history, and Sets (the existing history tab). The current section is highlighted; exercise/template/completed-workout details select their parent section, and active workouts select Templates. Detail pages retain contextual back links. Navigation wraps on small screens and supports keyboard focus. The shared light/dark toggle keeps the existing saved theme across navigation and refresh.
+
+## Search and filter workout history (#43)
+
+Both history tabs offer Search names, Exercise, From date, and To date controls. Apply search and filters (or Enter) puts the criteria in the URL; typing alone does not change results. Clear filters retains the selected tab. Switching tabs retains applied criteria, and refresh/back/forward restore the controls and results. Name search is a trimmed, case-insensitive literal substring of captured workout/exercise names; Sessions may match any captured occurrence, while Sets match each set's occurrence or workout name. Filters combine with AND. Sessions can match an exercise even if it has no recorded sets.
+
+URLs use `tab`, `q`, `exercise`, `from`, and `to`, omitting blank criteria and the default Sessions tab. For example `/history?tab=sets&q=press&exercise=12&from=2026-10-01&to=2026-10-13`. Dates are inclusive browser-local completion dates, including daylight-saving changes; either endpoint is optional. Historical exercise options include identities from empty completed snapshots and removed library exercises, labeled with their latest captured name and ID. Renames do not rewrite search names or identity.
+
+`GET /api/history/sessions` and `GET /api/sets` accept `q`, `exercise`, `from`, `to`, and API-only `tz` (IANA timezone, supplied by the browser for dates; defaults to UTC for direct API calls). Malformed/repeated/unknown filter parameters, invalid IDs/dates/timezones, and reversed date ranges return uncached `400` validation errors. Unknown page `tab` values still fall back to Sessions; other malformed page criteria show a validation message and block results until corrected/cleared. Unknown valid exercise IDs simply produce no matches. `GET /api/history/exercises` returns uncached `{"items":[{"id":"12","name":"Press"}]}` from the local owner's completed snapshots only.
+
+Results remain completed-only and newest-first, with deleted sets excluded. No matching results has a clear-filters action; load failures can be retried for the current criteria. No schema, dependencies, or environment changes are needed.

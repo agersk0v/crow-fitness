@@ -158,3 +158,7 @@ Local or private-network use is the proposed deployment scope for this applicati
 ## Approved shared navigation (#41)
 
 All pages share Home, Exercises, Templates, Workout history, and Sets links in that order, plus the light/dark toggle. Sets opens the existing history tab. Current destinations are highlighted using the URL; detail pages highlight their parent section, with active sessions under Templates. Keep contextual back/continue actions in page content. Navigation must work with keyboard, phone/desktop layouts, refresh/back/forward, and retained theme preferences.
+
+## Approved history search and filters (#43)
+
+The owner confirmed all proposed defaults: case-insensitive captured-name substring search, one stable exercise-identity filter, inclusive browser-local completion-date From/To filters, explicit Apply/Search or Enter, and shared criteria retained on tab switching. Applied criteria live in URL query parameters and restore through direct links, refresh, back/forward. Blank/default criteria are omitted. Invalid criteria block results with validation; unknown tab selectors fall back to Sessions. Clearing retains the selected tab. Sessions match captured workout names or any captured exercise name and may include empty completed workouts; Sets match each set's captured exercise/workout name. AND combines search/date/exercise criteria. Historical exercise options retain removed identities. Active/cancelled workouts and deleted sets remain excluded.

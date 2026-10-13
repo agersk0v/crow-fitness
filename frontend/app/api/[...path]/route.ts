@@ -69,6 +69,7 @@ async function forward(
         template ||
         endpoint === "sessions/active" ||
         endpoint === "history/sessions" ||
+        endpoint === "history/exercises" ||
         completedSession ||
         session ||
         previous)) ||

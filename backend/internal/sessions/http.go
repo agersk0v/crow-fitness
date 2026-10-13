@@ -91,7 +91,12 @@ func Register(mux *http.ServeMux, store Store) {
 	mux.HandleFunc("GET /api/sets", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
-		items, err := store.CompletedSets(ctx, exercises.LocalOwnerID)
+		filter, err := ParseHistoryQuery(r.URL.RawQuery)
+		if err != nil {
+			problem(w, 400, "validation_error", err.Error())
+			return
+		}
+		items, err := store.CompletedSets(ctx, exercises.LocalOwnerID, filter)
 		if err != nil {
 			operationError(w, err)
 			return
@@ -104,13 +109,28 @@ func Register(mux *http.ServeMux, store Store) {
 	mux.HandleFunc("GET /api/history/sessions", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
-		items, err := store.CompletedSessions(ctx, exercises.LocalOwnerID)
+		filter, err := ParseHistoryQuery(r.URL.RawQuery)
+		if err != nil {
+			problem(w, 400, "validation_error", err.Error())
+			return
+		}
+		items, err := store.CompletedSessions(ctx, exercises.LocalOwnerID, filter)
 		if err != nil {
 			operationError(w, err)
 			return
 		}
 		if items == nil {
 			items = []CompletedSession{}
+		}
+		write(w, 200, map[string]any{"items": items})
+	})
+	mux.HandleFunc("GET /api/history/exercises", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+		items, err := store.HistoryExercises(ctx, exercises.LocalOwnerID)
+		if err != nil {
+			operationError(w, err)
+			return
 		}
 		write(w, 200, map[string]any{"items": items})
 	})

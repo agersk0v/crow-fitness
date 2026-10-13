@@ -117,3 +117,9 @@ Future tests should cover snapshots surviving template changes, request replay, 
 ## Shared navigation (#41)
 
 The root layout mounts one shared navbar inside the existing theme provider. A Suspense boundary permits URL-aware highlighting with `usePathname`/`useSearchParams` while static routes retain server-rendered links and the theme control. The fallback uses the same navbar without a selected destination. Main-page navbar copies are removed; contextual detail back links remain in page content. No backend, schema, dependency, or lifecycle changes are needed.
+
+## Implemented history filtering (#43)
+
+Go parses history query criteria and performs literal case-insensitive substring, identity, and completion-time filtering in the existing PostgreSQL queries. Session search and exercise membership use EXISTS to avoid duplicating cards for repeated occurrences. Date filters become inclusive start/exclusive next-day instants in the client's IANA timezone; standard-library embedded timezone data makes DST handling available in the existing minimal runtime image. API dates default to UTC when `tz` is absent. Validation rejects malformed IDs/dates/timezones, reversed ranges, duplicates, and unknown parameters.
+
+`GET /api/history/exercises` lists completed-snapshot identities with the latest captured name, scoped to the local owner and independent of current filters. The UI uses URL query state for applied criteria, a separate form draft until Apply, and keyed/abortable result requests to prevent stale results. Tab changes retain criteria, and no-matches states offer clear filters. Existing services, collection shapes, ordering, and completed-detail routes remain intact; no schema or dependency changes are required.

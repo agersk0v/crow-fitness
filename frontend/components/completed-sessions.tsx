@@ -5,7 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import type { CompletedSession } from "@/lib/sessions";
 
-export function CompletedSessions() {
+export function CompletedSessions({
+  query = "",
+  filtered = false,
+}: {
+  query?: string;
+  filtered?: boolean;
+}) {
   const [items, setItems] = useState<CompletedSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -16,10 +22,13 @@ export function CompletedSessions() {
     setError("");
     async function load() {
       try {
-        const response = await fetch("/api/history/sessions", {
-          cache: "no-store",
-          signal: controller.signal,
-        });
+        const response = await fetch(
+          `/api/history/sessions${query ? `?${query}` : ""}`,
+          {
+            cache: "no-store",
+            signal: controller.signal,
+          },
+        );
         if (!response.ok) throw new Error();
         const body = await response.json();
         if (!controller.signal.aborted) setItems(body.items);
@@ -32,7 +41,7 @@ export function CompletedSessions() {
     }
     void load();
     return () => controller.abort();
-  }, [retry]);
+  }, [retry, query]);
   if (loading) return <p role="status">Loading completed sessions…</p>;
   if (error)
     return (
@@ -46,6 +55,18 @@ export function CompletedSessions() {
           Try again
         </Button>
       </Alert>
+    );
+  if (!items.length && filtered)
+    return (
+      <div className="space-y-3">
+        <p className="text-muted-foreground">
+          No matching completed sessions. Try different criteria or clear
+          filters.
+        </p>
+        <Link href="/history" className="text-highlight underline">
+          Clear filters
+        </Link>
+      </div>
     );
   if (!items.length)
     return (

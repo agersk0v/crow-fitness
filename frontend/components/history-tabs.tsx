@@ -1,16 +1,36 @@
 "use client";
 import { useRef, type KeyboardEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { CompletedSessions } from "@/components/completed-sessions";
 import { CompletedSets } from "@/components/completed-sets";
 
+import { HistoryFilters } from "@/components/history-filters";
+import {
+  historyCriteria,
+  historyFilterError,
+  historyQuery,
+} from "@/lib/history-filters";
+
 const tabs = ["sessions", "sets"] as const;
 export function HistoryTabs({ selected }: { selected: "sessions" | "sets" }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const query = searchParams.toString();
+  const params = new URLSearchParams(query);
+  const criteria = historyCriteria(params);
+  const validation = historyFilterError(params);
+  const filters = historyQuery(criteria);
+  if (criteria.from || criteria.to)
+    filters.set("tz", Intl.DateTimeFormat().resolvedOptions().timeZone);
+  const apiQuery = filters.toString();
+  const filtered = Object.values(criteria).some((value) => value.trim() !== "");
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   function select(tab: "sessions" | "sets") {
-    router.push(`/history?tab=${tab}`, { scroll: false });
+    const next = new URLSearchParams(query);
+    if (tab === "sets") next.set("tab", "sets");
+    else next.delete("tab");
+    router.push(`/history${next.size ? `?${next}` : ""}`, { scroll: false });
   }
   function move(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     let next: number;
@@ -61,6 +81,12 @@ export function HistoryTabs({ selected }: { selected: "sessions" | "sets" }) {
           </Button>
         ))}
       </div>
+      <HistoryFilters key={query} query={query} selected={selected} />
+      {validation && (
+        <p role="alert" className="text-destructive">
+          {validation}
+        </p>
+      )}
       <div
         role="tabpanel"
         id="history-sessions-panel"
@@ -68,7 +94,13 @@ export function HistoryTabs({ selected }: { selected: "sessions" | "sets" }) {
         hidden={selected !== "sessions"}
         tabIndex={0}
       >
-        {selected === "sessions" && <CompletedSessions />}
+        {selected === "sessions" && !validation && (
+          <CompletedSessions
+            key={apiQuery}
+            query={apiQuery}
+            filtered={filtered}
+          />
+        )}
       </div>
       <div
         role="tabpanel"
@@ -77,7 +109,9 @@ export function HistoryTabs({ selected }: { selected: "sessions" | "sets" }) {
         hidden={selected !== "sets"}
         tabIndex={0}
       >
-        {selected === "sets" && <CompletedSets />}
+        {selected === "sets" && !validation && (
+          <CompletedSets key={apiQuery} query={apiQuery} filtered={filtered} />
+        )}
       </div>
     </div>
   );

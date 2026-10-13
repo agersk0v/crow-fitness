@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	urlpkg "net/url"
 	"os"
 	"reflect"
 	"testing"
@@ -90,7 +91,7 @@ func TestPostgresHistory(t *testing.T) {
 	if _, err = store.GetCompleted(ctx, 91, first.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatal("active session exposed as completed", err)
 	}
-	if list, err := store.CompletedSessions(ctx, 91); err != nil || len(list) != 0 {
+	if list, err := store.CompletedSessions(ctx, 91, HistoryFilter{}); err != nil || len(list) != 0 {
 		t.Fatal("active session listed", list, err)
 	}
 	if _, err = store.SaveSet(ctx, 91, first.ID, setID, SetInput{Position: 1, Weight: "0.00", Reps: 8}); err != nil {
@@ -124,7 +125,7 @@ func TestPostgresHistory(t *testing.T) {
 	if _, err = pool.Exec(ctx, "UPDATE workout_sessions SET completed_at='2030-01-01T00:00:00Z' WHERE owner_id=91 AND id IN($1,$2)", first.ID, empty.ID); err != nil {
 		t.Fatal(err)
 	}
-	list, err := store.CompletedSessions(ctx, 91)
+	list, err := store.CompletedSessions(ctx, 91, HistoryFilter{})
 	if err != nil || len(list) != 2 || list[0].ID != empty.ID || list[1].ID != first.ID || list[0].Name != list[1].Name {
 		t.Fatal("repeated workouts/tied order", list, err)
 	}
@@ -148,7 +149,7 @@ func TestPostgresHistory(t *testing.T) {
 			t.Fatal("non-completed workout exposed", id, err)
 		}
 	}
-	if foreign, err := store.CompletedSessions(ctx, 92); err != nil || len(foreign) != 0 {
+	if foreign, err := store.CompletedSessions(ctx, 92, HistoryFilter{}); err != nil || len(foreign) != 0 {
 		t.Fatal("foreign list exposed", foreign, err)
 	}
 	if _, err = store.GetCompleted(ctx, 92, first.ID); !errors.Is(err, ErrNotFound) {
@@ -170,9 +171,59 @@ func TestPostgresHistory(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(saved, after) {
 		t.Fatal("history changed after template/library changes", after, err)
 	}
-	afterList, err := store.CompletedSessions(ctx, 91)
+	afterList, err := store.CompletedSessions(ctx, 91, HistoryFilter{})
 	if err != nil || !reflect.DeepEqual(list, afterList) {
 		t.Fatal("active/cancelled records listed or captured names changed", afterList, err)
+	}
+
+	// Filters use copied names and exercise identity, including removed identities.
+	for _, tc := range []struct {
+		query          string
+		sessions, sets int
+	}{
+		{"q=CAPTURED%20PRESS", 2, 2}, {"q=same%20ROUTINE", 2, 2}, {"q=renamed", 0, 0},
+		{"exercise=" + press.ID, 2, 2}, {"exercise=" + squat.ID, 2, 0},
+		{"q=squat&exercise=" + press.ID, 2, 0}, {"q=press&exercise=" + squat.ID, 2, 0},
+		{"q=unknown", 0, 0}, {"from=2030-01-01&to=2030-01-01&tz=Europe%2FCopenhagen", 2, 2},
+		{"from=2030-01-02", 0, 0}, {"to=2029-12-31", 0, 0}, {"exercise=9223372036854775807", 0, 0},
+	} {
+		values, _ := urlpkg.ParseQuery(tc.query)
+		filter, err := ParseHistoryFilter(values)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sessions, err := store.CompletedSessions(ctx, 91, filter)
+		if err != nil || len(sessions) != tc.sessions {
+			t.Fatal("session filtering", tc, sessions, err)
+		}
+		sets, err := store.CompletedSets(ctx, 91, filter)
+		if err != nil || len(sets) != tc.sets {
+			t.Fatal("set filtering", tc, sets, err)
+		}
+		if tc.sets > 0 && (sets[0].Weight != "0.00" || sets[1].Weight != "12.50") {
+			t.Fatal("filtered set order/values changed", sets)
+		}
+		foreign, err := store.CompletedSessions(ctx, 92, filter)
+		if err != nil || len(foreign) != 0 {
+			t.Fatal("foreign filter leaked", foreign, err)
+		}
+	}
+	options, err := store.HistoryExercises(ctx, 91)
+	if err != nil || len(options) != 2 {
+		t.Fatal("history identity options", options, err)
+	}
+	found := false
+	for _, option := range options {
+		if option.ID == press.ID && option.Name == "Captured press" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("removed historical identity missing", options)
+	}
+	foreignOptions, err := store.HistoryExercises(ctx, 92)
+	if err != nil || len(foreignOptions) != 0 {
+		t.Fatal("foreign history options", foreignOptions, err)
 	}
 	fresh, err := pgxpool.New(ctx, url)
 	if err != nil {
