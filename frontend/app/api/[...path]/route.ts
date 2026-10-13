@@ -44,6 +44,11 @@ async function forward(
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
       path[3],
     );
+  const previous =
+    path.length === 3 &&
+    path[0] === "sessions" &&
+    /^[1-9][0-9]*$/.test(path[1]) &&
+    path[2] === "previous";
   const allowed =
     (request.method === "GET" &&
       (["health", "ready", "exercises", "templates", "sets"].includes(
@@ -52,7 +57,8 @@ async function forward(
         usage ||
         template ||
         endpoint === "sessions/active" ||
-        session)) ||
+        session ||
+        previous)) ||
     (request.method === "POST" &&
       (["exercises", "templates", "sessions"].includes(endpoint) ||
         templateAction ||
