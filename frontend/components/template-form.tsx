@@ -3,7 +3,6 @@ import { useId, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import {
   DndContext,
-  PointerSensor,
   KeyboardSensor,
   closestCenter,
   useSensor,
@@ -16,6 +15,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
+import { CardMouseSensor, CardTouchSensor } from "@/lib/template-drag-sensors";
 import { SortableExercise } from "@/components/sortable-exercise";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
@@ -68,7 +68,10 @@ export function TemplateForm({
     );
   }
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(CardMouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(CardTouchSensor, {
+      activationConstraint: { delay: 250, tolerance: 5 },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     }),
@@ -169,9 +172,9 @@ export function TemplateForm({
           id={`${formID}-reorder-help`}
           className="text-sm text-muted-foreground"
         >
-          Drag the grip to reorder exercises. With a keyboard, focus the grip,
-          press Space, use arrow keys, then press Space to drop or Escape to
-          cancel.
+          Drag an exercise card’s background to reorder, or hold briefly on
+          touch screens. With a keyboard, focus the card, press Space, use arrow
+          keys, then press Space to drop or Escape to cancel.
         </p>
         <DndContext
           sensors={sensors}
@@ -220,7 +223,7 @@ export function TemplateForm({
                       </legend>
                       <label
                         htmlFor={`${entry.key}-exercise`}
-                        className="mb-2 block pr-12 text-sm font-medium"
+                        className="mb-2 block text-sm font-medium"
                       >
                         Exercise
                       </label>
