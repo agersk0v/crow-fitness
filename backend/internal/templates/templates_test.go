@@ -69,7 +69,7 @@ func (f *fakeStore) Create(_ context.Context, owner int64, input Input) (Templat
 	f.calls++
 	return Template{ID: "7", Name: input.Name, Exercises: []Entry{}}, f.err
 }
-func (f *fakeStore) List(_ context.Context, owner int64) ([]Summary, error) {
+func (f *fakeStore) List(_ context.Context, owner int64, archived bool) ([]Summary, error) {
 	f.owner = owner
 	return nil, f.err
 }
@@ -152,4 +152,16 @@ func TestReadsAndStoreErrors(t *testing.T) {
 			t.Fatal(w.Body)
 		}
 	}
+}
+
+func (f *fakeStore) Update(ctx context.Context, owner int64, id string, input Input) (Template, error) {
+	return f.Create(ctx, owner, input)
+}
+func (f *fakeStore) Duplicate(ctx context.Context, owner int64, id, name string) (Template, error) {
+	return f.Create(ctx, owner, Input{Name: name})
+}
+func (f *fakeStore) SetArchived(_ context.Context, owner int64, id string, archived bool) (Template, error) {
+	f.owner = owner
+	f.calls++
+	return Template{ID: id, Archived: archived}, f.err
 }

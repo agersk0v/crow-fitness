@@ -77,7 +77,7 @@ func TestPostgres(t *testing.T) {
 	if _, err = store.Get(ctx, 24, item.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatal("foreign template visible")
 	}
-	items, err := store.List(ctx, 24)
+	items, err := store.List(ctx, 24, false)
 	if err != nil || len(items) != 0 {
 		t.Fatal("foreign templates listed")
 	}
@@ -97,7 +97,7 @@ func TestPostgres(t *testing.T) {
 	if _, err = store.Create(ctx, 23, failed); err == nil {
 		t.Fatal("expected numeric storage failure")
 	}
-	items, err = store.List(ctx, 23)
+	items, err = store.List(ctx, 23, false)
 	if err != nil || len(items) != 1 {
 		t.Fatalf("failed create left partial template: %+v %v", items, err)
 	}

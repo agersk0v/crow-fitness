@@ -9,8 +9,9 @@ import (
 var ErrNotFound = errors.New("exercise not found")
 
 type TemplateReference struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	Archived bool   `json:"archived"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
 }
 type InUseError struct{ Templates []TemplateReference }
 
@@ -23,7 +24,7 @@ type referenceQueryer interface {
 }
 
 func references(ctx context.Context, db referenceQueryer, owner int64, id string) ([]TemplateReference, error) {
-	rows, err := db.Query(ctx, `SELECT DISTINCT t.id::text,t.name FROM templates t JOIN template_exercises te ON te.template_id=t.id AND te.owner_id=t.owner_id WHERE te.owner_id=$1 AND te.exercise_id=$2 ORDER BY t.id::text`, owner, id)
+	rows, err := db.Query(ctx, `SELECT DISTINCT t.id::text,t.name,t.archived FROM templates t JOIN template_exercises te ON te.template_id=t.id AND te.owner_id=t.owner_id WHERE te.owner_id=$1 AND te.exercise_id=$2 ORDER BY t.id::text`, owner, id)
 	if err != nil {
 		return nil, err
 	}
@@ -31,7 +32,7 @@ func references(ctx context.Context, db referenceQueryer, owner int64, id string
 	items := []TemplateReference{}
 	for rows.Next() {
 		var item TemplateReference
-		if err = rows.Scan(&item.ID, &item.Name); err != nil {
+		if err = rows.Scan(&item.ID, &item.Name, &item.Archived); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
