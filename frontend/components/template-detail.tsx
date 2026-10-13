@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { StartSession } from "@/components/start-session";
 import { TemplateForm } from "@/components/template-form";
 import type { Exercise } from "@/lib/exercises";
 import type { Template } from "@/lib/templates";
@@ -145,10 +146,11 @@ export function TemplateDetail({ id }: { id: string }) {
       <h1 className="break-words text-4xl font-semibold">{template.name}</h1>
       {template.archived && (
         <p className="mt-3 rounded-lg border border-border bg-primary/5 p-3 text-sm">
-          Archived — restore this template before editing or duplicating it.
-          Exercise references are preserved.
+          Archived — restore this template before editing, duplicating, or
+          starting a workout. Exercise references are preserved.
         </p>
       )}
+      {!template.archived && <StartSession templateID={template.id} />}
       <div className="my-5 flex flex-wrap gap-3">
         {template.archived ? (
           <Button disabled={busy} onClick={() => void mutate("restore")}>

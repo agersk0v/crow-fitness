@@ -132,6 +132,28 @@ assert saved['exercises'][0]['name']=='Smoke squat'
 CHECK
 }
 assert_archived_copy
+# Session transport and restart persistence share this disposable stack.
+session_id="$(curl --fail --silent --show-error "$base_url/api/sessions" -H 'Content-Type: application/json' --data "{\"template_id\":\"$template_id\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+assert_session() {
+  curl --fail --silent --show-error "$base_url/api/sessions/active" --output "$response_file"
+  python3 - "$response_file" "$session_id" "$template_id" <<'CHECK'
+import json,sys
+with open(sys.argv[1]) as f: saved=json.load(f)['session']
+assert saved['id']==sys.argv[2] and saved['template_id']==sys.argv[3] and saved['name']=='Smoke routine',saved
+assert saved['exercises'][0]['name']=='Smoke squat' and saved['exercises'][0]['set_count']==3,saved
+CHECK
+  curl --fail --silent --show-error "$base_url/api/sessions/$session_id" --output "$response_file"
+}
+assert_session
+code="$(curl --silent --show-error --output "$response_file" --write-out '%{http_code}' "$base_url/api/sessions" -H 'Content-Type: application/json' --data "{\"template_id\":\"$template_id\"}")"
+[[ "$code" == 409 ]]
+python3 - "$response_file" "$session_id" <<'CHECK'
+import json,sys
+with open(sys.argv[1]) as f: body=json.load(f)
+assert body['error']['code']=='active_session_exists' and body['error']['session']['id']==sys.argv[2],body
+CHECK
+curl --fail --silent --show-error "$base_url/sessions/$session_id" --output "$response_file"
+grep -q 'Loading session' "$response_file"
 docker compose stop postgres
 assert_response /api/health 200 ok
 assert_response /api/ready 503 unavailable
@@ -140,10 +162,22 @@ wait_ready
 assert_exercise
 assert_template
 assert_archived_copy
+assert_session
 docker compose down
 docker compose up --detach --wait --wait-timeout 180
 assert_exercise
 assert_template
 assert_archived_copy
+assert_session
+code="$(curl --silent --show-error --output "$response_file" --write-out '%{http_code}' "$base_url/api/sessions/$session_id/complete" -X POST)"
+[[ "$code" == 204 ]]
+session_id="$(curl --fail --silent --show-error "$base_url/api/sessions" -H 'Content-Type: application/json' --data "{\"template_id\":\"$template_id\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+code="$(curl --silent --show-error --output "$response_file" --write-out '%{http_code}' "$base_url/api/sessions/$session_id/cancel" -X POST)"
+[[ "$code" == 204 ]]
+curl --fail --silent --show-error "$base_url/api/sessions/active" --output "$response_file"
+python3 - "$response_file" <<'CHECK'
+import json,sys
+with open(sys.argv[1]) as f: assert json.load(f)['session'] is None
+CHECK
 assert_response /api/ready 200 ok
-echo "Stack smoke check passed: frontend, API, exercise/template routing, validation, readiness recovery, and restart persistence."
+echo "Stack smoke check passed: frontend, API, exercise/template/session routing, validation, readiness recovery, and restart persistence."

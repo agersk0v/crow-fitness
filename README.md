@@ -4,7 +4,7 @@ A simple workout tracker for one person, with no authentication or accounts.
 
 ## Current status
 
-The Next.js frontend, Go API, and PostgreSQL support creating, searching, tagging, renaming, and safely deleting personal exercises at `/exercises`. Names are trimmed and validated in Go. Saved exercises survive refresh and stack restart. Go selects one internal local owner; the app has no login or authentication. You can also create, edit, duplicate, archive, and restore persistent workout templates at `/templates`. Logging and progress remain planned.
+The Next.js frontend, Go API, and PostgreSQL support creating, searching, tagging, renaming, and safely deleting personal exercises at `/exercises`. Names are trimmed and validated in Go. Saved exercises survive refresh and stack restart. Go selects one internal local owner; the app has no login or authentication. You can also create, edit, duplicate, archive, and restore persistent workout templates at `/templates`. Start a workout from an active template, continue the saved session from home, or cancel/complete it without storing history. Logging and progress remain planned.
 
 See [product requirements](docs/PRODUCT.md), [architecture](docs/ARCHITECTURE.md), and [agent instructions](AGENTS.md).
 
@@ -99,7 +99,7 @@ go build -o bin/api ./cmd/api
 
 CI runs frontend formatting and Go formatting, vet, and race tests (including disposable PostgreSQL tests) on PRs and commits to `main`. Its stack job builds both production Docker images and runs the smoke check; the Next.js build also checks TypeScript. Standalone build/typecheck commands above remain available locally.
 
-The smoke check covers representative exercise/template create, list, and detail requests through Next.js, one validation error, readiness outage/recovery, and persistence through database and whole-stack restarts. Page fetches verify routes render, not interactive form behavior. Each run owns a randomly named Compose project and removes only its disposable test volume afterward.
+The smoke check covers representative exercise/template/session lifecycle requests through Next.js, one validation error, readiness outage/recovery, and persistence through database and whole-stack restarts. Page fetches verify routes render, not interactive form behavior. Each run owns a randomly named Compose project and removes only its disposable test volume afterward.
 
 To run the same integration check locally, use Bash with Docker running:
 
@@ -125,7 +125,6 @@ Motion for React provides brief 180 ms entrance animations for the home/exercise
 
 ## Planned features
 
-- Workout sessions from saved templates.
 - Previous performance references and weight/reps logging.
 - Workout history and sets grouped by exercise to track progress.
 
@@ -153,7 +152,7 @@ Migration `003_exercise_tags.sql` adds empty tags to existing exercises without 
 
 ## Workout templates
 
-Open `/templates` from home or exercises. Give the template a name, add saved exercises, and drag each exercise card’s background to arrange them, or hold briefly before dragging on touch screens. Inputs, labels, dropdowns, and buttons keep their normal behavior. Keyboard users can focus the card, press Space, use arrow keys, and press Space to drop or Escape to cancel. Each occurrence requires a positive whole-number working-set count. Rep bounds are optional: leave both blank, use a positive minimum/maximum range, or equal values for a fixed target. Target RIR is optional and accepts nonnegative decimals, including zero. One rep/RIR target applies to all working sets of an occurrence; warm-up sets are excluded. The same exercise may appear more than once with different targets. Saving persists the entire ordered configuration atomically; select a saved template to reopen it. Active templates can be edited or duplicated. Archive preserves their configuration and hides them from the Active list; inspect or restore them in Archived. Archived templates are read-only and must be restored before editing or duplicating. Permanent deletion, starting workouts, and recording sets are not included.
+Open `/templates` from home or exercises. Give the template a name, add saved exercises, and drag each exercise card’s background to arrange them, or hold briefly before dragging on touch screens. Inputs, labels, dropdowns, and buttons keep their normal behavior. Keyboard users can focus the card, press Space, use arrow keys, and press Space to drop or Escape to cancel. Each occurrence requires a positive whole-number working-set count. Rep bounds are optional: leave both blank, use a positive minimum/maximum range, or equal values for a fixed target. Target RIR is optional and accepts nonnegative decimals, including zero. One rep/RIR target applies to all working sets of an occurrence; warm-up sets are excluded. The same exercise may appear more than once with different targets. Saving persists the entire ordered configuration atomically; select a saved template to reopen it. Active templates can be edited or duplicated. Archive preserves their configuration and hides them from the Active list; inspect or restore them in Archived. Archived templates are read-only and must be restored before editing or duplicating. Start workout opens a persisted active session. Permanent deletion and recording sets are not included.
 
 Migrations `002_templates.sql` and `004_template_archive.sql` use the same startup process described above. Existing templates remain active. Template writes reject missing or foreign-owner exercises.
 
@@ -180,4 +179,21 @@ Array order determines `position` in the response. Each returned occurrence also
 
 PostgreSQL tests cover template ordering, optional/fixed targets, ownership, constraints, rollback, and migration reruns. The smoke check covers transport and restart persistence.
 
-Template editing offers Save/Cancel and retains drafts after failed saves. Duplication requests a name for the independent copy. Archive requires confirmation naming the template; Cancel/Escape leaves it unchanged. Archived exercise references are preserved until an active template is edited to remove them. Concurrent edits apply complete configurations in commit order; there is no draft merging. Session snapshots and workout history remain future work.
+Template editing offers Save/Cancel and retains drafts after failed saves. Duplication requests a name for the independent copy. Archive requires confirmation naming the template; Cancel/Escape leaves it unchanged. Archived exercise references are preserved until an active template is edited to remove them. Concurrent edits apply complete configurations in commit order; there is no draft merging. Active sessions preserve their own snapshots; completed workout history remains future work.
+
+## Active workout sessions
+
+Choose **Start workout** on an active template. The session saves a copy of the template name, ordered exercises/names, working-set counts, and optional rep/RIR targets. Later edits, archiving, or removal of an otherwise unused exercise do not change this copy. Only one session can be active; trying to start another offers **Continue session** without replacing it.
+
+Home shows **Continue session**, including after refresh or a stack/database restart. **Continue later** returns home while retaining the session. **Cancel session** asks for confirmation; Keep session or Escape dismisses it. Confirmed cancellation and **Complete session** clear the session and return home. Neither saves set results or completed-session history. Request failures show an error and allow retry using the same action.
+
+Migration `005_active_sessions.sql` runs automatically during API startup and preserves existing exercises/templates. No new environment settings or services are required.
+
+- `POST /api/sessions`: `application/json` with `{"template_id":"1"}`; `201` with the copied session and `Location`. An existing session returns `409`, `error.code: "active_session_exists"`, and `error.session` containing the existing snapshot for continuation. Archived/empty templates return `409`; missing/foreign-owner templates return `404` when no session is active.
+- `GET /api/sessions/active`: `200` with `{"session":null}` or `{"session":{...}}`.
+- `GET /api/sessions/{id}`: `200` with the snapshot, or `404` if missing/ended/foreign-owned.
+- `POST /api/sessions/{id}/cancel` and `/complete`: bodyless actions returning `204`; delete only that owner's matching session and its snapshot rows. Repeated requests and stale IDs are harmless, including when a newer workout exists.
+
+Session resources contain string `id` and `template_id`, copied `name`, UTC `started_at`, and `exercises` using the same occurrence shape/target types as template details. Responses are uncached. Start accepts only a canonical positive string template ID; unknown fields/malformed JSON return `400`, bodies above 4 KiB return `413`, and unsupported media types return `415`. Persistence/forwarding failures use the existing generic `500`/`502` conventions. No set/history endpoints are available.
+
+Focused PostgreSQL tests cover snapshots, null/zero/decimal targets, owner isolation, concurrent starts, atomic failed starts, migration reruns/reconnection, clearing rows, and stale end requests. The stack smoke also checks session forwarding and persistence through database/full-stack restarts.

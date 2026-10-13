@@ -40,7 +40,7 @@ These are agent working instructions, not a security boundary. GitHub permission
 
 ## Validation and documentation
 
-Use the repository's actual tools and commands. The runnable foundation includes frontend package scripts, a Go module with health/configuration tests, Docker Compose, and CI. Exercise and template create/list/read and persistence tests are implemented; sessions and logging remain planned. The README documents the supported setup and check commands.
+Use the repository's actual tools and commands. The runnable foundation includes frontend package scripts, a Go module with health/configuration tests, Docker Compose, and CI. Exercise/template management and active-session lifecycle/persistence tests are implemented; set logging and workout history remain planned. The README documents the supported setup and check commands.
 
 Do not invent setup, build, or test commands, or claim checks passed when they did not run. As tooling is implemented, document working commands in the README and use the relevant checks for each change.
 
