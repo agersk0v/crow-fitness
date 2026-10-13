@@ -6,11 +6,11 @@
 
 | Component | Responsibility | Location |
 | --- | --- | --- |
-| Next.js / TypeScript / Tailwind | Connection checks, exercise search/tags/edit/delete, template creation/list/detail, themes and accessible UI | `frontend/app/`, `frontend/components/`, `frontend/lib/` |
+| Next.js / TypeScript / Tailwind | Connection checks, exercise search/tags/edit/delete, template creation/edit/duplicate/archive/restore, themes and accessible UI | `frontend/app/`, `frontend/components/`, `frontend/lib/` |
 | Go `net/http` | Configuration, HTTP decoding, validation, ownership, persistence and graceful shutdown | `backend/cmd/api/`, `backend/internal/config/`, `health/`, `exercises/`, `templates/` |
 | PostgreSQL / `pgx` pool | Durable records, foreign keys, constraints and transactions | SQL in the Go feature packages; `backend/internal/migrations/` |
 
-The browser calls relative `/api` URLs. The server-only Next.js forwarding route uses runtime `API_INTERNAL_URL` and allows exercise/template collection GET/POST, template-detail GET, exercise PUT/DELETE and template-usage GET, and health/readiness GET. Responses are uncached. Only Go accesses PostgreSQL; database credentials stay server-side. Go sets request deadlines and server timeouts, and returns generic persistence errors while logging diagnostic details.
+The browser calls relative `/api` URLs. The server-only Next.js forwarding route uses runtime `API_INTERNAL_URL` and allows exercise/template collection GET/POST, template-detail GET/PUT and duplicate/archive/restore POST, exercise PUT/DELETE and template-usage GET, and health/readiness GET. Responses are uncached. Only Go accesses PostgreSQL; database credentials stay server-side. Go sets request deadlines and server timeouts, and returns generic persistence errors while logging diagnostic details.
 
 The local Docker stack publishes only the frontend on localhost. Go and PostgreSQL remain on the internal Compose network; PostgreSQL 18 data uses a named volume at `/var/lib/postgresql`. Dockerfiles and CI pin the supported runtime versions. Rebuilds, rather than source mounts, apply local code changes. With no login or authentication, anyone who can reach this app can operate on its data. The internal owner is not an access-control mechanism.
 
@@ -22,14 +22,14 @@ IDs are generated bigint values serialized as decimal strings to avoid JavaScrip
 | --- | --- | --- |
 | `owners` | `id`, `label` | Seeded local owner |
 | `exercises` | `id`, `owner_id`, `name`, `muscle_groups`, `created_at` | Owner foreign key, nonblank name, predefined tag constraint, unique `(owner_id, id)` |
-| `templates` | `id`, `owner_id`, `name` | Owner foreign key, nonblank name, unique `(owner_id, id)` |
+| `templates` | `id`, `owner_id`, `name`, `archived` | Owner foreign key, nonblank name, unique `(owner_id, id)` |
 | `template_exercises` | `template_id`, `owner_id`, `position`, `exercise_id`, `set_count`, `rep_min`, `rep_max`, `target_rir` | Primary key `(template_id, position)`; composite foreign keys enforce common ownership; positive positions/counts; paired positive ordered rep bounds; nullable nonnegative finite RIR |
 
 Template array order becomes one-based positions. Repeated exercise occurrences are allowed. Counts and rep bounds use bigint; RIR uses numeric without a fixed scale. Optional targets remain null, distinct from zero. Product rules for these targets are documented in PRODUCT.md.
 
-Go validates and locks selected exercises before writing a template and all its occurrences in one transaction. Missing and foreign-owner exercises return the same field error. Failed writes roll back the entire template. Collection reads return ID/name summaries; detail and create responses return ordered configuration with exercise names. Template editing/deletion are not implemented.
+Go validates and locks selected exercises before writing a template and all its occurrences in one transaction. Missing and foreign-owner exercises return the same field error. Failed writes roll back the entire template. Collection reads return ID/name summaries; detail and create responses return ordered configuration with exercise names. Edits lock the parent template, validate/lock selected exercises, and replace its name and ordered occurrences in one transaction. Duplication locks the source, rejects archived state, and copies occurrences directly in SQL into a new identity without decimal rounding. Archive/restore lock the same parent, preserve references, and safely repeat the same state transition. Lists select active or archived records explicitly; details use a read-only repeatable-read transaction to prevent mixed name/configuration snapshots. Concurrent edits apply whole configurations in commit order. Permanent template deletion is unavailable.
 
-Exercise create/update requires at least one predefined muscle group, normalizes tags in vocabulary order and removes duplicates; PostgreSQL checks tag membership. Empty arrays remain valid in storage for legacy records; Go enforces the minimum on every create/update without backfilling existing data. Go returns the vocabulary with the exercise collection; Next.js filters the loaded list by name and one group. Update preserves the exercise ID. Usage reads return distinct referencing templates scoped to the owner. Delete locks the exercise `FOR UPDATE`, checks references, and deletes only when unused. This conflicts with template creation's `FOR KEY SHARE` lock: whichever operation commits first determines whether creation or deletion is rejected. Foreign keys remain the final reference protection. A conflict includes template links for the UI; missing/foreign records return the same 404. Native dialogs provide modal focus and Escape/Cancel behavior.
+Exercise create/update requires at least one predefined muscle group, normalizes tags in vocabulary order and removes duplicates; PostgreSQL checks tag membership. Empty arrays remain valid in storage for legacy records; Go enforces the minimum on every create/update without backfilling existing data. Go returns the vocabulary with the exercise collection; Next.js filters the loaded list by name and one group. Update preserves the exercise ID. Usage reads return distinct referencing templates and their archived status scoped to the owner. Delete locks the exercise `FOR UPDATE`, checks references, and deletes only when unused. This conflicts with template creation's `FOR KEY SHARE` lock: whichever operation commits first determines whether creation or deletion is rejected. Foreign keys remain the final reference protection. A conflict includes template links for the UI; missing/foreign records return the same 404. Native dialogs provide modal focus and Escape/Cancel behavior.
 
 Embedded numbered SQL migrations run before Go serves traffic. A transaction and PostgreSQL advisory lock serialize concurrent starts; `schema_migrations` records applied versions. Reruns skip applied files and preserve records. Migration failure stops startup. Operational commands and data-preservation guidance are in README.md; add new migrations rather than changing applied SQL. A volume provides persistence, not backup; define an export/restore procedure before storing important workout history.
 
@@ -51,23 +51,22 @@ Nothing in this section is implemented. Resolve the remaining PRODUCT.md decisio
 
 Store timestamps in UTC and display them in the browser's local timezone. Require a finish timestamp only for completed sessions, no earlier than the start. If one active session is approved, enforce it per owner with a partial unique index. If kilograms with two decimal places is approved, `numeric(8,2)` and decimal-string JSON are proposed for weights; reject excess precision/range rather than silently rounding. Add indexes for real history joins and queries.
 
-Session snapshots preserve history through template changes. A future template deletion should clear the session's template reference while retaining its copied configuration. Block deletion of referenced exercises. Session deletion and editing completed sessions require separate requirements.
+Session snapshots preserve history through template changes. Template archiving retains references; future sessions must keep their copied configuration. Permanent deletion requires a separate approved requirement. Block deletion of referenced exercises. Session deletion and editing completed sessions require separate requirements.
 
 ### Proposed transactions
 
-1. **Start:** accept a template ID and request UUID. Lock the owner's template, read its ordered configuration, and create the session and snapshot in one transaction. Future template edits/deletions must use the same lock. Reject missing/empty templates. A retry of the same request must reuse the existing session, compare the template ID, and never recopy a changed template.
+1. **Start:** accept a template ID and request UUID. Lock the owner's template, read its ordered configuration, and create the session and snapshot in one transaction. Template edits and archive operations already use this parent lock. Reject missing/empty templates. A retry of the same request must reuse the existing session, compare the template ID, and never recopy a changed template.
 2. **Reference performance:** if approved, select the most recent completed session containing recorded sets for each exercise, ordered by completion time then session ID. Include repeated occurrences in source occurrence/set order. Resolve the mapping into suggestions before implementing prefilling.
 3. **Record:** lock the parent session, verify ownership, active status and occurrence membership, then insert valid weight/reps. A request UUID identifies a logical write; replay the same payload, reject changed payloads, and enforce uniqueness. Replay lookup precedes the active-status check so a lost response can be recovered after completion.
 4. **Edit/remove:** acquire the same parent-session lock and require active status. Preserve other set numbers. If autosave is approved, serialize valid edits per set and retain failed drafts for retry.
 5. **Complete:** wait for pending saves, then lock the session and persist completion once. Replays keep the existing finish time. The shared lock orders completion against writes. Resolve failed saves before finishing; never silently convert suggestions into performed sets.
 
-Suggested values remain separate from performed records. Future template updates must validate and replace ordered configuration atomically. Generic writes must not bypass session-state or ownership rules. Offline draft persistence is outside the proposed MVP.
+Suggested values remain separate from performed records. Template updates already validate and replace ordered configuration atomically. Generic writes must not bypass session-state or ownership rules. Offline draft persistence is outside the proposed MVP.
 
 ### Proposed API and validation
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
-| PUT, DELETE | `/api/templates/{id}` | Edit/delete a template |
 | GET, POST | `/api/sessions` | List/start sessions |
 | GET | `/api/sessions/{id}` | Snapshot, sets and reference performance |
 | POST | `/api/sessions/{id}/sets` | Record a set |

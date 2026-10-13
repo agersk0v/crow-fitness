@@ -54,13 +54,15 @@ type Input struct {
 	Exercises []InputEntry `json:"exercises"`
 }
 type Template struct {
+	Archived  bool    `json:"archived"`
 	ID        string  `json:"id"`
 	Name      string  `json:"name"`
 	Exercises []Entry `json:"exercises"`
 }
 type Summary struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	Archived bool   `json:"archived"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
 }
 type ValidationError map[string]string
 
@@ -70,7 +72,10 @@ var ErrNotFound = errors.New("template not found")
 
 type Store interface {
 	Create(context.Context, int64, Input) (Template, error)
-	List(context.Context, int64) ([]Summary, error)
+	List(context.Context, int64, bool) ([]Summary, error)
+	Update(context.Context, int64, string, Input) (Template, error)
+	Duplicate(context.Context, int64, string, string) (Template, error)
+	SetArchived(context.Context, int64, string, bool) (Template, error)
 	Get(context.Context, int64, string) (Template, error)
 }
 
@@ -123,30 +128,15 @@ func (p Postgres) Create(ctx context.Context, owner int64, input Input) (Templat
 		return Template{}, err
 	}
 	defer tx.Rollback(ctx)
-	// Validate and lock selected records before inserting anything.
-	for i, entry := range input.Exercises {
-		var id string
-		err = tx.QueryRow(ctx, "SELECT id::text FROM exercises WHERE owner_id=$1 AND id=$2 FOR KEY SHARE", owner, entry.ExerciseID).Scan(&id)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return Template{}, ValidationError{fmt.Sprintf("exercises.%d.exercise_id", i): "This exercise is unavailable. Choose one from your library."}
-		}
-		if err != nil {
-			return Template{}, err
-		}
+	if err = lockExercises(ctx, tx, owner, input); err != nil {
+		return Template{}, err
 	}
 	var item Template
 	if err = tx.QueryRow(ctx, "INSERT INTO templates(owner_id,name) VALUES ($1,$2) RETURNING id::text,name", owner, input.Name).Scan(&item.ID, &item.Name); err != nil {
 		return Template{}, err
 	}
-	for i, entry := range input.Exercises {
-		var rir any
-		if entry.TargetRIR != nil {
-			rir = string(*entry.TargetRIR)
-		}
-		_, err = tx.Exec(ctx, `INSERT INTO template_exercises(template_id,owner_id,position,exercise_id,set_count,rep_min,rep_max,target_rir) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::text::numeric)`, item.ID, owner, i+1, entry.ExerciseID, entry.SetCount, entry.RepMin, entry.RepMax, rir)
-		if err != nil {
-			return Template{}, err
-		}
+	if err = insertEntries(ctx, tx, owner, item.ID, input.Exercises); err != nil {
+		return Template{}, err
 	}
 	item, err = get(ctx, tx, owner, item.ID)
 	if err != nil {
@@ -157,8 +147,8 @@ func (p Postgres) Create(ctx context.Context, owner int64, input Input) (Templat
 	}
 	return item, nil
 }
-func (p Postgres) List(ctx context.Context, owner int64) ([]Summary, error) {
-	rows, err := p.Pool.Query(ctx, "SELECT id::text,name FROM templates WHERE owner_id=$1 ORDER BY id", owner)
+func (p Postgres) List(ctx context.Context, owner int64, archived bool) ([]Summary, error) {
+	rows, err := p.Pool.Query(ctx, "SELECT id::text,name,archived FROM templates WHERE owner_id=$1 AND archived=$2 ORDER BY id", owner, archived)
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +156,7 @@ func (p Postgres) List(ctx context.Context, owner int64) ([]Summary, error) {
 	items := []Summary{}
 	for rows.Next() {
 		var item Summary
-		if err = rows.Scan(&item.ID, &item.Name); err != nil {
+		if err = rows.Scan(&item.ID, &item.Name, &item.Archived); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
@@ -180,11 +170,23 @@ type queryer interface {
 }
 
 func (p Postgres) Get(ctx context.Context, owner int64, id string) (Template, error) {
-	return get(ctx, p.Pool, owner, id)
+	tx, err := p.Pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return Template{}, err
+	}
+	defer tx.Rollback(ctx)
+	item, err := get(ctx, tx, owner, id)
+	if err != nil {
+		return Template{}, err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return Template{}, err
+	}
+	return item, nil
 }
 func get(ctx context.Context, db queryer, owner int64, id string) (Template, error) {
 	var item Template
-	err := db.QueryRow(ctx, "SELECT id::text,name FROM templates WHERE owner_id=$1 AND id=$2", owner, id).Scan(&item.ID, &item.Name)
+	err := db.QueryRow(ctx, "SELECT id::text,name,archived FROM templates WHERE owner_id=$1 AND id=$2", owner, id).Scan(&item.ID, &item.Name, &item.Archived)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return item, ErrNotFound
 	}
@@ -215,7 +217,15 @@ func Register(mux *http.ServeMux, store Store) {
 	mux.HandleFunc("GET /api/templates", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
-		items, err := store.List(ctx, exercises.LocalOwnerID)
+		archived := false
+		if values, ok := r.URL.Query()["archived"]; ok {
+			if len(values) != 1 || (values[0] != "true" && values[0] != "false") {
+				problem(w, 400, "validation_error", "Use archived=true or archived=false.", nil)
+				return
+			}
+			archived = values[0] == "true"
+		}
+		items, err := store.List(ctx, exercises.LocalOwnerID, archived)
 		if err != nil {
 			failure(w, err)
 			return
@@ -244,35 +254,14 @@ func Register(mux *http.ServeMux, store Store) {
 		}
 		write(w, 200, item)
 	})
-	mux.HandleFunc("POST /api/templates", func(w http.ResponseWriter, r *http.Request) {
-		media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-		if err != nil || media != "application/json" {
-			problem(w, 415, "unsupported_media_type", "Use application/json.", nil)
+	save := func(w http.ResponseWriter, r *http.Request) {
+		updating := r.Method == http.MethodPut
+		if updating && !validID(r.PathValue("id")) {
+			problem(w, 400, "validation_error", "Invalid template ID.", nil)
 			return
 		}
-		r.Body = http.MaxBytesReader(w, r.Body, 65536)
-		decoder := json.NewDecoder(r.Body)
-		decoder.DisallowUnknownFields()
 		var input Input
-		err = decoder.Decode(&input)
-		if err == nil {
-			var extra any
-			next := decoder.Decode(&extra)
-			if next != io.EOF {
-				if next == nil {
-					err = errors.New("extra JSON")
-				} else {
-					err = next
-				}
-			}
-		}
-		if err != nil {
-			var oversized *http.MaxBytesError
-			if errors.As(err, &oversized) {
-				problem(w, 413, "body_too_large", "Request is too large.", nil)
-			} else {
-				problem(w, 400, "validation_error", "Send a template name and exercises with whole-number counts and numeric targets.", nil)
-			}
+		if !decode(w, r, &input) {
 			return
 		}
 		if fields := Validate(&input); len(fields) > 0 {
@@ -281,20 +270,120 @@ func Register(mux *http.ServeMux, store Store) {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
-		item, err := store.Create(ctx, exercises.LocalOwnerID, input)
-		var fields ValidationError
-		if errors.As(err, &fields) {
-			problem(w, 400, "validation_error", fields.Error(), fields)
-			return
+		var item Template
+		var err error
+		if updating {
+			item, err = store.Update(ctx, exercises.LocalOwnerID, r.PathValue("id"), input)
+		} else {
+			item, err = store.Create(ctx, exercises.LocalOwnerID, input)
 		}
 		if err != nil {
-			failure(w, err)
+			operationError(w, err)
+			return
+		}
+		if updating {
+			write(w, 200, item)
+		} else {
+			w.Header().Set("Location", "/api/templates/"+item.ID)
+			write(w, 201, item)
+		}
+	}
+	mux.HandleFunc("POST /api/templates", save)
+	mux.HandleFunc("PUT /api/templates/{id}", save)
+	mux.HandleFunc("POST /api/templates/{id}/duplicate", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		if !validID(id) {
+			problem(w, 400, "validation_error", "Invalid template ID.", nil)
+			return
+		}
+		var input struct {
+			Name string `json:"name"`
+		}
+		if !decode(w, r, &input) {
+			return
+		}
+		input.Name = strings.TrimSpace(input.Name)
+		if input.Name == "" {
+			problem(w, 400, "validation_error", "Enter a name for the copy.", ValidationError{"name": "Enter a template name."})
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+		item, err := store.Duplicate(ctx, exercises.LocalOwnerID, id, input.Name)
+		if err != nil {
+			operationError(w, err)
 			return
 		}
 		w.Header().Set("Location", "/api/templates/"+item.ID)
 		write(w, 201, item)
 	})
+	for _, action := range []string{"archive", "restore"} {
+		mux.HandleFunc("POST /api/templates/{id}/"+action, func(w http.ResponseWriter, r *http.Request) {
+			id := r.PathValue("id")
+			if !validID(id) {
+				problem(w, 400, "validation_error", "Invalid template ID.", nil)
+				return
+			}
+			ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+			defer cancel()
+			item, err := store.SetArchived(ctx, exercises.LocalOwnerID, id, action == "archive")
+			if err != nil {
+				operationError(w, err)
+				return
+			}
+			write(w, 200, item)
+		})
+	}
 }
+func decode(w http.ResponseWriter, r *http.Request, input any) bool {
+	media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || media != "application/json" {
+		problem(w, 415, "unsupported_media_type", "Use application/json.", nil)
+		return false
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 65536)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	err = decoder.Decode(input)
+	if err == nil {
+		var extra any
+		next := decoder.Decode(&extra)
+		if next != io.EOF {
+			if next == nil {
+				err = errors.New("extra JSON")
+			} else {
+				err = next
+			}
+		}
+	}
+	if err != nil {
+		var oversized *http.MaxBytesError
+		if errors.As(err, &oversized) {
+			problem(w, 413, "body_too_large", "Request is too large.", nil)
+		} else {
+			problem(w, 400, "validation_error", "Send valid template JSON with whole-number counts and numeric targets.", nil)
+		}
+		return false
+	}
+	return true
+}
+func operationError(w http.ResponseWriter, err error) {
+	if errors.Is(err, ErrNotFound) {
+		problem(w, 404, "not_found", "Template not found.", nil)
+		return
+	}
+	if errors.Is(err, ErrArchived) {
+		problem(w, 409, "template_archived", "Restore this template before editing or duplicating it.", nil)
+		return
+	}
+	var fields ValidationError
+	if errors.As(err, &fields) {
+		problem(w, 400, "validation_error", fields.Error(), fields)
+		return
+	}
+	failure(w, err)
+}
+
 func failure(w http.ResponseWriter, err error) {
 	slog.Error("Template persistence failed", "error", err)
 	problem(w, 500, "internal_error", "Templates could not be saved or loaded. Please try again.", nil)

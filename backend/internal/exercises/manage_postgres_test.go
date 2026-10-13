@@ -150,7 +150,7 @@ func TestManagementPersistence(t *testing.T) {
 	if err = <-result; !errors.As(err, &invalid) {
 		t.Fatalf("concurrent create did not reject deleted exercise: %v", err)
 	}
-	summaries, err := templateStore.List(ctx, 27)
+	summaries, err := templateStore.List(ctx, 27, false)
 	if err != nil || len(summaries) != 2 {
 		t.Fatal(summaries, err)
 	}

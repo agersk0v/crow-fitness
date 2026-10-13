@@ -108,8 +108,30 @@ python3 - "$response_file" "$template_id" <<'CHECK'
 import json,sys
 with open(sys.argv[1]) as f: body=json.load(f)
 assert body['error']['code']=='exercise_in_use'
-assert body['error']['templates']==[{'id':sys.argv[2],'name':'Smoke routine'}]
+assert body['error']['templates']==[{'id':sys.argv[2],'name':'Smoke routine','archived':False}]
 CHECK
+# Exercise the management routes once; detailed rule cases stay in Go tests.
+curl --fail --silent --show-error "$base_url/api/templates/$template_id" -X PUT -H 'Content-Type: application/json' --data-binary "@$request_file" --output "$response_file"
+copy_id="$(curl --fail --silent --show-error "$base_url/api/templates/$template_id/duplicate" -H 'Content-Type: application/json' --data '{"name":"Smoke copy"}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+curl --fail --silent --show-error "$base_url/api/templates/$copy_id/archive" -X POST --output "$response_file"
+curl --fail --silent --show-error "$base_url/api/templates/$copy_id/restore" -X POST --output "$response_file"
+curl --fail --silent --show-error "$base_url/api/templates/$copy_id/archive" -X POST --output "$response_file"
+assert_archived_copy() {
+  curl --fail --silent --show-error "$base_url/api/templates?archived=true" --output "$response_file"
+  python3 - "$response_file" "$copy_id" <<'CHECK'
+import json,sys
+with open(sys.argv[1]) as f: items=json.load(f)['items']
+assert any(x['id']==sys.argv[2] and x['name']=='Smoke copy' and x['archived'] for x in items),items
+CHECK
+  curl --fail --silent --show-error "$base_url/api/templates/$copy_id" --output "$response_file"
+  python3 - "$response_file" "$copy_id" "$template_id" <<'CHECK'
+import json,sys
+with open(sys.argv[1]) as f: saved=json.load(f)
+assert saved['id']==sys.argv[2] and saved['id']!=sys.argv[3] and saved['archived']
+assert saved['exercises'][0]['name']=='Smoke squat'
+CHECK
+}
+assert_archived_copy
 docker compose stop postgres
 assert_response /api/health 200 ok
 assert_response /api/ready 503 unavailable
@@ -117,9 +139,11 @@ docker compose start postgres
 wait_ready
 assert_exercise
 assert_template
+assert_archived_copy
 docker compose down
 docker compose up --detach --wait --wait-timeout 180
 assert_exercise
 assert_template
+assert_archived_copy
 assert_response /api/ready 200 ok
 echo "Stack smoke check passed: frontend, API, exercise/template routing, validation, readiness recovery, and restart persistence."

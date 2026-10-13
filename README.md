@@ -4,7 +4,7 @@ A simple workout tracker for one person, with no authentication or accounts.
 
 ## Current status
 
-The Next.js frontend, Go API, and PostgreSQL support creating, searching, tagging, renaming, and safely deleting personal exercises at `/exercises`. Names are trimmed and validated in Go. Saved exercises survive refresh and stack restart. Go selects one internal local owner; the app has no login or authentication. You can also create, list, and reopen persistent workout templates at `/templates`. Logging and progress remain planned.
+The Next.js frontend, Go API, and PostgreSQL support creating, searching, tagging, renaming, and safely deleting personal exercises at `/exercises`. Names are trimmed and validated in Go. Saved exercises survive refresh and stack restart. Go selects one internal local owner; the app has no login or authentication. You can also create, edit, duplicate, archive, and restore persistent workout templates at `/templates`. Logging and progress remain planned.
 
 See [product requirements](docs/PRODUCT.md), [architecture](docs/ARCHITECTURE.md), and [agent instructions](AGENTS.md).
 
@@ -146,20 +146,23 @@ On `/exercises`, case-insensitive name substring search combines with one muscle
 **Edit** opens the saved name/tags with Save/Cancel and inline errors. Failed saves retain the draft. Renaming keeps the exercise ID and updates the name displayed in templates. **Delete** opens a confirmation naming the exercise and checks usage; referencing templates are linked and block deletion. Escape/Cancel closes the dialog, with no mutation.
 
 - `PUT /api/exercises/{id}` replaces the name and tags, returning `200` with the updated exercise. At least one muscle group is required; clearing every tag is rejected.
-- `GET /api/exercises/{id}/templates` returns `200` with `{"items":[{"id":"1","name":"Push day"}]}`; repeated occurrences count once per template.
+- `GET /api/exercises/{id}/templates` returns `200` with `{"items":[{"id":"1","name":"Push day","archived":false}]}`; repeated occurrences count once per template. Archived references still block deletion and are labeled in the UI.
 - `DELETE /api/exercises/{id}` returns `204` for an unreferenced exercise, or `409` with `error.code: "exercise_in_use"` and `error.templates` containing the referencing template IDs/names. No references are removed automatically. Missing/foreign-owner exercises return `404` for these operations.
 
 Migration `003_exercise_tags.sql` adds empty tags to existing exercises without resetting data. These legacy exercises remain available and must receive at least one tag when next edited. PostgreSQL constraints validate tags and preserve template references. Go locks deletion against concurrent template creation, so stale usage information cannot permit deleting a referenced exercise.
 
 ## Workout templates
 
-Open `/templates` from home or exercises. Give the template a name, add saved exercises, and use **Move up / Move down** to arrange them. Each occurrence requires a positive whole-number working-set count. Rep bounds are optional: leave both blank, use a positive minimum/maximum range, or equal values for a fixed target. Target RIR is optional and accepts nonnegative decimals, including zero. One rep/RIR target applies to all working sets of an occurrence; warm-up sets are excluded. The same exercise may appear more than once with different targets. Saving persists the entire ordered configuration atomically; select a saved template to reopen it. Editing, deleting, starting workouts, and recording sets are not included yet.
+Open `/templates` from home or exercises. Give the template a name, add saved exercises, and use **Move up / Move down** to arrange them. Each occurrence requires a positive whole-number working-set count. Rep bounds are optional: leave both blank, use a positive minimum/maximum range, or equal values for a fixed target. Target RIR is optional and accepts nonnegative decimals, including zero. One rep/RIR target applies to all working sets of an occurrence; warm-up sets are excluded. The same exercise may appear more than once with different targets. Saving persists the entire ordered configuration atomically; select a saved template to reopen it. Active templates can be edited or duplicated. Archive preserves their configuration and hides them from the Active list; inspect or restore them in Archived. Archived templates are read-only and must be restored before editing or duplicating. Permanent deletion, starting workouts, and recording sets are not included.
 
-Migration `002_templates.sql` uses the same startup process described above. Template writes reject missing or foreign-owner exercises.
+Migrations `002_templates.sql` and `004_template_archive.sql` use the same startup process described above. Existing templates remain active. Template writes reject missing or foreign-owner exercises.
 
-- `GET /api/templates`: `200` with `{"items":[{"id":"1","name":"Push day"}]}`.
+- `GET /api/templates`: active templates by default, `200` with `{"items":[{"id":"1","name":"Push day","archived":false}]}`. Use `?archived=true` for Archived; invalid selector values return `400`.
 - `POST /api/templates`: `application/json`, with a trimmed nonblank name and at least one exercise. Returns `201` with the full resource and a `Location` header.
-- `GET /api/templates/{id}`: `200` with the full resource, or `404` if absent or owned by another owner.
+- `GET /api/templates/{id}`: `200` with the full resource, including `archived`, or `404` if absent or owned by another owner. Archived templates remain inspectable.
+- `PUT /api/templates/{id}`: replace the name and ordered exercise configuration atomically, using the same JSON body and rules as create; `200` with the saved resource. Removing an occurrence does not delete its library exercise.
+- `POST /api/templates/{id}/duplicate`: `application/json` with `{"name":"Push day B"}`; `201` with a new independent resource and `Location`. All saved occurrences/targets are copied in PostgreSQL without numeric rounding. Names need not be globally unique.
+- `POST /api/templates/{id}/archive` and `/restore`: bodyless actions returning `200` with the resource. Repeating either action is safe. Archived edits/duplication return `409` with `error.code: "template_archived"`; permanent template DELETE is unavailable.
 
 Example create body:
 
@@ -176,3 +179,5 @@ Example create body:
 Array order determines `position` in the response. Each returned occurrence also includes its exercise name. Absent optional values are returned as `null`; zero RIR remains zero. Counts/reps must be whole numbers; RIR is a JSON number stored as a decimal without a fixed rounding scale or product-specific ceiling. PostgreSQL's numeric storage limits still apply. Requests are limited to 64 KiB and unknown fields are rejected. Invalid values return `400` with `error.message` and, for business validation, `error.fields` keyed by `name`, `exercises`, or e.g. `exercises.0.set_count`, `exercises.0.rep_range`, `exercises.0.target_rir`, and `exercises.0.exercise_id`. Responses are uncached; transport/media/size/persistence errors use the same status conventions as exercises.
 
 PostgreSQL tests cover template ordering, optional/fixed targets, ownership, constraints, rollback, and migration reruns. The smoke check covers transport and restart persistence.
+
+Template editing offers Save/Cancel and retains drafts after failed saves. Duplication requests a name for the independent copy. Archive requires confirmation naming the template; Cancel/Escape leaves it unchanged. Archived exercise references are preserved until an active template is edited to remove them. Concurrent edits apply complete configurations in commit order; there is no draft merging. Session snapshots and workout history remain future work.

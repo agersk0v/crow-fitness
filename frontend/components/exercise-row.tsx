@@ -263,6 +263,7 @@ export function ExerciseRow({
                         className="break-words text-highlight underline"
                       >
                         {template.name}
+                        {template.archived ? " (Archived)" : ""}
                       </Link>
                     </li>
                   ))}
