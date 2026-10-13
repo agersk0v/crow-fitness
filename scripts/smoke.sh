@@ -68,15 +68,13 @@ import json,sys
 with open(sys.argv[1]) as f: body=json.load(f)
 assert body['error']['fields']['name']
 CHECK
-# Create a template with repeated occurrences, decimal/zero RIR, fixed reps,
-# a range, and absent targets. Verify list/detail through Next.js forwarding.
+# Verify a representative template through Next.js forwarding. Detailed target,
+# ordering, ownership, and rollback cases stay in the PostgreSQL tests.
 python3 - "$exercise_id" > "$request_file" <<'CHECK'
 import json,sys
 exercise=sys.argv[1]
 print(json.dumps({'name':'  Smoke routine  ','exercises':[
- {'exercise_id':exercise,'set_count':3,'rep_min':8,'rep_max':12,'target_rir':1.5},
- {'exercise_id':exercise,'set_count':2,'rep_min':10,'rep_max':10,'target_rir':0},
- {'exercise_id':exercise,'set_count':1,'rep_min':None,'rep_max':None,'target_rir':None}]}))
+ {'exercise_id':exercise,'set_count':3,'rep_min':8,'rep_max':12,'target_rir':1.5}]}))
 CHECK
 template_id="$(curl --fail --silent --show-error "$base_url/api/templates" -H 'Content-Type: application/json' --data-binary "@$request_file" | python3 -c 'import json,sys; x=json.load(sys.stdin); assert x["name"]=="Smoke routine"; print(x["id"])')"
 assert_template() {
@@ -92,7 +90,7 @@ import json,sys
 with open(sys.argv[1]) as f: saved=json.load(f)
 with open(sys.argv[2]) as f: request=json.load(f)
 assert saved['name']=='Smoke routine'
-assert len(saved['exercises'])==3
+assert len(saved['exercises'])==1
 for i,(actual,expected) in enumerate(zip(saved['exercises'],request['exercises'])):
     assert actual['position']==i+1 and actual['name']=='Smoke squat',actual
     for key,value in expected.items(): assert actual[key]==value,(key,actual)
@@ -103,14 +101,6 @@ curl --fail --silent --show-error "$base_url/templates" --output "$response_file
 grep -q 'Create a template' "$response_file"
 curl --fail --silent --show-error "$base_url/templates/$template_id" --output "$response_file"
 grep -q 'Loading template' "$response_file"
-code="$(curl --silent --show-error --output "$response_file" --write-out '%{http_code}' "$base_url/api/templates" -H 'Content-Type: application/json' --data '{"name":"Invalid","exercises":[{"exercise_id":"9223372036854775807","set_count":1}]}')"
-[[ "$code" == 400 ]]
-python3 - "$response_file" <<'CHECK'
-import json,sys
-with open(sys.argv[1]) as f: body=json.load(f)
-assert body['error']['fields']['exercises.0.exercise_id']
-CHECK
-assert_template
 docker compose stop postgres
 assert_response /api/health 200 ok
 assert_response /api/ready 503 unavailable
@@ -123,4 +113,4 @@ docker compose up --detach --wait --wait-timeout 180
 assert_exercise
 assert_template
 assert_response /api/ready 200 ok
-echo "Stack smoke check passed: frontend, API, exercise/template validation, readiness recovery, and restart persistence."
+echo "Stack smoke check passed: frontend, API, exercise/template routing, validation, readiness recovery, and restart persistence."

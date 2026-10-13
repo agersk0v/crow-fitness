@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { ExerciseRow } from "@/components/exercise-row";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import type { Exercise } from "@/lib/static-exercises";
+import type { Exercise } from "@/lib/exercises";
 
 export function ExerciseLibrary() {
   const [exercises, setExercises] = useState<Exercise[]>([]);

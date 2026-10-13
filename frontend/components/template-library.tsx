@@ -4,7 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import type { Exercise } from "@/lib/static-exercises";
+import type { Exercise } from "@/lib/exercises";
 import type { TemplateSummary } from "@/lib/templates";
 
 type DraftEntry = {

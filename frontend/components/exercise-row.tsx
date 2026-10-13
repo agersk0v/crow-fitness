@@ -1,7 +1,7 @@
 "use client";
 
 import { useEntranceAnimation } from "@/hooks/use-entrance-animation";
-import type { Exercise } from "@/lib/static-exercises";
+import type { Exercise } from "@/lib/exercises";
 
 export function ExerciseRow({
   exercise,
