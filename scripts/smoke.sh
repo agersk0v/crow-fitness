@@ -49,15 +49,16 @@ curl --fail --silent --show-error --max-time 8 "$base_url" --output "$response_f
 grep -q 'Crow Fitness' "$response_file"
 assert_response /api/health 200 ok
 assert_response /api/ready 200 ok
-exercise_id="$(curl --fail --silent --show-error "$base_url/api/exercises" -H 'Content-Type: application/json' --data '{"name":"  Smoke squat  "}' | python3 -c 'import json,sys; x=json.load(sys.stdin); assert x["name"]=="Smoke squat"; print(x["id"])')"
+exercise_id="$(curl --fail --silent --show-error "$base_url/api/exercises" -H 'Content-Type: application/json' --data '{"name":"  Smoke squat  ","muscle_groups":["quadriceps"]}' | python3 -c 'import json,sys; x=json.load(sys.stdin); assert x["name"]=="Smoke squat"; print(x["id"])')"
 assert_exercise() {
   curl --fail --silent --show-error "$base_url/api/exercises" --output "$response_file"
   python3 - "$response_file" "$exercise_id" <<'CHECK'
 import json,sys
 with open(sys.argv[1]) as f: items=json.load(f)['items']
-assert any(x['id']==sys.argv[2] and x['name']=='Smoke squat' for x in items), items
+assert any(x['id']==sys.argv[2] and x['name']=='Smoke squat' and x['muscle_groups']==['quadriceps'] for x in items), items
 CHECK
 }
+curl --fail --silent --show-error "$base_url/api/exercises/$exercise_id" -X PUT -H 'Content-Type: application/json' --data '{"name":" Smoke squat ","muscle_groups":["quadriceps"]}' --output "$response_file"
 assert_exercise
 curl --fail --silent --show-error "$base_url/exercises" --output "$response_file"
 grep -q 'Exercise name' "$response_file"
@@ -101,6 +102,14 @@ curl --fail --silent --show-error "$base_url/templates" --output "$response_file
 grep -q 'Create a template' "$response_file"
 curl --fail --silent --show-error "$base_url/templates/$template_id" --output "$response_file"
 grep -q 'Loading template' "$response_file"
+code="$(curl --silent --show-error --output "$response_file" --write-out '%{http_code}' "$base_url/api/exercises/$exercise_id" -X DELETE)"
+[[ "$code" == 409 ]]
+python3 - "$response_file" "$template_id" <<'CHECK'
+import json,sys
+with open(sys.argv[1]) as f: body=json.load(f)
+assert body['error']['code']=='exercise_in_use'
+assert body['error']['templates']==[{'id':sys.argv[2],'name':'Smoke routine'}]
+CHECK
 docker compose stop postgres
 assert_response /api/health 200 ok
 assert_response /api/ready 503 unavailable

@@ -19,10 +19,10 @@ func (f *fakeStore) List(_ context.Context, owner int64) ([]Exercise, error) {
 	f.owner = owner
 	return nil, f.err
 }
-func (f *fakeStore) Create(_ context.Context, owner int64, name string) (Exercise, error) {
+func (f *fakeStore) Create(_ context.Context, owner int64, input Input) (Exercise, error) {
 	f.owner = owner
-	f.name = name
-	return Exercise{ID: "1", Name: name}, f.err
+	f.name = input.Name
+	return Exercise{ID: "1", Name: input.Name}, f.err
 }
 func TestCreate(t *testing.T) {
 	for _, tc := range []struct {
@@ -30,12 +30,12 @@ func TestCreate(t *testing.T) {
 		status int
 		name   string
 	}{
-		{`{"name":"  Squat  "}`, 201, "Squat"},
-		{`{"name":"\u2003Press\u2003"}`, 201, "Press"},
+		{`{"name":"  Squat  ","muscle_groups":["chest"]}`, 201, "Squat"},
+		{`{"name":"\u2003Press\u2003","muscle_groups":["chest"]}`, 201, "Press"},
 		{`{"name":" \t "}`, 400, ""}, {`{}`, 400, ""},
 		{`{"name":"Squat","owner_id":2}`, 400, ""},
 		{`{"name":`, 400, ""}, {`{"name":2}`, 400, ""},
-		{`{"name":"Squat"}{}`, 400, ""},
+		{`{"name":"Squat","muscle_groups":["chest"]}{}`, 400, ""},
 		{`{"name":"` + strings.Repeat("x", 17000) + `"}`, 413, ""},
 	} {
 		store := &fakeStore{}
@@ -62,7 +62,7 @@ func TestListAndErrors(t *testing.T) {
 	if response.Code != 200 || !strings.Contains(response.Body.String(), `"items":[]`) || store.owner != LocalOwnerID {
 		t.Fatal(response.Body)
 	}
-	req := httptest.NewRequest("POST", "/api/exercises", strings.NewReader(`{"name":"Squat"}`))
+	req := httptest.NewRequest("POST", "/api/exercises", strings.NewReader(`{"name":"Squat","muscle_groups":["chest"]}`))
 	response = httptest.NewRecorder()
 	mux.ServeHTTP(response, req)
 	if response.Code != 415 {
@@ -70,7 +70,7 @@ func TestListAndErrors(t *testing.T) {
 	}
 	store.err = errors.New("secret SQL details")
 	for _, method := range []string{"GET", "POST"} {
-		req = httptest.NewRequest(method, "/api/exercises", strings.NewReader(`{"name":"Squat"}`))
+		req = httptest.NewRequest(method, "/api/exercises", strings.NewReader(`{"name":"Squat","muscle_groups":["chest"]}`))
 		req.Header.Set("Content-Type", "application/json")
 		response = httptest.NewRecorder()
 		mux.ServeHTTP(response, req)
@@ -78,4 +78,16 @@ func TestListAndErrors(t *testing.T) {
 			t.Fatal(response.Body)
 		}
 	}
+}
+
+func (f *fakeStore) Update(ctx context.Context, owner int64, id string, input Input) (Exercise, error) {
+	return f.Create(ctx, owner, input)
+}
+func (f *fakeStore) Usage(_ context.Context, owner int64, id string) ([]TemplateReference, error) {
+	f.owner = owner
+	return []TemplateReference{}, f.err
+}
+func (f *fakeStore) Delete(_ context.Context, owner int64, id string) error {
+	f.owner = owner
+	return f.err
 }

@@ -31,15 +31,15 @@ func TestPostgres(t *testing.T) {
 	}
 	defer pool.Exec(ctx, "DELETE FROM owners WHERE id IN (23,24)")
 	library := exercises.Postgres{Pool: pool}
-	first, err := library.Create(ctx, 23, "Squat")
+	first, err := library.Create(ctx, 23, exercises.Input{Name: "Squat", MuscleGroups: []string{"chest"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := library.Create(ctx, 23, "Press")
+	second, err := library.Create(ctx, 23, exercises.Input{Name: "Press", MuscleGroups: []string{"chest"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	foreign, err := library.Create(ctx, 24, "Foreign")
+	foreign, err := library.Create(ctx, 24, exercises.Input{Name: "Foreign", MuscleGroups: []string{"chest"}})
 	if err != nil {
 		t.Fatal(err)
 	}
