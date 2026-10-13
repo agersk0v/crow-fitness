@@ -234,3 +234,7 @@ History uses exercise identity, so renaming does not split results. The page tit
 - `GET /api/exercises/{id}/history`: uncached `200` with string `id`, `name`, and `workouts`. Each workout contains string `session_id`, captured `name`, UTC `completed_at`, and ordered `occurrences` with `position`, captured `name`, and existing saved-set resources. Workouts sort by completion time then numeric session ID descending; sets sort by saved time then UUID within each occurrence. An owned library exercise or retained completed snapshot with no eligible sets returns `workouts: []`. Missing/foreign identities return `404`, invalid IDs `400`; generic persistence/forwarding errors use `500`/`502`.
 
 No migration, dependencies, or environment changes are required. Focused tests cover identity/ownership, exclusions, ordering, repeated occurrences, exact values, retention, reconnect, and unchanged active data.
+
+## Shared navigation (#41)
+
+Every page uses the same navbar: Home, Exercises, Templates, Workout history, and Sets (the existing history tab). The current section is highlighted; exercise/template/completed-workout details select their parent section, and active workouts select Templates. Detail pages retain contextual back links. Navigation wraps on small screens and supports keyboard focus. The shared light/dark toggle keeps the existing saved theme across navigation and refresh.

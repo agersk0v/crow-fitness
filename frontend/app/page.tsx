@@ -1,25 +1,11 @@
 import Link from "next/link";
 import { PageEntrance } from "@/components/page-entrance";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { ActiveSession } from "@/components/active-session";
 import { ConnectionStatus } from "@/components/connection-status";
 
 export default function Home() {
   return (
     <main className="mx-auto flex min-h-screen max-w-5xl flex-col px-6 py-8 sm:px-12">
-      <header className="flex flex-wrap items-center gap-3 border-b border-border pb-6">
-        <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-lg font-bold text-primary-foreground">
-          C
-        </span>
-        <span className="text-lg font-semibold tracking-tight">
-          Crow Fitness
-        </span>
-        <span className="ml-auto rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
-          Local preview
-        </span>
-        <ThemeToggle />
-      </header>
-
       <PageEntrance className="flex flex-1 flex-col justify-center gap-8 py-16">
         <div className="max-w-2xl">
           <p className="mb-4 text-sm font-medium uppercase tracking-widest text-highlight">

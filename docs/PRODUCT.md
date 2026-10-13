@@ -154,3 +154,7 @@ Resolve the remaining decisions before implementing affected session flows. Acti
 - Editing/deleting completed sessions or deleting referenced exercises.
 
 Local or private-network use is the proposed deployment scope for this application without authentication; the technical setup belongs in the architecture and eventual README.
+
+## Approved shared navigation (#41)
+
+All pages share Home, Exercises, Templates, Workout history, and Sets links in that order, plus the light/dark toggle. Sets opens the existing history tab. Current destinations are highlighted using the URL; detail pages highlight their parent section, with active sessions under Templates. Keep contextual back/continue actions in page content. Navigation must work with keyboard, phone/desktop layouts, refresh/back/forward, and retained theme preferences.
