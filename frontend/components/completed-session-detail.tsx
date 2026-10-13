@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
@@ -96,6 +97,13 @@ export function CompletedSessionDetail({ id }: { id: string }) {
               <h2 className="break-words text-xl font-semibold">
                 {entry.position}. {entry.name}
               </h2>
+              <Link
+                href={`/exercises/${entry.exercise_id}/history`}
+                className="mt-2 inline-block text-sm text-highlight underline"
+                aria-label={`View history for occurrence ${entry.position}: ${entry.name}`}
+              >
+                View exercise history
+              </Link>
               <section
                 className="mt-4 rounded-xl border border-border p-4"
                 aria-label={`Template targets for exercise ${entry.position}`}

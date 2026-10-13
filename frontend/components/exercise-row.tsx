@@ -150,7 +150,15 @@ export function ExerciseRow({
             ))}
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+          <Button asChild variant="outline">
+            <Link
+              href={`/exercises/${exercise.id}/history`}
+              aria-label={`View history for ${exercise.name}`}
+            >
+              View history
+            </Link>
+          </Button>
           <Button
             variant="outline"
             onClick={() => open("edit")}
