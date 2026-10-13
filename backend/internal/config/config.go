@@ -8,11 +8,16 @@ import (
 )
 
 type Config struct {
-	HTTPPort    string
-	DatabaseURL string
+	EnableDevReset bool
+	HTTPPort       string
+	DatabaseURL    string
 }
 
 func Load(getenv func(string) string) (Config, error) {
+	reset := value(getenv, "ENABLE_DEV_RESET", "false")
+	if reset != "true" && reset != "false" {
+		return Config{}, errors.New("ENABLE_DEV_RESET must be true or false")
+	}
 	port := value(getenv, "HTTP_PORT", "8080")
 	if !validPort(port) {
 		return Config{}, errors.New("HTTP_PORT must be a port between 1 and 65535")
@@ -32,7 +37,7 @@ func Load(getenv func(string) string) (Config, error) {
 		Path:     "/" + value(getenv, "DB_NAME", "crowfitness"),
 		RawQuery: "sslmode=disable&connect_timeout=2",
 	}
-	return Config{HTTPPort: port, DatabaseURL: connection.String()}, nil
+	return Config{HTTPPort: port, DatabaseURL: connection.String(), EnableDevReset: reset == "true"}, nil
 }
 
 func value(getenv func(string) string, name, fallback string) string {

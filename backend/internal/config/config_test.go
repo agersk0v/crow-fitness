@@ -38,3 +38,23 @@ func TestLoadRejectsInvalidConfigurationWithoutLeakingPassword(t *testing.T) {
 		}
 	}
 }
+
+func TestExplicitDevResetSetting(t *testing.T) {
+	for _, tc := range []struct {
+		value            string
+		enabled, invalid bool
+	}{{"", false, false}, {"false", false, false}, {"true", true, false}, {"yes", false, true}} {
+		cfg, err := Load(func(key string) string {
+			if key == "DB_PASSWORD" {
+				return "disposable"
+			}
+			if key == "ENABLE_DEV_RESET" {
+				return tc.value
+			}
+			return ""
+		})
+		if (err != nil) != tc.invalid || cfg.EnableDevReset != tc.enabled {
+			t.Fatal(tc, cfg.EnableDevReset, err)
+		}
+	}
+}

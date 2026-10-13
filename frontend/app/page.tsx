@@ -1,7 +1,9 @@
-import Link from "next/link";
 import { PageEntrance } from "@/components/page-entrance";
-import { ActiveSession } from "@/components/active-session";
+import { HomeWorkout } from "@/components/home-workout";
 import { ConnectionStatus } from "@/components/connection-status";
+
+// Read the temporary testing flag at runtime, including production Docker runs.
+export const dynamic = "force-dynamic";
 
 export default function Home() {
   return (
@@ -21,25 +23,7 @@ export default function Home() {
             Save your sets and complete your workout to keep the results.
           </p>
         </div>
-        <ActiveSession />
-        <Link
-          href="/exercises"
-          className="self-start rounded-lg bg-primary px-5 py-3 font-semibold text-primary-foreground hover:bg-primary/90"
-        >
-          Browse exercises
-        </Link>
-        <Link
-          href="/templates"
-          className="self-start rounded-lg border border-border px-5 py-3 font-semibold text-highlight hover:bg-primary/5"
-        >
-          Browse templates
-        </Link>
-        <Link
-          href="/history"
-          className="self-start rounded-lg border border-border px-5 py-3 font-semibold text-highlight hover:bg-primary/5"
-        >
-          Workout history
-        </Link>
+        <HomeWorkout resetEnabled={process.env.ENABLE_DEV_RESET === "true"} />
         <ConnectionStatus />
       </PageEntrance>
 

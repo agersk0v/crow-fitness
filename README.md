@@ -26,6 +26,7 @@ On Windows PowerShell, use `Copy-Item .env.example .env` instead of `cp`. Open `
 | --- | --- | --- |
 | `POSTGRES_PASSWORD` | Required local database password | Replace the example value |
 | `APP_PORT` | Frontend port on your computer | `3000` |
+| `ENABLE_DEV_RESET` | Temporary destructive reset/seed tool | `false` |
 
 Start the stack:
 
@@ -248,3 +249,15 @@ URLs use `tab`, `q`, `exercise`, `from`, and `to`, omitting blank criteria and t
 `GET /api/history/sessions` and `GET /api/sets` accept `q`, `exercise`, `from`, `to`, and API-only `tz` (IANA timezone, supplied by the browser for dates; defaults to UTC for direct API calls). Malformed/repeated/unknown filter parameters, invalid IDs/dates/timezones, and reversed date ranges return uncached `400` validation errors. Unknown page `tab` values still fall back to Sessions; other malformed page criteria show a validation message and block results until corrected/cleared. Unknown valid exercise IDs simply produce no matches. `GET /api/history/exercises` returns uncached `{"items":[{"id":"12","name":"Press"}]}` from the local owner's completed snapshots only.
 
 Results remain completed-only and newest-first, with deleted sets excluded. No matching results has a clear-filters action; load failures can be retried for the current criteria. No schema, dependencies, or environment changes are needed.
+
+## Temporary dummy-data reset (#46)
+
+Home's three content shortcuts have been removed; use the shared navbar to browse exercises, templates, and history. The reset tool is disabled by default. To use it on a disposable local workout database, set `ENABLE_DEV_RESET=true` in `.env` and run the usual Docker startup command. Compose supplies the setting to both Go and Next.js. Home reads it at runtime, so production images work with the selected setting. Set it back to `false` and recreate the containers to remove the button and disable the endpoint. Invalid values stop Go startup.
+
+**Reset database and add dummy data** opens a confirmation describing the data replacement. Cancel/Escape leaves data intact; confirmation disables repeated submissions while working. The operation replaces the internal local owner's exercises, templates, active/completed sessions, and sets in one transaction, preserving the schema, migration records, owner record, and increasing IDs. A failed transaction rolls back. It never drops tables or resets sequences. Concurrent writes are ordered by temporary table locks; ordinary reads see committed data.
+
+The dataset contains 26 tagged exercise identities, Upper 1 / Lower 1 / Upper 2 / Lower 2 with the supplied order and working-set counts, 48 completed workouts over the preceding 12 weeks, 1,032 completed sets, and an active Upper 1 session with three saved sets. Shared movements reuse IDs; rep-range and RIR targets remain unset. Completion dates are in the past; weights/reps vary deterministically, including zero and decimal kilograms. These are synthetic testing values. The active sets are excluded from completed history. Success refreshes Home's active-session card; history, filters, and previous performance use the ordinary APIs.
+
+- `POST /api/dev/reset`: available only when `ENABLE_DEV_RESET=true` in Go and the forwarding frontend. Requires `X-Confirm-Reset: replace-workout-data`; no request body is needed. Returns uncached `200` with `exercises`, `templates`, `completed_sessions`, `completed_sets`, `active_session_id`, and `active_sets`. Missing confirmation returns `400`; persistence failures return generic `500`, forwarding failures `502`. When disabled, it returns `404`.
+
+If a response is lost, refresh to inspect the current data before confirming another replacement. Repeating a successful reset replaces the dataset rather than accumulating it. The tool is temporary and isolated in `backend/internal/devdata/` and the Home component; remove its registration/configuration/UI when testing no longer needs it. Tests always use a separate disposable database/schema.
