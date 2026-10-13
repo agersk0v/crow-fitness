@@ -4,7 +4,7 @@ A simple workout tracker for one person, with no authentication or accounts.
 
 ## Current status
 
-The Next.js frontend, Go API, and PostgreSQL support creating, searching, tagging, renaming, and safely deleting personal exercises at `/exercises`. Names are trimmed and validated in Go. Saved exercises survive refresh and stack restart. Go selects one internal local owner; the app has no login or authentication. You can also create, edit, duplicate, archive, and restore persistent workout templates at `/templates`. Start a workout from an active template, continue the saved session from home, save weight/reps, or cancel it. Completing preserves its sets on the simple `/sets` page. Active exercises show previous completed performance without prefilling; detailed history and exercise progress remain planned.
+The Next.js frontend, Go API, and PostgreSQL support creating, searching, tagging, renaming, and safely deleting personal exercises at `/exercises`. Names are trimmed and validated in Go. Saved exercises survive refresh and stack restart. Go selects one internal local owner; the app has no login or authentication. You can also create, edit, duplicate, archive, and restore persistent workout templates at `/templates`. Start a workout from an active template, continue the saved session from home, save weight/reps, or cancel it. Completing preserves its sets in Workout history at `/history`. Active exercises show previous completed performance without prefilling; exercise-specific history/progress remain planned.
 
 See [product requirements](docs/PRODUCT.md), [architecture](docs/ARCHITECTURE.md), and [agent instructions](AGENTS.md).
 
@@ -126,7 +126,7 @@ Motion for React provides brief 180 ms entrance animations for the home/exercise
 ## Planned features
 
 - Optional previous-performance prefilling (requires separate decisions).
-- A detailed workout-history interface and exercise progress.
+- Exercise-specific history and progress.
 
 The product document lists decisions to confirm before implementing these flows. This setup is intended for your own computer; it has no authentication and is not configured for public hosting.
 
@@ -179,7 +179,7 @@ Array order determines `position` in the response. Each returned occurrence also
 
 PostgreSQL tests cover template ordering, optional/fixed targets, ownership, constraints, rollback, and migration reruns. The smoke check covers transport and restart persistence.
 
-Template editing offers Save/Cancel and retains drafts after failed saves. Duplication requests a name for the independent copy. Archive requires confirmation naming the template; Cancel/Escape leaves it unchanged. Archived exercise references are preserved until an active template is edited to remove them. Concurrent edits apply complete configurations in commit order; there is no draft merging. Active sessions preserve their own snapshots; completed sets are retained on the Sets page.
+Template editing offers Save/Cancel and retains drafts after failed saves. Duplication requests a name for the independent copy. Archive requires confirmation naming the template; Cancel/Escape leaves it unchanged. Archived exercise references are preserved until an active template is edited to remove them. Concurrent edits apply complete configurations in commit order; there is no draft merging. Active sessions preserve their own snapshots; completed sets are retained in the Sets tab of Workout history.
 
 ## Active workout sessions
 
@@ -202,7 +202,7 @@ Session resources contain string `id` and `template_id`, copied `name`, UTC `sta
 
 Focused PostgreSQL tests cover snapshots, null/zero/decimal targets, owner isolation, concurrent starts, atomic failed starts, migration reruns/reconnection, clearing rows, and stale end requests. The stack smoke also checks session forwarding and persistence through database/full-stack restarts.
 
-On a session page, **Add set** opens blank weight/reps fields; **Save set** persists them to the active workout. Saved rows offer Edit/Save/Cancel and Delete. They appear on **Browse sets** from home only after completion. The Sets page is a plain list of exercise name, kilograms, reps, and workout completion date in the browser's local timezone.
+On a session page, **Add set** opens blank weight/reps fields; **Save set** persists them to the active workout. Saved rows offer Edit/Save/Cancel and Delete. They appear in **Workout history → Sets** only after completion. The Sets tab is a plain list of exercise name, kilograms, reps, and workout completion date in the browser's local timezone.
 
 Completion is disabled while a set draft, write, or unresolved error exists. Save or explicitly discard a new draft, cancel an unsubmitted edit, or retry a failed edit/delete before completing. A new set whose save response was lost can be retried with the same UUID or discarded with a server deletion. A failed edit must be resolved by retrying Save before cancelling the edit, because the server may already have saved it. Cancel session still discards the entire active workout after confirmation. Refresh restores successful saves; unsaved drafts have no offline persistence guarantee.
 
@@ -213,3 +213,14 @@ Each exercise shows its latest completed workout with saved sets, across any tem
 Reference requests run independently from current-set entry. **Retry previous performance** reloads only the references, preserving current drafts and controls. Refresh/Continue session reload references and saved current sets. Previous results never prefill, create, or complete any current set.
 
 - `GET /api/sessions/{id}/previous`: uncached `200` with `{"items":[...]}` for the owner's active session. A reference contains string `exercise_id`, string source `session_id`, UTC `completed_at`, and `occurrences` with source `position`, captured `name`, and `sets` using the existing saved-set shape. Exercises without history are omitted; no history returns `{"items":[]}`. Missing/completed/cancelled/foreign sessions return `404`; invalid IDs return `400`. Persistence/forwarding failures use the existing generic `500`/`502` conventions. Completion time/session ID and occurrence/saved timestamp/UUID provide stable tie-breaking.
+
+## Workout history
+
+Open **Workout history** from home, exercises, templates, or an active session. `/history` starts with **Sessions**: template-style cards for completed workouts, newest first, using the captured name and a local-time completion date. Selecting a card opens `/history/[id]`, a read-only snapshot with ordered exercise occurrences, template targets, and completed sets in separate sections. Repeated workouts are separate cards, and repeated exercises remain separate occurrences. Empty completed workouts still have a card and detail; they add no set rows.
+
+**Sets** keeps the plain completed-set list. Tabs use `/history?tab=sessions` or `?tab=sets` so refresh/back restores selection. Arrow keys, Home, and End move and activate tab focus; Tab enters the selected panel. `/sets` redirects to the Sets tab, preserving existing links. Active/cancelled workouts are excluded from both views. Loading failures offer retry, and missing/foreign/noncompleted detail IDs show not found. No editing, deletion, duplication, or template-creation actions are exposed on completed detail.
+
+- `GET /api/history/sessions`: uncached `200`, `{"items":[{"id":"1","name":"Push day","completed_at":"..."}]}`. Completion time and numeric session ID sort descending, including workouts with no sets.
+- `GET /api/history/sessions/{id}`: uncached `200` with the saved session resource, including nonnull `completed_at`, copied `exercises`, and nondeleted `sets`. Missing, foreign, active, or cancelled sessions return `404`; invalid IDs return `400`. Existing generic persistence/forwarding errors apply. The active `/api/sessions/{id}` endpoint remains active-only.
+
+No schema/environment changes are required. Completed-history reads preserve copied names, targets, exact weights/reps, and source order after template/library changes. Focused tests cover filtering, empty/repeated workouts, ownership, deterministic ordering, preserved snapshots, and reconnect; browser checks cover tabs, keyboard focus, read-only details, retry, and legacy navigation.

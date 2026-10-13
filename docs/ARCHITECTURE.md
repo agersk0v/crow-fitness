@@ -1,6 +1,6 @@
 # Architecture
 
-[PRODUCT.md](PRODUCT.md) owns approved requirements and unresolved product decisions. [README.md](../README.md) owns setup, API examples, and check commands. The implemented design below reflects the current repository; session/set persistence and a plain completed-sets list are implemented; previous-performance references are implemented; detailed history/progress remain proposals.
+[PRODUCT.md](PRODUCT.md) owns approved requirements and unresolved product decisions. [README.md](../README.md) owns setup, API examples, and check commands. The implemented design below reflects the current repository; session/set persistence, completed-workout history, and previous-performance references are implemented; exercise progress remains proposed.
 
 ## Implemented components
 
@@ -10,7 +10,7 @@
 | Go `net/http` | Configuration, HTTP decoding, validation, ownership, persistence and graceful shutdown | `backend/cmd/api/`, `backend/internal/config/`, `health/`, `exercises/`, `templates/`, `sessions/` |
 | PostgreSQL / `pgx` pool | Durable records, foreign keys, constraints and transactions | SQL in the Go feature packages; `backend/internal/migrations/` |
 
-The browser calls relative `/api` URLs. The server-only Next.js forwarding route uses runtime `API_INTERNAL_URL` and allows exercise/template collection GET/POST, template-detail GET/PUT and duplicate/archive/restore POST, exercise PUT/DELETE and template-usage GET, session start POST, active/detail GET and cancel/complete POST, session-set PUT/DELETE, previous-performance GET, and completed-sets GET, and health/readiness GET. Responses are uncached. Only Go accesses PostgreSQL; database credentials stay server-side. Go sets request deadlines and server timeouts, and returns generic persistence errors while logging diagnostic details.
+The browser calls relative `/api` URLs. The server-only Next.js forwarding route uses runtime `API_INTERNAL_URL` and allows exercise/template collection GET/POST, template-detail GET/PUT and duplicate/archive/restore POST, exercise PUT/DELETE and template-usage GET, session start POST, active/detail GET and cancel/complete POST, session-set PUT/DELETE, previous-performance GET, completed-session list/detail GET, and completed-sets GET, and health/readiness GET. Responses are uncached. Only Go accesses PostgreSQL; database credentials stay server-side. Go sets request deadlines and server timeouts, and returns generic persistence errors while logging diagnostic details.
 
 The local Docker stack publishes only the frontend on localhost. Go and PostgreSQL remain on the internal Compose network; PostgreSQL 18 data uses a named volume at `/var/lib/postgresql`. Dockerfiles and CI pin the supported runtime versions. Rebuilds, rather than source mounts, apply local code changes. With no login or authentication, anyone who can reach this app can operate on its data. The internal owner is not an access-control mechanism.
 
@@ -41,13 +41,19 @@ Start locks the owner with `FOR NO KEY UPDATE`, compatible with template creatio
 
 Set PUT locks the parent session, requires active state, validates occurrence ownership and decimal-string weight (up to two fractional digits), and inserts/replaces by the same UUID. Position is immutable for an existing set. Numeric has no fixed scale or product-specific ceiling; constraints reject excess scale instead of rounding. Deleted rows remain as tombstones so delayed PUT retries cannot recreate a removed set. Active concurrent edits apply in commit order; there is no draft merging. Frontend drafts keep their UUID until Save succeeds or server deletion confirms discard.
 
-Completion locks the owner and updates the parent session once, ordering against set writes/deletion. It preserves the first completion time and snapshot/results and releases the active slot. Writes that race afterward are rejected. Cancel deletes only the supplied owner's active session; repeated/stale endings cannot affect a completed workout or newer active session. A completed-set query joins copied occurrence names and includes only nondeleted sets from completed workouts, with stable completion/session/occurrence/set ordering. The UI blocks completion for drafts/pending/failed writes, offers native cancel confirmation, and has a plain `/sets` list. Completed detail routes, analytics, and editing completed records remain outside scope.
+Completion locks the owner and updates the parent session once, ordering against set writes/deletion. It preserves the first completion time and snapshot/results and releases the active slot. Writes that race afterward are rejected. Cancel deletes only the supplied owner's active session; repeated/stale endings cannot affect a completed workout or newer active session. A completed-set query joins copied occurrence names and includes only nondeleted sets from completed workouts, with stable completion/session/occurrence/set ordering. The UI blocks completion for drafts/pending/failed writes, offers native cancel confirmation, and has a completed-sets tab in `/history`. Analytics and editing completed records remain outside scope.
 
 ## Implemented previous-performance references (#35)
 
 `GET /api/sessions/{id}/previous` verifies the owner's active session and reads its membership and historical references in one read-only repeatable-read transaction. One SQL query selects the latest completed source per distinct current exercise identity that has nondeleted sets, then returns all its recorded matching source occurrences/sets. Completion timestamp/session ID break recency ties; source occurrence position, saved timestamp, and UUID order sets. Queries use captured names and decimal-string weights, not mutable library names. No schema change or writes are needed.
 
 The UI makes one independent request for the session and shares results across repeated current occurrences. Its retry/error state leaves current set components and drafts mounted. References have their own read-only panel and never supply input values. Empty history has a distinct state. Tests cover source selection/exclusion, identity and owner scope, repeated occurrences, exact values, deterministic ties, reconnect, and unchanged current/history data.
+
+## Implemented workout history (#37)
+
+Go exposes `GET /api/history/sessions` and `/api/history/sessions/{id}`. The list includes all completed workouts for the local owner, including empty workouts, ordered by completion time then session ID descending. Detail reuses the read-only repeatable-read snapshot reader with an explicit completed-state filter. Active detail stays active-only. Detail returns captured configuration and nondeleted saved sets from the same snapshot and never joins mutable library names.
+
+Next.js serves `/history` with Sessions/Sets tabs controlled by the URL's `tab` selector. Sessions is the confirmed default; invalid selectors fall back to it. Roving keyboard focus uses arrows/Home/End, and only the selected tab's data component is mounted. Cards link to `/history/[id]` read-only detail, with separate target and actual-set sections. Legacy `/sets` redirects to `/history?tab=sets`. Existing set data/entry and all mutation/state rules remain intact. No schema migration, extra dependency, or service is needed.
 
 ## Current validation coverage
 

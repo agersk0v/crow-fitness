@@ -49,10 +49,10 @@ export default function Home() {
           Browse templates
         </Link>
         <Link
-          href="/sets"
+          href="/history"
           className="self-start rounded-lg border border-border px-5 py-3 font-semibold text-highlight hover:bg-primary/5"
         >
-          Browse sets
+          Workout history
         </Link>
         <ConnectionStatus />
       </PageEntrance>
