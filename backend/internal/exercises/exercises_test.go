@@ -19,10 +19,10 @@ func (f *fakeStore) List(_ context.Context, owner int64) ([]Exercise, error) {
 	f.owner = owner
 	return nil, f.err
 }
-func (f *fakeStore) Create(_ context.Context, owner int64, name string) (Exercise, error) {
+func (f *fakeStore) Create(_ context.Context, owner int64, input Input) (Exercise, error) {
 	f.owner = owner
-	f.name = name
-	return Exercise{ID: "1", Name: name}, f.err
+	f.name = input.Name
+	return Exercise{ID: "1", Name: input.Name}, f.err
 }
 func TestCreate(t *testing.T) {
 	for _, tc := range []struct {
@@ -78,4 +78,16 @@ func TestListAndErrors(t *testing.T) {
 			t.Fatal(response.Body)
 		}
 	}
+}
+
+func (f *fakeStore) Update(ctx context.Context, owner int64, id string, input Input) (Exercise, error) {
+	return f.Create(ctx, owner, input)
+}
+func (f *fakeStore) Usage(_ context.Context, owner int64, id string) ([]TemplateReference, error) {
+	f.owner = owner
+	return []TemplateReference{}, f.err
+}
+func (f *fakeStore) Delete(_ context.Context, owner int64, id string) error {
+	f.owner = owner
+	return f.err
 }

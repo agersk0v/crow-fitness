@@ -2,7 +2,7 @@
 
 ## Status and purpose
 
-Crow Fitness is a minimal workout tracker for one person: create a reusable workout template, start a session, record weight and reps, and inspect exercise progress. Connection checks, exercise creation/browsing, and template creation/browsing are implemented. Workout sessions and logging remain planned.
+Crow Fitness is a minimal workout tracker for one person: create a reusable workout template, start a session, record weight and reps, and inspect exercise progress. Connection checks, exercise management, and template creation/browsing are implemented. Workout sessions and logging remain planned.
 
 The [README](../README.md) gives the overview. [ARCHITECTURE.md](ARCHITECTURE.md) separates the implemented design from future proposals. This document separates confirmed requirements from proposed MVP behavior; the decisions below remain open until the owner explicitly approves them. Merging a technical proposal does not by itself resolve product choices.
 
@@ -28,6 +28,12 @@ The owner approved personal exercises with one internal local owner on 2026-10-1
 
 A template has a nonblank name and at least one ordered saved exercise. Working-set counts are required. Rep ranges and target RIR are optional and belong to the exercise occurrence within the template, so different templates or repeated occurrences can use different targets. One target applies across its working sets; no individual-set targets or warm-up sets. Target RIR is distinct from performed RIR. Notes, rest times, planned weights, editing/deletion, sessions, and logging are deferred. Zero RIR is valid; decimals are accepted without a product-specific upper limit or rounding rule.
 
+## Approved exercise management (#27)
+
+Exercises have multiple optional tags from the confirmed predefined list: chest, back, shoulders, biceps, triceps, forearms, core, glutes, quadriceps, hamstrings, and calves. Custom tags and primary/secondary distinctions are deferred. Case-insensitive name search combines with a single muscle-group filter; clearing them restores the list.
+
+Renaming preserves exercise identity and updates template displays. Edit offers Save/Cancel, inline validation, saving feedback, and retained drafts for retry. Delete requires confirmation naming the exercise and is blocked when any template references it; show links to those templates, counting repeated occurrences once. Concurrent requests must not break references or leave partial templates. Existing records receive empty tags during migration. Future recorded workouts must retain their captured names/history; sessions remain unimplemented.
+
 ## Pages and navigation
 
 Home links to exercises and templates, with navigation between those pages. Session, history, and progress routes below remain proposals.
@@ -37,7 +43,7 @@ Home links to exercises and templates, with navigation between those pages. Sess
 | Workout templates | `/templates`, `/templates/[id]` | Create, list, and reopen (implemented); edit/delete/start are proposed |
 | Workout session | `/sessions/[id]` | View exercises, reference previous performance, and record sets |
 | Workout history | `/sessions` | List active/completed sessions and open a workout to review |
-| Exercises | `/exercises` | Create and browse personal exercises (implemented) |
+| Exercises | `/exercises` | Create, search/filter, tag, rename, and safely delete personal exercises (implemented) |
 | Exercise progress | `/exercises/[id]` | View all recorded sets for one exercise, grouped by workout |
 
 Use simple navigation between templates, workout history, and exercises. An empty page explains how to create the first exercise/template or record the first workout. Workout entry should be usable on a phone, with clearly labeled fields and actions.
@@ -117,7 +123,7 @@ The remaining session defaults are recommendations, not approved requirements. T
 
 A partial previous workout supplies suggestions only for matching rows. If an exercise occurs more than once in that workout, preserve the source occurrence/order when displaying references; confirm how to map those sets into suggestions before implementing prefilling.
 
-Resolve the remaining decisions before implementing affected session flows. Exercise renaming/deletion, session cancellation/deletion, and corrections to completed workouts need separate requirements if requested. The proposed MVP supports reopening an existing active session, but does not define a separate pause/cancel state.
+Resolve the remaining decisions before implementing affected session flows. Session cancellation/deletion and corrections to completed workouts need separate requirements if requested. The proposed MVP supports reopening an existing active session, but does not define a separate pause/cancel state.
 
 ## Outside the proposed MVP
 

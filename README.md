@@ -4,7 +4,7 @@ A simple workout tracker for one person, with no authentication or accounts.
 
 ## Current status
 
-The Next.js frontend, Go API, and PostgreSQL support creating and browsing personal exercises at `/exercises`. Names are trimmed and validated in Go. Saved exercises survive refresh and stack restart. Go selects one internal local owner; the app has no login or authentication. You can also create, list, and reopen persistent workout templates at `/templates`. Logging and progress remain planned.
+The Next.js frontend, Go API, and PostgreSQL support creating, searching, tagging, renaming, and safely deleting personal exercises at `/exercises`. Names are trimmed and validated in Go. Saved exercises survive refresh and stack restart. Go selects one internal local owner; the app has no login or authentication. You can also create, list, and reopen persistent workout templates at `/templates`. Logging and progress remain planned.
 
 See [product requirements](docs/PRODUCT.md), [architecture](docs/ARCHITECTURE.md), and [agent instructions](AGENTS.md).
 
@@ -135,11 +135,21 @@ The product document lists decisions to confirm before implementing these flows.
 
 The API applies embedded SQL migrations from `backend/internal/migrations/` before serving requests. The documented Docker startup command runs them automatically. Each migration and its version record commit in one transaction; an advisory lock serializes concurrent starts. Applied migrations are skipped. Restart does not reset or delete data. Add new numbered migrations rather than editing applied SQL. Migration failures stop API startup; inspect API logs.
 
-`GET /api/exercises` returns `200` with `{"items":[{"id":"1","name":"Squat"}]}` (or an empty array). `POST /api/exercises` accepts `application/json` and `{"name":"  Squat  "}`, returning `201` with `{"id":"1","name":"Squat"}`. Names must be nonblank after trimming; requests are limited to 16 KiB. Duplicate names are allowed. Blank names return `400` with `error.fields.name`; malformed JSON/unknown fields return `400`, oversized requests `413`, and unsupported media types `415`. Persistence failures return generic `500` errors; unreachable Go returns `502` from Next.js. Responses are uncached.
+`GET /api/exercises` returns `200` with `items` containing exercise IDs, names, and `muscle_groups` arrays, plus the predefined `muscle_groups` vocabulary. `POST /api/exercises` accepts `application/json` and `{"name":"  Squat  ","muscle_groups":["quadriceps"]}`, returning `201` with `{"id":"1","name":"Squat","muscle_groups":["quadriceps"]}`. Omitted/null tags become an empty array. Unknown tags return `400` with `error.fields.muscle_groups`; duplicate tags are normalized. Names must be nonblank after trimming; requests are limited to 16 KiB. Duplicate names are allowed. Blank names return `400` with `error.fields.name`; malformed JSON/unknown fields return `400`, oversized requests `413`, and unsupported media types `415`. Persistence failures return generic `500` errors; unreachable Go returns `502` from Next.js. Responses are uncached.
 
 Exercise records reference seeded local owner 1. Go selects it; clients cannot choose an owner. This implements personal ownership without authentication. Anyone who can reach the local app can operate on this owner's data.
 
 For PostgreSQL tests, set `TEST_DATABASE_URL` to a **separate disposable test database**, then run `go test -race ./...` from `backend/`. Never use your workout database. Without the variable, PostgreSQL tests are explicitly skipped. See Development checks above for the isolated stack smoke workflow.
+
+On `/exercises`, case-insensitive name substring search combines with one muscle-group filter (or All). An empty library and no matches have distinct messages. Tags are optional and may include multiple groups: chest, back, shoulders, biceps, triceps, forearms, core, glutes, quadriceps, hamstrings, and calves. This vocabulary is returned by Go, rather than maintained separately in the browser.
+
+**Edit** opens the saved name/tags with Save/Cancel and inline errors. Failed saves retain the draft. Renaming keeps the exercise ID and updates the name displayed in templates. **Delete** opens a confirmation naming the exercise and checks usage; referencing templates are linked and block deletion. Escape/Cancel closes the dialog, with no mutation.
+
+- `PUT /api/exercises/{id}` replaces the name and tags, returning `200` with the updated exercise. Send `muscle_groups: []` to clear tags.
+- `GET /api/exercises/{id}/templates` returns `200` with `{"items":[{"id":"1","name":"Push day"}]}`; repeated occurrences count once per template.
+- `DELETE /api/exercises/{id}` returns `204` for an unreferenced exercise, or `409` with `error.code: "exercise_in_use"` and `error.templates` containing the referencing template IDs/names. No references are removed automatically. Missing/foreign-owner exercises return `404` for these operations.
+
+Migration `003_exercise_tags.sql` adds empty tags to existing exercises without resetting data. PostgreSQL constraints validate tags and preserve template references. Go locks deletion against concurrent template creation, so stale usage information cannot permit deleting a referenced exercise.
 
 ## Workout templates
 

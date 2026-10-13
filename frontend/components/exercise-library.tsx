@@ -5,11 +5,17 @@ import { toast } from "sonner";
 import { ExerciseRow } from "@/components/exercise-row";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import type { Exercise } from "@/lib/exercises";
+import { muscleGroupLabel, type Exercise } from "@/lib/exercises";
+import { MuscleGroupPicker } from "@/components/muscle-group-picker";
 
 export function ExerciseLibrary() {
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [name, setName] = useState("");
+  const [groups, setGroups] = useState<string[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagError, setTagError] = useState("");
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState("");
   const [error, setError] = useState("");
   const [listError, setListError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -27,7 +33,10 @@ export function ExerciseLibrary() {
       if (!response.ok)
         throw new Error("Could not load exercises. Please try again.");
       const body = await response.json();
-      if (!signal?.aborted) setExercises(body.items);
+      if (!signal?.aborted) {
+        setExercises(body.items);
+        setGroups(body.muscle_groups);
+      }
     } catch {
       if (!signal?.aborted)
         setListError("Could not load exercises. Please try again.");
@@ -38,6 +47,7 @@ export function ExerciseLibrary() {
   useEffect(() => {
     const controller = new AbortController();
     void loadExercises(controller.signal);
+
     return () => controller.abort();
   }, []);
 
@@ -46,14 +56,16 @@ export function ExerciseLibrary() {
     if (saving) return;
     setSaving(true);
     setError("");
+    setTagError("");
     try {
       const response = await fetch("/api/exercises", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, muscle_groups: tags }),
       });
       const body = await response.json();
       if (!response.ok) {
+        setTagError(body.error?.fields?.muscle_groups ?? "");
         setError(
           body.error?.fields?.name ??
             body.error?.message ??
@@ -64,8 +76,8 @@ export function ExerciseLibrary() {
       setExercises((current) => [...current, body]);
       setAddedIDs((current) => [...current, body.id]);
       setName("");
+      setTags([]);
       toast.success(`${body.name} added.`);
-      await loadExercises();
     } catch {
       setError("Could not add exercise. Please try again.");
     } finally {
@@ -73,12 +85,57 @@ export function ExerciseLibrary() {
     }
   }
 
+  const visible = exercises.filter(
+    (exercise) =>
+      exercise.name.toLowerCase().includes(query.trim().toLowerCase()) &&
+      (!filter || exercise.muscle_groups.includes(filter)),
+  );
+
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_20rem]">
       <section aria-labelledby="exercise-list-heading" className="min-w-0">
         <h2 id="exercise-list-heading" className="mb-4 text-xl font-semibold">
           Exercise library
         </h2>
+        <div className="mb-4 grid gap-3 sm:grid-cols-2">
+          <div>
+            <label
+              htmlFor="exercise-search"
+              className="mb-2 block text-sm font-medium"
+            >
+              Search exercises
+            </label>
+            <input
+              id="exercise-search"
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              className="min-h-12 w-full rounded-lg border border-input bg-background px-3 text-base focus-visible:outline-2 focus-visible:outline-ring"
+              placeholder="Search by name"
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="muscle-filter"
+              className="mb-2 block text-sm font-medium"
+            >
+              Filter by muscle group
+            </label>
+            <select
+              id="muscle-filter"
+              value={filter}
+              onChange={(event) => setFilter(event.target.value)}
+              className="min-h-12 w-full rounded-lg border border-input bg-background px-3 text-base focus-visible:outline-2 focus-visible:outline-ring"
+            >
+              <option value="">All muscle groups</option>
+              {groups.map((group) => (
+                <option key={group} value={group}>
+                  {muscleGroupLabel(group)}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
         {loading && exercises.length === 0 ? (
           <p role="status">Loading exercises…</p>
         ) : listError ? (
@@ -93,13 +150,42 @@ export function ExerciseLibrary() {
           <p className="rounded-2xl border border-dashed border-border p-6 text-muted-foreground">
             No exercises yet. Add your first exercise using the form.
           </p>
+        ) : visible.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border p-6">
+            <p className="text-muted-foreground">
+              No exercises match your search and filter.
+            </p>
+            <Button
+              variant="outline"
+              className="mt-3"
+              onClick={() => {
+                setQuery("");
+                setFilter("");
+              }}
+            >
+              Clear search and filter
+            </Button>
+          </div>
         ) : (
           <ul className="divide-y divide-border rounded-2xl border border-border bg-card">
-            {exercises.map((exercise) => (
+            {visible.map((exercise) => (
               <ExerciseRow
                 key={exercise.id}
                 exercise={exercise}
                 animateEntrance={addedIDs.includes(exercise.id)}
+                groups={groups}
+                onUpdated={(updated) =>
+                  setExercises((current) =>
+                    current.map((item) =>
+                      item.id === updated.id ? updated : item,
+                    ),
+                  )
+                }
+                onDeleted={(id) =>
+                  setExercises((current) =>
+                    current.filter((item) => item.id !== id),
+                  )
+                }
               />
             ))}
           </ul>
@@ -137,6 +223,14 @@ export function ExerciseLibrary() {
           <p id="exercise-help" className="text-sm text-muted-foreground">
             Choose a name you will recognize in your workouts.
           </p>
+          <fieldset disabled={saving}>
+            <MuscleGroupPicker
+              groups={groups}
+              selected={tags}
+              onChange={setTags}
+              error={tagError}
+            />
+          </fieldset>
           {error && (
             <Alert variant="destructive">
               <AlertTitle>Could not add exercise</AlertTitle>
