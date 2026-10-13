@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-Crow Fitness is a simple workout tracker for one implicit user. The runnable foundation is implemented with Next.js, TypeScript, Tailwind CSS, a Go REST API, and PostgreSQL. Workout features and their data model remain proposals. Exercises are personal, with one internal local owner selected by Go. There is no authentication, login, or browser-provided user identity.
+Crow Fitness is a simple workout tracker for one implicit user. The runnable foundation is implemented with Next.js, TypeScript, Tailwind CSS, a Go REST API, and PostgreSQL. Exercise and template create/list/read are implemented; sessions, logging, and their data model remain proposals. Exercises are personal, with one internal local owner selected by Go. There is no authentication, login, or browser-provided user identity.
 
 The current [README](../README.md) documents setup and checks; [PRODUCT.md](PRODUCT.md) defines requirements and open product decisions. The local foundation described below is implemented. Workout component responsibilities, schema, lifecycle, and REST endpoints are proposed designs; reconcile them with approved product decisions before implementing affected behavior.
 
@@ -10,7 +10,7 @@ The current [README](../README.md) documents setup and checks; [PRODUCT.md](PROD
 
 | Component | Responsibility | Proposed approach |
 | --- | --- | --- |
-| Frontend | Connection-check page now; templates, workout entry, history, and progress planned | Next.js App Router, TypeScript, Tailwind CSS, and small client components |
+| Frontend | Connection checks, exercises, and template creation/browsing now; workout entry, history, and progress planned | Next.js App Router, TypeScript, Tailwind CSS, and small client components |
 | API | Validation, workout rules, snapshots, history queries | Go `net/http`, with handlers calling services and repositories |
 | Database | Durable records, relationships, constraints and transactions | PostgreSQL accessed through `pgx` and a connection pool |
 
@@ -183,7 +183,7 @@ Use Docker Compose for the frontend, Go API, and PostgreSQL. Publish the fronten
 
 Run migrations explicitly before serving traffic and check database readiness rather than relying only on container startup order. A database volume provides persistence, not a backup; define a simple export/restore procedure before storing important workout history. With no authentication, the intended deployment is local or on a private network; anyone who can reach the app can change its data.
 
-The local foundation uses npm, Node.js 24.19.0, Go 1.27.2, and PostgreSQL 18.6. The user selected a local Docker run with rebuilds after changes, without hot reload. The Next.js server forwards `/api/exercises` GET/POST, `/api/health`, and `/api/ready` to Go using a runtime server-only `API_INTERNAL_URL`; additional routes will be added with workout features. The Go server uses `net/http` and a `pgx` pool, a database-independent liveness endpoint, and a two-second database readiness check. Database connection details are constructed from server-only environment variables. The frontend is published on localhost; Go and PostgreSQL stay on the internal Compose network. PostgreSQL data uses a named volume mounted at `/var/lib/postgresql` for the PostgreSQL 18 image layout.
+The local foundation uses npm, Node.js 24.19.0, Go 1.27.2, and PostgreSQL 18.6. The user selected a local Docker run with rebuilds after changes, without hot reload. The Next.js server forwards `/api/exercises` and `/api/templates` GET/POST, `/api/templates/{id}` GET, `/api/health`, and `/api/ready` to Go using a runtime server-only `API_INTERNAL_URL`; additional routes will be added with workout features. The Go server uses `net/http` and a `pgx` pool, a database-independent liveness endpoint, and a two-second database readiness check. Database connection details are constructed from server-only environment variables. The frontend is published on localhost; Go and PostgreSQL stay on the internal Compose network. PostgreSQL data uses a named volume mounted at `/var/lib/postgresql` for the PostgreSQL 18 image layout.
 
 Dockerfiles, Compose configuration, health checks, and setup/check commands now exist and are documented in the README. The API applies embedded versioned exercise migrations transactionally before serving traffic, with an advisory lock to serialize starts. The migration seeds internal owner 1 and exercise rows reference it. Other workout schema choices remain proposals. CI performs frontend checks/build, Go checks/tests/build, and an isolated stack smoke check covering readiness failure/recovery and database restart persistence. It requests only read access to repository contents.
 
@@ -217,3 +217,7 @@ Confirm these in the product document before coding affected flows. Editing comp
 - [Go net/http documentation](https://pkg.go.dev/net/http)
 - [pgx documentation](https://pkg.go.dev/github.com/jackc/pgx/v5)
 - [PostgreSQL partial indexes](https://www.postgresql.org/docs/current/indexes-partial.html)
+
+## Implemented templates (#23)
+
+`002_templates.sql` adds personal `templates` and ordered `template_exercises` with working-set counts, nullable rep bounds, and nullable decimal target RIR. Array order determines one-based positions. Repeated exercise occurrences are allowed. Composite foreign keys require templates and referenced exercises to share an owner. Go validates/locks every selected exercise before inserting the template and occurrences in one transaction. Unavailable and foreign-owner exercises receive the same field error. Create responses and detail reads return ordered configuration; collection reads return ID/name summaries. Decimal RIR uses PostgreSQL numeric without a fixed scale; counts and reps use bigint. These implemented details supersede the earlier proposed template table/column names. Session snapshots and logging remain proposals.
