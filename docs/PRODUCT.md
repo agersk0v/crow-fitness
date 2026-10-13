@@ -2,7 +2,7 @@
 
 ## Status and purpose
 
-Crow Fitness is a minimal workout tracker for one person: create a reusable workout template, start a session, record weight and reps, and inspect exercise progress. Connection checks, exercise management, and template management are implemented. One persisted active session can be started, continued, cancelled, or completed. Set logging and workout history remain planned.
+Crow Fitness is a minimal workout tracker for one person: create a reusable workout template, start a session, record weight and reps, and inspect exercise progress. Connection checks, exercise management, and template management are implemented. One persisted active session can be started, continued, cancelled, or completed. Active-session set entry and a simple list of completed sets are implemented; previous performance and detailed history/progress remain planned.
 
 The [README](../README.md) gives the overview. [ARCHITECTURE.md](ARCHITECTURE.md) separates the implemented design from future proposals. This document separates confirmed requirements from proposed MVP behavior; the decisions below remain open until the owner explicitly approves them. Merging a technical proposal does not by itself resolve product choices.
 
@@ -26,13 +26,13 @@ The owner approved personal exercises with one internal local owner on 2026-10-1
 
 ## Approved template targets (#23)
 
-A template has a nonblank name and at least one ordered saved exercise. Working-set counts are required. Rep ranges and target RIR are optional and belong to the exercise occurrence within the template, so different templates or repeated occurrences can use different targets. One target applies across its working sets; no individual-set targets or warm-up sets. Target RIR is distinct from performed RIR. Notes, rest times, planned weights, and logging are deferred. Template management is defined below. Zero RIR is valid; decimals are accepted without a product-specific upper limit or rounding rule.
+A template has a nonblank name and at least one ordered saved exercise. Working-set counts are required. Rep ranges and target RIR are optional and belong to the exercise occurrence within the template, so different templates or repeated occurrences can use different targets. One target applies across its working sets; no individual-set targets or warm-up sets. Target RIR is distinct from performed RIR. Notes, rest times, and planned weights are deferred. Template management is defined below. Zero RIR is valid; decimals are accepted without a product-specific upper limit or rounding rule.
 
 ## Approved exercise management (#27)
 
 Creating or editing an exercise requires one or more tags from the confirmed predefined list: chest, back, shoulders, biceps, triceps, forearms, core, glutes, quadriceps, hamstrings, and calves. Custom tags and primary/secondary distinctions are deferred. Case-insensitive name search combines with a single muscle-group filter; clearing them restores the list.
 
-Renaming preserves exercise identity and updates template displays. Edit offers Save/Cancel, inline validation, saving feedback, and retained drafts for retry. Delete requires confirmation naming the exercise and is blocked when any template references it; show links to those templates, counting repeated occurrences once. Concurrent requests must not break references or leave partial templates. Existing records receive empty tags during migration and remain available; they must be tagged the next time they are edited. Future recorded workouts must retain their captured names/history; active sessions preserve copied exercise names; set logging remains unimplemented.
+Renaming preserves exercise identity and updates template displays. Edit offers Save/Cancel, inline validation, saving feedback, and retained drafts for retry. Delete requires confirmation naming the exercise and is blocked when any template references it; show links to those templates, counting repeated occurrences once. Concurrent requests must not break references or leave partial templates. Existing records receive empty tags during migration and remain available; they must be tagged the next time they are edited. Future recorded workouts must retain their captured names/history; active sessions preserve copied exercise names; set entry and retention follow #33 below.
 
 ## Approved template management (#29)
 
@@ -42,24 +42,35 @@ Duplication creates an independent template with a supplied nonblank name and th
 
 Archive requires confirmation naming the template and preserves its identity, configuration, and exercise references. Active is the default list; Archived provides read-only inspection and restoration. Restore preserves the same identity and configuration. Restore before editing, duplicating, or starting a workout. Archived templates still block deletion of referenced exercises, with archived status shown in usage information. Permanent template deletion is out of scope.
 
-Future recorded workouts must preserve their snapshots/history through template edits and archiving. Active sessions follow #31 below; completed workout history remains deferred.
+Future recorded workouts must preserve their snapshots/history through template edits and archiving. Active sessions follow #31 below; completed sets follow #33 below.
 
-## Approved active-session lifecycle (#31)
+## Approved active-session lifecycle (#31, superseded completion in #33)
 
 Start a workout from an active template and allow only one active session for the local owner. Starting while one exists offers continuation and never replaces it. Save a snapshot of the template name, ordered exercises and their names, working-set counts, and optional rep/RIR targets. Repeated occurrences and blank targets are preserved. Later template edits, exercise renames/removal from the library, or template archiving leave this session unchanged.
 
-Home shows Continue session when one exists. Refresh, reopening the app, and database/stack restarts retain it. The session page displays its copied configuration and offers Continue later, Cancel session, and Complete session. Cancel requires confirmation; dismissing it preserves the session. Confirmed cancellation and completion clear the active session and return home, allowing another workout to start. No completed record, set result, or history is saved. Failed requests show retryable errors; ending an old session cannot clear a newer one.
+Home shows Continue session when one exists. Refresh, reopening the app, and database/stack restarts retain it. The session page displays its copied configuration and offers Continue later, Cancel session, and Complete session. Cancel requires confirmation; dismissing it preserves the session. Confirmed cancellation discards the session/sets; completion now retains them under #33 and returns home, allowing another workout to start. Failed requests show retryable errors; ending an old session cannot clear a newer one.
 
-Set logging, previous performance, changing exercises/targets during a session, timers, and completed-session history are outside this increment. Future proposals below do not override this approved lifecycle.
+Previous performance, changing exercises/targets during a session, timers, and a detailed workout-history interface remain outside this increment. Future proposals below do not override the approved lifecycle.
+
+## Approved session sets and completion (#33)
+
+The owner confirmed the recommended defaults on 2026-10-13: kilograms with up to two decimal places (zero is valid), positive whole-number reps, explicit Add/Save actions for creation and editing, completion with fewer or no sets, and workout completion dates displayed in the browser's local timezone.
+
+Sets belong to a specific captured exercise occurrence, including repeated exercises. Saving keeps them in the active session for refresh/continuation; they are not yet on the Sets page. Active sets can be edited or deleted. Completion preserves the snapshot and saved sets, records completion once, and clears the active slot. It never converts targets or unsaved inputs into performed results. Cancel confirmation explains that cancellation discards the session and all its sets; Keep/Escape preserves them.
+
+Completion waits for successful pending changes. Open drafts and failed changes remain available and block completion until saved, explicitly discarded, or resolved. Retrying uncertain writes must not duplicate sets or recreate deleted sets. Completed sets cannot be edited through active-session endpoints, and stale cancellation cannot delete a completed workout or newer session.
+
+Home links to a simple Sets page: only completed-workout sets, newest workouts first, showing copied exercise name, weight, reps, and workout completion date. Empty completed workouts produce no set rows. No filters, charts, timers, actual RIR, reference suggestions, session exercise editing, or detailed history interface in this issue. Later template/exercise changes or archiving preserve completed snapshots/results.
 
 ## Pages and navigation
 
-Home links to exercises and templates and offers continuation of an active session. History and progress routes below remain proposals.
+Home links to exercises and templates and offers continuation of an active session. Sets is implemented; detailed history and progress routes below remain proposals.
 
 | Page | Route | Purpose |
 | --- | --- | --- |
 | Workout templates | `/templates`, `/templates/[id]` | Create, edit, duplicate, archive, inspect, restore, start (implemented) |
-| Workout session | `/sessions/[id]` | View the active snapshot, continue later, cancel, or complete (implemented); logging remains proposed |
+| Workout session | `/sessions/[id]` | View the active snapshot, add/edit/delete sets, continue later, cancel, or complete (implemented) |
+| Completed sets | `/sets` | Plain completed-set list (implemented) |
 | Workout history | `/sessions` | Browse completed workouts (proposed) |
 | Exercises | `/exercises` | Create, search/filter, tag, rename, and safely delete personal exercises (implemented) |
 | Exercise progress | `/exercises/[id]` | View all recorded sets for one exercise, grouped by workout |
@@ -84,28 +95,13 @@ Template creation and management follow the approved sections above. Templates d
 
 The approved #31 lifecycle above is implemented. Start Workout opens a saved snapshot; Continue session from home reopens it. There are no performed sets to restore yet. Retries while a session exists offer that same session instead of creating a duplicate.
 
-### 3. View reference performance and record sets
+### 3. Save sets in the active session
 
-Each exercise shows its recorded sets alongside a separate reference to previous performance. Under D1 and D2, planned rows may start with suggested values. A suggestion is never proof that the set was performed.
+The approved #33 behavior above is implemented. Add/Save records weight/reps in the active session; Edit/Save replaces values and Delete removes the set. Previous-performance references and suggested values remain future work.
 
-- Each performed set records weight and reps and belongs to a specific exercise occurrence in the workout.
-- Under D6, previous performance comes from the most recent completed workout containing recorded sets for that exercise, across any template. An exercise with no history shows a clear empty state.
-- Suggested values remain visibly unrecorded until the user selects Record/Done. They do not appear in history or totals, and completing a workout does not silently record them.
-- A recorded set can be edited or removed while the session is active. Extra sets can be recorded beyond the planned count. Removing a set removes it from history without altering other recorded weights/reps.
-- Reps must be a positive whole number. Under D4, weight must be nonnegative kilograms with at most two decimal places; zero is allowed for bodyweight exercises.
-- Invalid input stays visible with a field-level error and is not saved.
-- Under D5, new sets use explicit recording; valid edits to recorded sets autosave. Show saving, saved, and failed states. Failed saves retain the input and allow retry.
-- Retrying a save after a lost response does not create a duplicate performed set. Refresh restores successfully persisted values; unsaved drafts may be lost.
+### 4. Complete a workout
 
-### 4. Complete and review a workout
-
-Choose Finish Workout once done. Under D7, fewer than the planned sets, including none, are allowed. Preserve the session and whatever sets were actually recorded.
-
-- Completion waits for pending saves. A failed save prevents finishing until it is retried or the user explicitly discards the unsaved change.
-- Completion records a finish time and marks the session completed; repeating completion does not create another workout or change its finish time.
-- Unrecorded suggested/planned rows do not become performed sets.
-- A completed session opens as a read-only record of its copied exercise configuration and recorded sets.
-- Editing or archiving a template leaves the completed session unchanged.
+The approved #33 behavior above is implemented. Complete retains the workout and its saved sets; Cancel discards them. Detailed completed-workout inspection/corrections remain deferred.
 
 ### 5. Inspect workout history and exercise progress
 
@@ -120,17 +116,14 @@ History lists sessions by date, copied template name, and active/completed statu
 
 ## Decisions requiring review
 
-The following logging/history defaults remain recommendations, not approved requirements. One active session and clearing it on completion/cancellation are approved in #31. The template working-set count is already approved; D2 now concerns extra performed sets.
+The following logging/history defaults remain recommendations, not approved requirements. One active session is approved in #31. #33 approves retaining completed results, discarding cancelled workouts, and the defaults stated above. The template working-set count is already approved; D2 now concerns extra performed sets.
 
 | ID | Decision | Proposed default |
 | --- | --- | --- |
 | D1 | Initial weight/reps | Prefill from previous completed performance as unrecorded suggestions; unmatched rows stay blank |
 | D2 | Planned sets | Positive working-set counts per template exercise are approved in #23; extra performed sets in sessions remain proposed |
-| D4 | Weight units | Kilograms with at most two decimal places, including zero |
-| D5 | Save behavior | Explicitly record new sets; autosave valid edits to recorded sets; no offline draft guarantee |
 | D6 | Previous performance | Most recent completed session with recorded sets for the exercise, regardless of template |
-| D7 | Completion | Permit incomplete/empty sessions; keep completed sessions read-only |
-| D8 | Progress scope | Include recorded sets from active and completed sessions, with status labels |
+| D8 | Future exercise progress scope | Include active/completed sets with labels remains proposed; the current Sets page includes completed sets only |
 
 A partial previous workout supplies suggestions only for matching rows. If an exercise occurs more than once in that workout, preserve the source occurrence/order when displaying references; confirm how to map those sets into suggestions before implementing prefilling.
 

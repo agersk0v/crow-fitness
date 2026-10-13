@@ -17,12 +17,13 @@ export default async function SessionPage({
         >
           <Link href="/">Home</Link>
           <Link href="/templates">Templates</Link>
+          <Link href="/sets">Sets</Link>
           <Link href="/exercises">Exercises</Link>
         </nav>
         <ThemeToggle />
       </header>
       <div className="py-10">
-        <SessionDetail id={id} />
+        <SessionDetail key={id} id={id} />
       </div>
     </main>
   );

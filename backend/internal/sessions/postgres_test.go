@@ -34,7 +34,7 @@ func TestPostgresLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() {
-		_, err := pool.Exec(context.Background(), `DELETE FROM active_sessions WHERE owner_id IN (61,62);
+		_, err := pool.Exec(context.Background(), `DELETE FROM workout_sessions WHERE owner_id IN (61,62);
    DELETE FROM template_exercises WHERE owner_id IN (61,62); DELETE FROM templates WHERE owner_id IN (61,62);
    DELETE FROM exercises WHERE owner_id IN (61,62); DELETE FROM owners WHERE id IN (61,62)`)
 		if err != nil {
@@ -93,7 +93,7 @@ func TestPostgresLifecycle(t *testing.T) {
 		}
 	}
 	// The unique owner constraint protects the rule even outside the Go transaction.
-	if _, err = pool.Exec(ctx, "INSERT INTO active_sessions(owner_id,template_id,name) VALUES (61,$1,'Duplicate')", template.ID); err == nil {
+	if _, err = pool.Exec(ctx, "INSERT INTO workout_sessions(owner_id,template_id,name) VALUES (61,$1,'Duplicate')", template.ID); err == nil {
 		t.Fatal("database allowed two active sessions")
 	}
 	changed := templates.Input{Name: "Changed", Exercises: []templates.InputEntry{{ExerciseID: second.ID, SetCount: 5}}}
@@ -134,7 +134,7 @@ func TestPostgresLifecycle(t *testing.T) {
 		t.Fatal("ending retained active", active, err)
 	}
 	var count int
-	if err = pool.QueryRow(ctx, "SELECT count(*) FROM active_session_exercises WHERE session_id=$1", session.ID).Scan(&count); err != nil || count != 0 {
+	if err = pool.QueryRow(ctx, "SELECT count(*) FROM session_exercises WHERE session_id=$1", session.ID).Scan(&count); err != nil || count != 0 {
 		t.Fatal("ending retained snapshot rows", count, err)
 	}
 	if _, err = store.Start(ctx, 61, template.ID); !errors.Is(err, ErrArchived) {
@@ -254,6 +254,25 @@ func TestPostgresLifecycle(t *testing.T) {
 	resultAfterEdit := <-started
 	if resultAfterEdit.err != nil || resultAfterEdit.item.Name != "Committed edit" || resultAfterEdit.item.Exercises[0].SetCount != 6 {
 		t.Fatal("start captured partial edit", resultAfterEdit)
+	}
+
+	// Retained completion frees the active slot and a stale cancellation cannot
+	// delete the completed snapshot. This checks the storage boundary directly.
+	completedID := resultAfterEdit.item.ID
+	if _, err = pool.Exec(ctx, "UPDATE workout_sessions SET completed_at=clock_timestamp() WHERE owner_id=61 AND id=$1", completedID); err != nil {
+		t.Fatal(err)
+	}
+	if active, err := store.Active(ctx, 61); err != nil || active != nil {
+		t.Fatal("completed workout still active", active, err)
+	}
+	if _, err = store.Start(ctx, 61, template.ID); err != nil {
+		t.Fatal("completion did not release slot", err)
+	}
+	if err = store.End(ctx, 61, completedID); err != nil {
+		t.Fatal(err)
+	}
+	if err = pool.QueryRow(ctx, "SELECT count(*) FROM session_exercises WHERE owner_id=61 AND session_id=$1", completedID).Scan(&count); err != nil || count != 1 {
+		t.Fatal("stale cancellation removed completed snapshot", count, err)
 	}
 
 }

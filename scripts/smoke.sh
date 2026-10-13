@@ -134,6 +134,12 @@ CHECK
 assert_archived_copy
 # Session transport and restart persistence share this disposable stack.
 session_id="$(curl --fail --silent --show-error "$base_url/api/sessions" -H 'Content-Type: application/json' --data "{\"template_id\":\"$template_id\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+curl --fail --silent --show-error "$base_url/api/sessions/$session_id/sets/11111111-1111-4111-8111-111111111111" -X PUT -H 'Content-Type: application/json' --data '{"exercise_position":1,"weight":"12.50","reps":8}' --output "$response_file"
+curl --fail --silent --show-error "$base_url/api/sets" --output "$response_file"
+python3 - "$response_file" <<'CHECK'
+import json,sys
+with open(sys.argv[1]) as f: assert json.load(f)['items']==[]
+CHECK
 assert_session() {
   curl --fail --silent --show-error "$base_url/api/sessions/active" --output "$response_file"
   python3 - "$response_file" "$session_id" "$template_id" <<'CHECK'
@@ -141,6 +147,7 @@ import json,sys
 with open(sys.argv[1]) as f: saved=json.load(f)['session']
 assert saved['id']==sys.argv[2] and saved['template_id']==sys.argv[3] and saved['name']=='Smoke routine',saved
 assert saved['exercises'][0]['name']=='Smoke squat' and saved['exercises'][0]['set_count']==3,saved
+assert saved['sets']==[{'id':'11111111-1111-4111-8111-111111111111','exercise_position':1,'weight':'12.50','reps':8}],saved
 CHECK
   curl --fail --silent --show-error "$base_url/api/sessions/$session_id" --output "$response_file"
 }
@@ -171,7 +178,14 @@ assert_archived_copy
 assert_session
 code="$(curl --silent --show-error --output "$response_file" --write-out '%{http_code}' "$base_url/api/sessions/$session_id/complete" -X POST)"
 [[ "$code" == 204 ]]
+curl --fail --silent --show-error "$base_url/api/sets" --output "$response_file"
+python3 - "$response_file" <<'CHECK'
+import json,sys
+with open(sys.argv[1]) as f: items=json.load(f)['items']
+assert len(items)==1 and items[0]['exercise_name']=='Smoke squat' and items[0]['weight']=='12.50' and items[0]['reps']==8,items
+CHECK
 session_id="$(curl --fail --silent --show-error "$base_url/api/sessions" -H 'Content-Type: application/json' --data "{\"template_id\":\"$template_id\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+curl --fail --silent --show-error "$base_url/api/sessions/$session_id/sets/11111111-1111-4111-8111-111111111111" -X PUT -H 'Content-Type: application/json' --data '{"exercise_position":1,"weight":"0","reps":5}' --output "$response_file"
 code="$(curl --silent --show-error --output "$response_file" --write-out '%{http_code}' "$base_url/api/sessions/$session_id/cancel" -X POST)"
 [[ "$code" == 204 ]]
 curl --fail --silent --show-error "$base_url/api/sessions/active" --output "$response_file"
@@ -179,5 +193,13 @@ python3 - "$response_file" <<'CHECK'
 import json,sys
 with open(sys.argv[1]) as f: assert json.load(f)['session'] is None
 CHECK
+curl --fail --silent --show-error "$base_url/api/sets" --output "$response_file"
+python3 - "$response_file" <<'CHECK'
+import json,sys
+with open(sys.argv[1]) as f: items=json.load(f)['items']
+assert len(items)==1 and items[0]['weight']=='12.50',items
+CHECK
+curl --fail --silent --show-error "$base_url/sets" --output "$response_file"
+grep -q 'Loading completed sets' "$response_file"
 assert_response /api/ready 200 ok
 echo "Stack smoke check passed: frontend, API, exercise/template/session routing, validation, readiness recovery, and restart persistence."
