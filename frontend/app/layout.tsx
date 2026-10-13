@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { Navbar, SiteNavbar } from "@/components/site-navbar";
 import type { Metadata } from "next";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
@@ -15,6 +17,9 @@ export default function RootLayout({
     <html lang="en" className="dark" suppressHydrationWarning>
       <body>
         <ThemeProvider>
+          <Suspense fallback={<Navbar />}>
+            <SiteNavbar />
+          </Suspense>
           {children}
           <Toaster
             position="top-center"

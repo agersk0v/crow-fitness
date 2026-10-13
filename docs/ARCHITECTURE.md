@@ -113,3 +113,7 @@ Future tests should cover snapshots surviving template changes, request replay, 
 - [Go net/http](https://pkg.go.dev/net/http)
 - [pgx](https://pkg.go.dev/github.com/jackc/pgx/v5)
 - [PostgreSQL partial indexes](https://www.postgresql.org/docs/current/indexes-partial.html)
+
+## Shared navigation (#41)
+
+The root layout mounts one shared navbar inside the existing theme provider. A Suspense boundary permits URL-aware highlighting with `usePathname`/`useSearchParams` while static routes retain server-rendered links and the theme control. The fallback uses the same navbar without a selected destination. Main-page navbar copies are removed; contextual detail back links remain in page content. No backend, schema, dependency, or lifecycle changes are needed.
