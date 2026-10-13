@@ -2,7 +2,6 @@ import Link from "next/link";
 import { PageEntrance } from "@/components/page-entrance";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ExerciseLibrary } from "@/components/exercise-library";
-import { staticExercises } from "@/lib/static-exercises";
 
 export default function ExercisesPage() {
   return (
@@ -23,11 +22,9 @@ export default function ExercisesPage() {
         <p className="mt-4 max-w-xl text-muted-foreground">
           Browse your exercises and add the movements you train.
         </p>
-        <p className="mb-8 mt-4 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-muted-foreground">
-          Preview with sample exercises. Additions last until you refresh this
-          page.
-        </p>
-        <ExerciseLibrary initialExercises={staticExercises} />
+        <div className="mt-8">
+          <ExerciseLibrary />
+        </div>
       </PageEntrance>
     </main>
   );

@@ -48,14 +48,33 @@ curl --fail --silent --show-error --max-time 8 "$base_url" --output "$response_f
 grep -q 'Crow Fitness' "$response_file"
 assert_response /api/health 200 ok
 assert_response /api/ready 200 ok
-docker compose exec -T postgres psql -U crowfitness -d crowfitness -v ON_ERROR_STOP=1 -c \
-  "CREATE TABLE foundation_smoke (value text NOT NULL); INSERT INTO foundation_smoke VALUES ('persists');"
+exercise_id="$(curl --fail --silent --show-error "$base_url/api/exercises" -H 'Content-Type: application/json' --data '{"name":"  Smoke squat  "}' | python3 -c 'import json,sys; x=json.load(sys.stdin); assert x["name"]=="Smoke squat"; print(x["id"])')"
+assert_exercise() {
+  curl --fail --silent --show-error "$base_url/api/exercises" --output "$response_file"
+  python3 - "$response_file" "$exercise_id" <<'CHECK'
+import json,sys
+with open(sys.argv[1]) as f: items=json.load(f)['items']
+assert any(x['id']==sys.argv[2] and x['name']=='Smoke squat' for x in items), items
+CHECK
+}
+assert_exercise
+curl --fail --silent --show-error "$base_url/exercises" --output "$response_file"
+grep -q 'Exercise name' "$response_file"
+code="$(curl --silent --show-error --output "$response_file" --write-out '%{http_code}' "$base_url/api/exercises" -H 'Content-Type: application/json' --data '{"name":"   "}')"
+[[ "$code" == 400 ]]
+python3 - "$response_file" <<'CHECK'
+import json,sys
+with open(sys.argv[1]) as f: body=json.load(f)
+assert body['error']['fields']['name']
+CHECK
 docker compose stop postgres
 assert_response /api/health 200 ok
 assert_response /api/ready 503 unavailable
 docker compose start postgres
 wait_ready
-value="$(docker compose exec -T postgres psql -U crowfitness -d crowfitness -tAc 'SELECT value FROM foundation_smoke')"
-[[ "$value" == "persists" ]] || { echo "Database data did not survive restart"; exit 1; }
+assert_exercise
+docker compose down
+docker compose up --detach --wait --wait-timeout 180
+assert_exercise
 assert_response /api/ready 200 ok
-echo "Stack smoke check passed: frontend, API, readiness failure/recovery, and data persistence."
+echo "Stack smoke check passed: frontend, API, exercise validation, readiness recovery, and restart persistence."

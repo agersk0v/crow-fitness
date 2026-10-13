@@ -3,13 +3,19 @@ import type { NextRequest } from "next/server";
 export const dynamic = "force-dynamic";
 
 // Server-only transport. Workout rules remain in Go.
-export async function GET(
+async function forward(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> },
 ) {
   const { path } = await params;
   const endpoint = path.join("/");
-  if (!new Set(["health", "ready"]).has(endpoint)) {
+  if (
+    !(
+      request.method === "GET" &&
+      ["health", "ready", "exercises"].includes(endpoint)
+    ) &&
+    !(request.method === "POST" && endpoint === "exercises")
+  ) {
     return Response.json(
       { error: { code: "not_found", message: "Not found." } },
       { status: 404 },
@@ -20,6 +26,13 @@ export async function GET(
     const base = process.env.API_INTERNAL_URL ?? "http://127.0.0.1:8080";
     const upstream = await fetch(new URL(`/api/${endpoint}`, base), {
       cache: "no-store",
+      method: request.method,
+      headers:
+        request.method === "POST"
+          ? { "Content-Type": request.headers.get("content-type") ?? "" }
+          : undefined,
+      body: request.method === "POST" ? request.body : undefined,
+      ...(request.method === "POST" ? { duplex: "half" } : {}),
       signal: AbortSignal.timeout(4000),
     });
     return new Response(await upstream.text(), {
@@ -41,3 +54,6 @@ export async function GET(
     );
   }
 }
+
+export const GET = forward;
+export const POST = forward;

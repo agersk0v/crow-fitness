@@ -4,7 +4,7 @@ A simple workout tracker for one person, with no authentication or accounts.
 
 ## Current status
 
-The runnable foundation is implemented: a Next.js frontend with TypeScript and Tailwind CSS, a Go API, PostgreSQL connectivity, and CI checks. The home page checks the API and database connection and links to an `/exercises` preview. The preview starts with a simple array of sample exercises and lets you add names to an in-memory list. Names are trimmed and blank names show an inline error. Refreshing restores the sample data; API integration and durable exercise storage are still pending in #11. Workout templates, logging, and exercise progress are planned and are not implemented yet.
+The Next.js frontend, Go API, and PostgreSQL support creating and browsing personal exercises at `/exercises`. Names are trimmed and validated in Go. Saved exercises survive refresh and stack restart. Go selects one internal local owner; the app has no login or authentication. Workout templates, logging, and progress remain planned.
 
 See [product requirements](docs/PRODUCT.md), [architecture](docs/ARCHITECTURE.md), and [agent instructions](AGENTS.md).
 
@@ -109,7 +109,7 @@ It uses port `13000`; set `SMOKE_PORT` to another available port if necessary. N
 
 ## UI components and animations
 
-The frontend uses shadcn/ui source components in `frontend/components/ui/`, with shared class merging in `frontend/lib/utils.ts`. The configuration in `frontend/components.json` uses the existing `@/` alias, App Router, TypeScript, and Tailwind CSS v4. The exercise form uses Button and a destructive Alert for validation errors, preserving the entered name for retry. Successful additions show a Sonner toast containing the trimmed name. A single theme-aware Toaster is mounted inside the root theme provider; use `toast.success(...)` from `sonner` for success feedback rather than adding a second live announcement. The exercise data is still temporary until API integration in #11. Theme tokens in `app/globals.css` preserve the dark/lime appearance; the header theme toggle switches between dark and light mode. Dark is the default; `next-themes` saves the choice in browser local storage across navigation and refresh. The provider applies the saved theme before the page paints, while the toggle waits for mounting to avoid hydration mismatches.
+The frontend uses shadcn/ui source components in `frontend/components/ui/`, with shared class merging in `frontend/lib/utils.ts`. The configuration in `frontend/components.json` uses the existing `@/` alias, App Router, TypeScript, and Tailwind CSS v4. The exercise form uses Button and a destructive Alert for validation errors, preserving the entered name for retry. Successful additions show a Sonner toast containing the trimmed name. A single theme-aware Toaster is mounted inside the root theme provider; use `toast.success(...)` from `sonner` for success feedback rather than adding a second live announcement. The form saves to PostgreSQL through Go and shows loading, validation, and retry states. Theme tokens in `app/globals.css` preserve the dark/lime appearance; the header theme toggle switches between dark and light mode. Dark is the default; `next-themes` saves the choice in browser local storage across navigation and refresh. The provider applies the saved theme before the page paints, while the toggle waits for mounting to avoid hydration mismatches.
 
 From `frontend/`, add only the components needed for a feature:
 
@@ -128,3 +128,13 @@ Motion for React provides brief 180 ms entrance animations for the home/exercise
 - Workout history and sets grouped by exercise to track progress.
 
 The product document lists decisions to confirm before implementing these flows. This setup is intended for your own computer; it has no authentication and is not configured for public hosting.
+
+## Exercises API and migrations
+
+The API applies embedded SQL migrations from `backend/internal/migrations/` before serving requests. The documented Docker startup command runs them automatically. Each migration and its version record commit in one transaction; an advisory lock serializes concurrent starts. Applied migrations are skipped. Restart does not reset or delete data. Add new numbered migrations rather than editing applied SQL. Migration failures stop API startup; inspect API logs.
+
+`GET /api/exercises` returns `200` with `{"items":[{"id":"1","name":"Squat"}]}` (or an empty array). `POST /api/exercises` accepts `application/json` and `{"name":"  Squat  "}`, returning `201` with `{"id":"1","name":"Squat"}`. Names must be nonblank after trimming; requests are limited to 16 KiB. Duplicate names are allowed. Blank names return `400` with `error.fields.name`; malformed JSON/unknown fields return `400`, oversized requests `413`, and unsupported media types `415`. Persistence failures return generic `500` errors; unreachable Go returns `502` from Next.js. Responses are uncached.
+
+Exercise records reference seeded local owner 1. Go selects it; clients cannot choose an owner. This implements personal ownership without authentication. Anyone who can reach the local app can operate on this owner's data.
+
+For PostgreSQL tests, set `TEST_DATABASE_URL` to a **separate disposable test database**, then run `go test -race ./...` from `backend/`. Never use your workout database. Without the variable, PostgreSQL tests are explicitly skipped. The Docker smoke check uses its own disposable volume and tests create/list, validation, page reload, database restart, and whole-stack restart with migration reruns.

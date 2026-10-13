@@ -15,7 +15,7 @@ The [README](../README.md) gives the overview. [ARCHITECTURE.md](ARCHITECTURE.md
 | R3 | In a session, see which exercises to perform and previous sets for those exercises. |
 | R4 | Record weight and reps for performed sets. |
 | R5 | Browse recorded sets by exercise to track progress. |
-| R6 | Treat all data as belonging to one implicit user, with no authentication, accounts, or multiple-user support. |
+| R6 | Exercises are personal and belong to an internal owner. Go selects one fixed local development owner for #11. Login and future multiple-user authentication remain separate work. |
 | R7 | Build the frontend with Next.js, TypeScript, and Tailwind CSS, the REST API with Go, and persistence with PostgreSQL. |
 
 The technology stack is a constraint; the rest of this document describes user-visible behavior rather than API or database details.
@@ -121,3 +121,7 @@ The owner should approve or revise D1-D8 before implementation of affected flows
 - Editing/deleting completed sessions or deleting referenced exercises.
 
 Local or private-network use is the proposed deployment scope for this application without authentication; the technical setup belongs in the architecture and eventual README.
+
+## Approved exercise ownership (#11)
+
+The owner approved personal exercises with one internal local owner on 2026-10-13. Go selects that owner for every create/list operation; browser-supplied identity is not accepted. Exercises are not shared across future users. The internal owner does not provide authentication or access protection.

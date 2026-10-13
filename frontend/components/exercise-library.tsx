@@ -1,35 +1,76 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { ExerciseRow } from "@/components/exercise-row";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import type { Exercise } from "@/lib/static-exercises";
 
-export function ExerciseLibrary({
-  initialExercises,
-}: {
-  initialExercises: Exercise[];
-}) {
-  const [exercises, setExercises] = useState(initialExercises);
+export function ExerciseLibrary() {
+  const [exercises, setExercises] = useState<Exercise[]>([]);
   const [name, setName] = useState("");
   const [error, setError] = useState("");
+  const [listError, setListError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [addedIDs, setAddedIDs] = useState<string[]>([]);
 
-  function addExercise(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const trimmedName = name.trim();
-    if (!trimmedName) {
-      setError("Enter an exercise name.");
-      return;
+  async function loadExercises(signal?: AbortSignal) {
+    setLoading(true);
+    setListError("");
+    try {
+      const response = await fetch("/api/exercises", {
+        cache: "no-store",
+        signal,
+      });
+      if (!response.ok)
+        throw new Error("Could not load exercises. Please try again.");
+      const body = await response.json();
+      if (!signal?.aborted) setExercises(body.items);
+    } catch {
+      if (!signal?.aborted)
+        setListError("Could not load exercises. Please try again.");
+    } finally {
+      if (!signal?.aborted) setLoading(false);
     }
-    setExercises((current) => [
-      ...current,
-      { id: crypto.randomUUID(), name: trimmedName },
-    ]);
-    setName("");
+  }
+  useEffect(() => {
+    const controller = new AbortController();
+    void loadExercises(controller.signal);
+    return () => controller.abort();
+  }, []);
+
+  async function addExercise(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (saving) return;
+    setSaving(true);
     setError("");
-    toast.success(`${trimmedName} added.`);
+    try {
+      const response = await fetch("/api/exercises", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const body = await response.json();
+      if (!response.ok) {
+        setError(
+          body.error?.fields?.name ??
+            body.error?.message ??
+            "Could not add exercise. Please try again.",
+        );
+        return;
+      }
+      setExercises((current) => [...current, body]);
+      setAddedIDs((current) => [...current, body.id]);
+      setName("");
+      toast.success(`${body.name} added.`);
+      await loadExercises();
+    } catch {
+      setError("Could not add exercise. Please try again.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -38,7 +79,17 @@ export function ExerciseLibrary({
         <h2 id="exercise-list-heading" className="mb-4 text-xl font-semibold">
           Exercise library
         </h2>
-        {exercises.length === 0 ? (
+        {loading && exercises.length === 0 ? (
+          <p role="status">Loading exercises…</p>
+        ) : listError ? (
+          <Alert variant="destructive">
+            <AlertTitle>Could not load exercises</AlertTitle>
+            <AlertDescription>{listError}</AlertDescription>
+            <Button onClick={() => void loadExercises()} className="mt-3">
+              Try again
+            </Button>
+          </Alert>
+        ) : exercises.length === 0 ? (
           <p className="rounded-2xl border border-dashed border-border p-6 text-muted-foreground">
             No exercises yet. Add your first exercise using the form.
           </p>
@@ -48,11 +99,7 @@ export function ExerciseLibrary({
               <ExerciseRow
                 key={exercise.id}
                 exercise={exercise}
-                animateEntrance={
-                  !initialExercises.some(
-                    (initial) => initial.id === exercise.id,
-                  )
-                }
+                animateEntrance={addedIDs.includes(exercise.id)}
               />
             ))}
           </ul>
@@ -78,6 +125,7 @@ export function ExerciseLibrary({
             name="name"
             type="text"
             value={name}
+            disabled={saving}
             onChange={(event) => setName(event.target.value)}
             aria-invalid={Boolean(error)}
             aria-describedby={
@@ -97,9 +145,10 @@ export function ExerciseLibrary({
           )}
           <Button
             type="submit"
+            disabled={saving || loading}
             className="mt-2 min-h-12 rounded-lg bg-primary px-4 py-3 font-semibold text-primary-foreground hover:bg-primary/90"
           >
-            Add exercise
+            {saving ? "Saving…" : "Add exercise"}
           </Button>
         </form>
       </section>
