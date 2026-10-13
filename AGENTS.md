@@ -2,7 +2,7 @@
 
 ## Project context
 
-Crow Fitness is a minimal workout tracker for one implicit user. The agreed stack is Next.js with TypeScript, a Go REST API, and PostgreSQL. There is no authentication, account management, or multiple-user support. Keep the application and its implementation simple.
+Crow Fitness is a minimal workout tracker for one implicit user. The agreed stack is Next.js with TypeScript, a Go REST API, and PostgreSQL. Exercises belong to one internal local owner selected by Go (approved for #11). There is no authentication, login, account management, or multiple-user runtime support. Keep the application and its implementation simple.
 
 The owner delegates implementation to agents and reviews their pull requests; do not require the owner to write code.
 
@@ -40,7 +40,7 @@ These are agent working instructions, not a security boundary. GitHub permission
 
 ## Validation and documentation
 
-Use the repository's actual tools and commands. The runnable foundation includes frontend package scripts, a Go module with health/configuration tests, Docker Compose, and CI. Workout features and their tests are not implemented yet. The README documents the supported setup and check commands.
+Use the repository's actual tools and commands. The runnable foundation includes frontend package scripts, a Go module with health/configuration tests, Docker Compose, and CI. Exercise create/list and persistence tests are implemented; other workout features are not implemented yet. The README documents the supported setup and check commands.
 
 Do not invent setup, build, or test commands, or claim checks passed when they did not run. As tooling is implemented, document working commands in the README and use the relevant checks for each change.
 

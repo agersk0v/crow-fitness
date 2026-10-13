@@ -12,7 +12,9 @@ import (
 	"time"
 
 	"github.com/agersk0v/crow-fitness/backend/internal/config"
+	"github.com/agersk0v/crow-fitness/backend/internal/exercises"
 	"github.com/agersk0v/crow-fitness/backend/internal/health"
+	"github.com/agersk0v/crow-fitness/backend/internal/migrations"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -47,9 +49,19 @@ func run() error {
 	}
 	defer pool.Close()
 
+	migrationContext, cancelMigrations := context.WithTimeout(ctx, 30*time.Second)
+	err = migrations.Apply(migrationContext, pool)
+	cancelMigrations()
+	if err != nil {
+		return fmt.Errorf("apply migrations: %w", err)
+	}
+	mux := http.NewServeMux()
+	exercises.Register(mux, exercises.Postgres{Pool: pool})
+	mux.Handle("/", health.NewHandler(pool))
+
 	server := &http.Server{
 		Addr:              ":" + cfg.HTTPPort,
-		Handler:           health.NewHandler(pool),
+		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,
