@@ -1,6 +1,22 @@
 "use client";
 import { useId, useState, type FormEvent } from "react";
 import { toast } from "sonner";
+import {
+  DndContext,
+  PointerSensor,
+  KeyboardSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { SortableExercise } from "@/components/sortable-exercise";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import type { Exercise } from "@/lib/exercises";
@@ -51,15 +67,27 @@ export function TemplateForm({
       ),
     );
   }
-  function move(index: number, direction: number) {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+  function describe(key: string | number) {
+    const index = entries.findIndex((entry) => entry.key === key);
+    const entry = entries[index];
+    return (
+      exercises.find((exercise) => exercise.id === entry?.exercise_id)?.name ??
+      `Exercise ${index + 1}`
+    );
+  }
+  function reorder({ active, over }: DragEndEvent) {
+    if (saving || disabled || !over || active.id === over.id) return;
     setFields({});
     setEntries((current) => {
-      const next = [...current];
-      [next[index], next[index + direction]] = [
-        next[index + direction],
-        next[index],
-      ];
-      return next;
+      const from = current.findIndex((entry) => entry.key === active.id);
+      const to = current.findIndex((entry) => entry.key === over.id);
+      return from < 0 || to < 0 ? current : arrayMove(current, from, to);
     });
   }
   function fieldError(field: string) {
@@ -137,123 +165,152 @@ export function TemplateForm({
           />
           {fieldError("name")}
         </div>
-        {entries.map((entry, index) => {
-          const prefix = `exercises.${index}.`;
-          const label =
-            exercises.find((exercise) => exercise.id === entry.exercise_id)
-              ?.name ?? `Exercise ${index + 1}`;
-          return (
-            <fieldset
-              key={entry.key}
-              className="min-w-0 rounded-xl border border-border p-4"
+        <p
+          id={`${formID}-reorder-help`}
+          className="text-sm text-muted-foreground"
+        >
+          Drag the grip to reorder exercises. With a keyboard, focus the grip,
+          press Space, use arrow keys, then press Space to drop or Escape to
+          cancel.
+        </p>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={reorder}
+          accessibility={{
+            announcements: {
+              onDragStart: ({ active }) =>
+                `Picked up ${describe(active.id)}. Use arrow keys to move, Space to drop, or Escape to cancel.`,
+              onDragOver: ({ active, over }) =>
+                over
+                  ? `${describe(active.id)}, position ${entries.findIndex((entry) => entry.key === over.id) + 1} of ${entries.length}.`
+                  : undefined,
+              onDragEnd: ({ active, over }) =>
+                over
+                  ? `${describe(active.id)} dropped at position ${entries.findIndex((entry) => entry.key === over.id) + 1}.`
+                  : "Reordering cancelled.",
+              onDragCancel: () => "Reordering cancelled.",
+            },
+          }}
+        >
+          <SortableContext
+            items={entries.map((entry) => entry.key)}
+            strategy={verticalListSortingStrategy}
+          >
+            <div
+              className="space-y-5"
+              aria-describedby={`${formID}-reorder-help`}
             >
-              <legend className="px-2 text-sm font-semibold">
-                Exercise {index + 1}
-              </legend>
-              <label
-                htmlFor={`${entry.key}-exercise`}
-                className="mb-2 block text-sm font-medium"
-              >
-                Exercise
-              </label>
-              <select
-                id={`${entry.key}-exercise`}
-                value={entry.exercise_id}
-                onChange={(event) =>
-                  update(entry.key, "exercise_id", event.target.value)
-                }
-                className={inputClass}
-                aria-invalid={Boolean(fields[prefix + "exercise_id"])}
-                aria-describedby={
-                  fields[prefix + "exercise_id"]
-                    ? `error-${formID}-${prefix}exercise_id`
-                    : undefined
-                }
-              >
-                <option value="">Choose an exercise</option>
-                {exercises.map((exercise) => (
-                  <option key={exercise.id} value={exercise.id}>
-                    {exercise.name}
-                  </option>
-                ))}
-              </select>
-              {fieldError(prefix + "exercise_id")}
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                {(
-                  [
-                    ["set_count", "Working-set count"],
-                    ["rep_min", "Minimum reps (optional)"],
-                    ["rep_max", "Maximum reps (optional)"],
-                    ["target_rir", "Target RIR (optional)"],
-                  ] as const
-                ).map(([field, title]) => {
-                  const errorKey =
-                    prefix + (field.startsWith("rep_") ? "rep_range" : field);
-                  return (
-                    <div key={field}>
+              {entries.map((entry, index) => {
+                const prefix = `exercises.${index}.`;
+                const label =
+                  exercises.find(
+                    (exercise) => exercise.id === entry.exercise_id,
+                  )?.name ?? `Exercise ${index + 1}`;
+                return (
+                  <SortableExercise
+                    key={entry.key}
+                    id={entry.key}
+                    label={`${label}, exercise ${index + 1}`}
+                    disabled={saving || disabled}
+                  >
+                    <fieldset className="min-w-0 rounded-xl border border-border p-4">
+                      <legend className="px-2 text-sm font-semibold">
+                        Exercise {index + 1}
+                      </legend>
                       <label
-                        htmlFor={`${entry.key}-${field}`}
-                        className="mb-2 block text-sm font-medium"
+                        htmlFor={`${entry.key}-exercise`}
+                        className="mb-2 block pr-12 text-sm font-medium"
                       >
-                        {title}
+                        Exercise
                       </label>
-                      <input
-                        id={`${entry.key}-${field}`}
-                        type="number"
-                        step={field === "target_rir" ? "any" : "1"}
-                        value={entry[field]}
+                      <select
+                        id={`${entry.key}-exercise`}
+                        value={entry.exercise_id}
                         onChange={(event) =>
-                          update(entry.key, field, event.target.value)
+                          update(entry.key, "exercise_id", event.target.value)
                         }
                         className={inputClass}
-                        aria-invalid={Boolean(fields[errorKey])}
+                        aria-invalid={Boolean(fields[prefix + "exercise_id"])}
                         aria-describedby={
-                          fields[errorKey]
-                            ? `error-${formID}-${errorKey}`
+                          fields[prefix + "exercise_id"]
+                            ? `error-${formID}-${prefix}exercise_id`
                             : undefined
                         }
-                      />
-                      {field.startsWith("rep_") ? null : fieldError(errorKey)}
-                    </div>
-                  );
-                })}
-              </div>
-              {fieldError(prefix + "rep_range")}
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={index === 0}
-                  aria-label={`Move ${label} up`}
-                  onClick={() => move(index, -1)}
-                >
-                  Move up
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={index === entries.length - 1}
-                  aria-label={`Move ${label} down`}
-                  onClick={() => move(index, 1)}
-                >
-                  Move down
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  aria-label={`Remove ${label} from draft`}
-                  onClick={() =>
-                    setEntries((current) =>
-                      current.filter((item) => item.key !== entry.key),
-                    )
-                  }
-                >
-                  Remove
-                </Button>
-              </div>
-            </fieldset>
-          );
-        })}
+                      >
+                        <option value="">Choose an exercise</option>
+                        {exercises.map((exercise) => (
+                          <option key={exercise.id} value={exercise.id}>
+                            {exercise.name}
+                          </option>
+                        ))}
+                      </select>
+                      {fieldError(prefix + "exercise_id")}
+                      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                        {(
+                          [
+                            ["set_count", "Working-set count"],
+                            ["rep_min", "Minimum reps (optional)"],
+                            ["rep_max", "Maximum reps (optional)"],
+                            ["target_rir", "Target RIR (optional)"],
+                          ] as const
+                        ).map(([field, title]) => {
+                          const errorKey =
+                            prefix +
+                            (field.startsWith("rep_") ? "rep_range" : field);
+                          return (
+                            <div key={field}>
+                              <label
+                                htmlFor={`${entry.key}-${field}`}
+                                className="mb-2 block text-sm font-medium"
+                              >
+                                {title}
+                              </label>
+                              <input
+                                id={`${entry.key}-${field}`}
+                                type="number"
+                                step={field === "target_rir" ? "any" : "1"}
+                                value={entry[field]}
+                                onChange={(event) =>
+                                  update(entry.key, field, event.target.value)
+                                }
+                                className={inputClass}
+                                aria-invalid={Boolean(fields[errorKey])}
+                                aria-describedby={
+                                  fields[errorKey]
+                                    ? `error-${formID}-${errorKey}`
+                                    : undefined
+                                }
+                              />
+                              {field.startsWith("rep_")
+                                ? null
+                                : fieldError(errorKey)}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {fieldError(prefix + "rep_range")}
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          aria-label={`Remove ${label} from draft`}
+                          onClick={() =>
+                            setEntries((current) =>
+                              current.filter((item) => item.key !== entry.key),
+                            )
+                          }
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </fieldset>
+                  </SortableExercise>
+                );
+              })}
+            </div>
+          </SortableContext>
+        </DndContext>
         {fieldError("exercises")}
         <Button
           type="button"

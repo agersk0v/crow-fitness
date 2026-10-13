@@ -36,7 +36,7 @@ Renaming preserves exercise identity and updates template displays. Edit offers 
 
 ## Approved template management (#29)
 
-Active templates can change their names, exercise occurrences/order, working-set counts, and optional rep/RIR targets. Save applies the complete draft atomically; Cancel discards it, and failures retain it for retry. Removing an occurrence leaves its exercise library record intact. Existing validation rules and ownership apply.
+Active templates can change their names, exercise occurrences/order, working-set counts, and optional rep/RIR targets. Reorder occurrences by dragging a grip, with touch and keyboard support. Save applies the complete draft atomically; Cancel discards it, and failures retain it for retry. Removing an occurrence leaves its exercise library record intact. Existing validation rules and ownership apply.
 
 Duplication creates an independent template with a supplied nonblank name and the same ordered configuration and targets. Later changes or archiving of either template do not affect the other. Names are not required to be globally unique.
 
