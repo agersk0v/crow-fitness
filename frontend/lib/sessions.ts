@@ -19,6 +19,8 @@ export type SavedSet = {
 export type CompletedSet = SavedSet & {
   session_id: string;
   exercise_name: string;
+  exercise_id: string;
+  session_name: string;
   completed_at: string;
 };
 

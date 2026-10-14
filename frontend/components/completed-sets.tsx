@@ -76,23 +76,82 @@ export function CompletedSets({
         </Link>
       </div>
     );
+  const workouts: {
+    id: string;
+    name: string;
+    completed_at: string;
+    occurrences: { position: number; name: string; sets: CompletedSet[] }[];
+  }[] = [];
+  // The API has already filtered and ordered the rows. Preserve that order
+  // and group by snapshot IDs/positions rather than mutable or repeated names.
+  for (const set of items) {
+    if (
+      !workouts.length ||
+      workouts[workouts.length - 1].id !== set.session_id
+    ) {
+      workouts.push({
+        id: set.session_id,
+        name: set.session_name,
+        completed_at: set.completed_at,
+        occurrences: [],
+      });
+    }
+    const workout = workouts[workouts.length - 1];
+    if (
+      !workout.occurrences.length ||
+      workout.occurrences[workout.occurrences.length - 1].position !==
+        set.exercise_position
+    ) {
+      workout.occurrences.push({
+        position: set.exercise_position,
+        name: set.exercise_name,
+        sets: [],
+      });
+    }
+    workout.occurrences[workout.occurrences.length - 1].sets.push(set);
+  }
   return (
-    <ol className="space-y-3">
-      {items.map((set) => (
+    <ol className="space-y-5" aria-label="Completed sets by workout">
+      {workouts.map((workout) => (
         <li
-          key={`${set.session_id}-${set.id}`}
-          className="rounded-xl border border-border bg-card p-4"
+          key={workout.id}
+          className="rounded-2xl border border-border bg-card p-5"
         >
-          <h2 className="break-words font-semibold">{set.exercise_name}</h2>
-          <p className="mt-1">
-            {set.weight} kg × {set.reps} reps
-          </p>
+          <h2 className="break-words text-xl font-semibold">
+            <Link
+              href={`/history/${workout.id}`}
+              className="text-highlight underline"
+            >
+              {workout.name}
+            </Link>
+          </h2>
           <time
             className="mt-2 block text-sm text-muted-foreground"
-            dateTime={set.completed_at}
+            dateTime={workout.completed_at}
           >
-            {new Date(set.completed_at).toLocaleString()}
+            {new Date(workout.completed_at).toLocaleString()}
           </time>
+          {workout.occurrences.map((occurrence) => (
+            <section
+              key={occurrence.position}
+              aria-label={`Exercise occurrence ${occurrence.position} in ${workout.name}`}
+              className="mt-4 space-y-3"
+            >
+              <h3 className="break-words font-medium">
+                Occurrence {occurrence.position}: {occurrence.name}
+              </h3>
+              <ol className="space-y-2 text-sm">
+                {occurrence.sets.map((set, index) => (
+                  <li
+                    key={set.id}
+                    className="rounded-lg border border-border p-3"
+                  >
+                    Set {index + 1}: {set.weight} kg × {set.reps} reps
+                  </li>
+                ))}
+              </ol>
+            </section>
+          ))}
         </li>
       ))}
     </ol>

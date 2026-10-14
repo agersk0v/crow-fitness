@@ -135,10 +135,18 @@ export function ExerciseRow({
     }
   }
   return (
-    <li ref={scope} className="min-w-0 px-5 py-4">
+    <li ref={scope} className="relative min-w-0 px-5 py-4 hover:bg-primary/5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="break-words font-medium">{exercise.name}</p>
+          <p className="break-words font-medium">
+            <Link
+              href={`/history?tab=sets&exercise=${exercise.id}`}
+              aria-label={`View completed sets for ${exercise.name}`}
+              className="text-highlight after:absolute after:inset-0 after:content-[''] hover:underline focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-[-2px] focus-visible:after:outline-ring"
+            >
+              {exercise.name}
+            </Link>
+          </p>
           <div className="mt-2 flex flex-wrap gap-2">
             {exercise.muscle_groups.map((group) => (
               <span
@@ -151,15 +159,8 @@ export function ExerciseRow({
           </div>
         </div>
         <div className="flex w-full flex-wrap gap-2 sm:w-auto">
-          <Button asChild variant="outline">
-            <Link
-              href={`/exercises/${exercise.id}/history`}
-              aria-label={`View history for ${exercise.name}`}
-            >
-              View history
-            </Link>
-          </Button>
           <Button
+            className="relative z-10"
             variant="outline"
             onClick={() => open("edit")}
             aria-label={`Edit ${exercise.name}`}
@@ -167,6 +168,7 @@ export function ExerciseRow({
             Edit
           </Button>
           <Button
+            className="relative z-10"
             variant="outline"
             onClick={() => open("delete")}
             aria-label={`Delete ${exercise.name}`}
