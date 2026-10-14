@@ -16,7 +16,7 @@ export default async function TemplatePage({
         ← Templates
       </Link>
       <div className="py-10">
-        <TemplateDetail id={id} />
+        <TemplateDetail key={id} id={id} />
       </div>
     </main>
   );
