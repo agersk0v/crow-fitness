@@ -80,7 +80,7 @@ The page is read-only, with useful empty/not-found/loading states, retry, and na
 
 The owner confirmed Sessions as the first tab. Home's Workout history link opens `/history`; Sessions and Sets tabs store selection in the URL for refresh and back navigation. Sessions lists completed workouts as template-style cards using captured names and local completion dates, newest first. Repeated workouts remain separate records. Sets retains the plain completed-set list. Active and cancelled sessions appear in neither tab.
 
-A session card opens a read-only saved snapshot with ordered exercise occurrences, captured names, template targets, and actually recorded sets in separate sections. Empty completed workouts still appear in Sessions and explain that no sets were recorded; they contribute no Sets rows. Source edits, archiving, renames, or removal of an otherwise unused exercise do not change history.
+A session card expands an inline read-only saved snapshot (#54) with ordered exercise occurrences, captured names, template targets, and actually recorded sets in separate sections. Empty completed workouts still appear in Sessions and explain that no sets were recorded; they contribute no Sets rows. Source edits, archiving, renames, or removal of an otherwise unused exercise do not change history.
 
 Tabs support keyboard navigation, selected/focus states, empty states, and retryable load errors. Missing/foreign detail IDs show not found. `/sets` redirects to the Sets tab so old links still work. Completed views offer no workout/set/template mutations. Exercise-specific history, filters, charts, analytics, correction, and creating templates from workouts remain separate work.
 
@@ -182,3 +182,9 @@ The owner confirmed that Copy workout copies saved configuration, explains any u
 ## Optional descriptions and individual cards (#52)
 
 Exercise and active/archived template lists use individual cards with borders, backgrounds, and spacing. Optional plain-text multiline descriptions can be added, edited, cleared, and displayed below card names without reserved space when absent. Copy workout copies the saved description; description drafts follow existing navigation/save/copy rules. Seed data includes example descriptions without changing routine identities/order/counts or workout/set counts. Descriptions are library metadata only: do not change recorded snapshots/history or search criteria.
+
+## Approved history presentation (#54)
+
+The owner confirmed a single-open accordion: opening a completed workout collapses the previous one, and the open workout can be collapsed. Expansion stays on the history page and preserves applied URL criteria and list context. Saved snapshot details load on first expansion and are retained during collapse/reopen in the same list view; loading, retry, not-found, and empty-set states remain clear. Existing `/history/[id]` direct links remain available.
+
+Sets emphasizes captured exercise names and exact logged set values above smaller workout-name/date metadata. Grouping by workout and occurrence, query filtering, source order, and read-only behavior remain unchanged.
