@@ -67,7 +67,7 @@ func TestSessionUpgradePreservesActiveWorkout(t *testing.T) {
 		t.Fatal(err)
 	}
 	var intact bool
-	if err = pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM workout_sessions s JOIN session_exercises e ON e.session_id=s.id
+	if err = pool.QueryRow(ctx, `SELECT (SELECT description FROM exercises WHERE id=1)='' AND (SELECT description FROM templates WHERE id=1)='' AND EXISTS(SELECT 1 FROM workout_sessions s JOIN session_exercises e ON e.session_id=s.id
  WHERE s.id=1 AND s.owner_id=1 AND s.name='Saved legacy name' AND s.completed_at IS NULL AND s.started_at='2026-10-13T08:00:00Z'
  AND e.name='Saved legacy exercise' AND e.set_count=3 AND e.target_rir=0)`).Scan(&intact); err != nil || !intact {
 		t.Fatal("upgrade rewrote active snapshot", err)

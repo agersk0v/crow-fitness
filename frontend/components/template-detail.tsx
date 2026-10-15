@@ -133,6 +133,11 @@ export function TemplateDetail({ id }: { id: string }) {
       </h1>
       {template.archived ? (
         <>
+          {template.description && (
+            <p className="mt-4 whitespace-pre-wrap break-words text-muted-foreground">
+              {template.description}
+            </p>
+          )}
           <p className="my-4 text-muted-foreground">
             Archived — restore this template before editing, copying, or
             starting a workout. Existing workout history remains intact.

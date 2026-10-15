@@ -254,7 +254,7 @@ func (p *pauseRead) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data pgx.T
 	return context.WithValue(ctx, readSQLKey{}, data.SQL)
 }
 func (p *pauseRead) TraceQueryEnd(ctx context.Context, _ *pgx.Conn, _ pgx.TraceQueryEndData) {
-	if ctx.Value(readSQLKey{}) == "SELECT id::text,name,archived FROM templates WHERE owner_id=$1 AND id=$2" {
+	if ctx.Value(readSQLKey{}) == "SELECT id::text,name,archived,description FROM templates WHERE owner_id=$1 AND id=$2" {
 		p.once.Do(func() {
 			close(p.reached)
 			select {

@@ -22,11 +22,13 @@ const LocalOwnerID int64 = 1
 var MuscleGroups = []string{"chest", "back", "shoulders", "biceps", "triceps", "forearms", "core", "glutes", "quadriceps", "hamstrings", "calves"}
 
 type Exercise struct {
+	Description  string   `json:"description"`
 	ID           string   `json:"id"`
 	Name         string   `json:"name"`
 	MuscleGroups []string `json:"muscle_groups"`
 }
 type Input struct {
+	Description  string   `json:"description"`
 	Name         string   `json:"name"`
 	MuscleGroups []string `json:"muscle_groups"`
 }
@@ -36,6 +38,7 @@ func (e ValidationError) Error() string { return "Check the exercise values." }
 func Validate(input *Input) ValidationError {
 	fields := ValidationError{}
 	input.Name = strings.TrimSpace(input.Name)
+	input.Description = strings.TrimSpace(input.Description)
 	if input.Name == "" {
 		fields["name"] = "Enter an exercise name."
 	}
@@ -70,7 +73,7 @@ type Store interface {
 type Postgres struct{ Pool *pgxpool.Pool }
 
 func (p Postgres) List(ctx context.Context, owner int64) ([]Exercise, error) {
-	rows, err := p.Pool.Query(ctx, "SELECT id::text,name,muscle_groups FROM exercises WHERE owner_id=$1 ORDER BY id", owner)
+	rows, err := p.Pool.Query(ctx, "SELECT id::text,name,muscle_groups,description FROM exercises WHERE owner_id=$1 ORDER BY id", owner)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +81,7 @@ func (p Postgres) List(ctx context.Context, owner int64) ([]Exercise, error) {
 	items := []Exercise{}
 	for rows.Next() {
 		var item Exercise
-		if err = rows.Scan(&item.ID, &item.Name, &item.MuscleGroups); err != nil {
+		if err = rows.Scan(&item.ID, &item.Name, &item.MuscleGroups, &item.Description); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
@@ -90,7 +93,7 @@ func (p Postgres) Create(ctx context.Context, owner int64, input Input) (Exercis
 		return Exercise{}, fields
 	}
 	var item Exercise
-	err := p.Pool.QueryRow(ctx, "INSERT INTO exercises(owner_id,name,muscle_groups) VALUES ($1,$2,$3) RETURNING id::text,name,muscle_groups", owner, input.Name, input.MuscleGroups).Scan(&item.ID, &item.Name, &item.MuscleGroups)
+	err := p.Pool.QueryRow(ctx, "INSERT INTO exercises(owner_id,name,muscle_groups,description) VALUES ($1,$2,$3,$4) RETURNING id::text,name,muscle_groups,description", owner, input.Name, input.MuscleGroups, input.Description).Scan(&item.ID, &item.Name, &item.MuscleGroups, &item.Description)
 	return item, err
 }
 func (p Postgres) Update(ctx context.Context, owner int64, id string, input Input) (Exercise, error) {
@@ -98,7 +101,7 @@ func (p Postgres) Update(ctx context.Context, owner int64, id string, input Inpu
 		return Exercise{}, fields
 	}
 	var item Exercise
-	err := p.Pool.QueryRow(ctx, "UPDATE exercises SET name=$3,muscle_groups=$4 WHERE owner_id=$1 AND id=$2 RETURNING id::text,name,muscle_groups", owner, id, input.Name, input.MuscleGroups).Scan(&item.ID, &item.Name, &item.MuscleGroups)
+	err := p.Pool.QueryRow(ctx, "UPDATE exercises SET name=$3,muscle_groups=$4,description=$5 WHERE owner_id=$1 AND id=$2 RETURNING id::text,name,muscle_groups,description", owner, id, input.Name, input.MuscleGroups, input.Description).Scan(&item.ID, &item.Name, &item.MuscleGroups, &item.Description)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Exercise{}, ErrNotFound
 	}

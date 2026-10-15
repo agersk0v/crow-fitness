@@ -45,7 +45,7 @@ export function TemplateCard({
     }
   }
   return (
-    <li className="relative min-w-0 px-5 py-4 hover:bg-primary/5">
+    <li className="relative min-w-0 rounded-2xl border border-border bg-card px-5 py-4 hover:bg-primary/5">
       <Link
         href={`/templates/${template.id}`}
         aria-label={`${template.archived ? "View archived" : "Edit"} ${template.name}`}
@@ -54,6 +54,11 @@ export function TemplateCard({
         {template.name}
         {template.archived ? " (Archived)" : ""} →
       </Link>
+      {template.description && (
+        <p className="mt-2 whitespace-pre-wrap break-words text-sm text-muted-foreground">
+          {template.description}
+        </p>
+      )}
       {!template.archived && (
         <div className="mt-3 flex flex-wrap items-start gap-3">
           <StartSession templateID={template.id} compact />

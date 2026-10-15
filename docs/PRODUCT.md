@@ -178,3 +178,7 @@ Group Sets results by captured workout and then exercise occurrence, with local 
 ## Approved template editor/actions (#48)
 
 The owner confirmed that Copy workout copies saved configuration, explains any unsaved edits, and never silently saves/discards the draft. Cancel/navigation confirms discarding changed drafts; Cancel returns to the list. Template cards link directly to editable detail with independent Start workout/Delete actions. Delete is a label for archiving only, and its popup explains restoration and preserved active/completed history. Archived/Restore behavior remains. Copy workout lives in the editor, creates an independent named template, preserves the original draft, and offers a link to edit the copy. Saves retain the existing template identity and stay editable; drag/input/error behavior remains intact.
+
+## Optional descriptions and individual cards (#52)
+
+Exercise and active/archived template lists use individual cards with borders, backgrounds, and spacing. Optional plain-text multiline descriptions can be added, edited, cleared, and displayed below card names without reserved space when absent. Copy workout copies the saved description; description drafts follow existing navigation/save/copy rules. Seed data includes example descriptions without changing routine identities/order/counts or workout/set counts. Descriptions are library metadata only: do not change recorded snapshots/history or search criteria.

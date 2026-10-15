@@ -11,6 +11,7 @@ import { MuscleGroupPicker } from "@/components/muscle-group-picker";
 export function ExerciseLibrary() {
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
   const [groups, setGroups] = useState<string[]>([]);
   const [tags, setTags] = useState<string[]>([]);
   const [tagError, setTagError] = useState("");
@@ -61,7 +62,7 @@ export function ExerciseLibrary() {
       const response = await fetch("/api/exercises", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, muscle_groups: tags }),
+        body: JSON.stringify({ name, description, muscle_groups: tags }),
       });
       const body = await response.json();
       if (!response.ok) {
@@ -76,6 +77,7 @@ export function ExerciseLibrary() {
       setExercises((current) => [...current, body]);
       setAddedIDs((current) => [...current, body.id]);
       setName("");
+      setDescription("");
       setTags([]);
       toast.success(`${body.name} added.`);
     } catch {
@@ -167,7 +169,7 @@ export function ExerciseLibrary() {
             </Button>
           </div>
         ) : (
-          <ul className="divide-y divide-border rounded-2xl border border-border bg-card">
+          <ul className="space-y-4">
             {visible.map((exercise) => (
               <ExerciseRow
                 key={exercise.id}
@@ -219,6 +221,17 @@ export function ExerciseLibrary() {
             }
             className="min-h-12 w-full rounded-lg border border-input bg-background px-3 text-base focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             placeholder="e.g. Overhead press"
+          />
+          <label htmlFor="exercise-description" className="text-sm font-medium">
+            Description (optional)
+          </label>
+          <textarea
+            id="exercise-description"
+            value={description}
+            disabled={saving}
+            onChange={(event) => setDescription(event.target.value)}
+            rows={3}
+            className="min-h-24 w-full rounded-lg border border-input bg-background p-3 text-base focus-visible:outline-2 focus-visible:outline-ring"
           />
           <p id="exercise-help" className="text-sm text-muted-foreground">
             Choose a name you will recognize in your workouts.

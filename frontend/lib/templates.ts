@@ -1,4 +1,9 @@
-export type TemplateSummary = { id: string; name: string; archived: boolean };
+export type TemplateSummary = {
+  id: string;
+  name: string;
+  description: string;
+  archived: boolean;
+};
 export type TemplateExercise = {
   exercise_id: string;
   name: string;

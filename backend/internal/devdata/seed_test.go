@@ -130,7 +130,7 @@ func TestPostgresResetReplacementRollbackAndWrites(t *testing.T) {
 			t.Fatal("stored seed counts", exercisesCount, templateCount, completed, active, completedSets, activeSets, err)
 		}
 		var invalid int
-		if err = pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM exercises WHERE owner_id=1 AND cardinality(muscle_groups)=0)+(SELECT count(*) FROM template_exercises WHERE owner_id=1 AND (rep_min IS NOT NULL OR rep_max IS NOT NULL OR target_rir IS NOT NULL))+(SELECT count(*) FROM workout_sessions WHERE owner_id=1 AND completed_at>$1)`, now).Scan(&invalid); err != nil || invalid != 0 {
+		if err = pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM exercises WHERE owner_id=1 AND (cardinality(muscle_groups)=0 OR description=''))+(SELECT count(*) FROM templates WHERE owner_id=1 AND description='')+(SELECT count(*) FROM template_exercises WHERE owner_id=1 AND (rep_min IS NOT NULL OR rep_max IS NOT NULL OR target_rir IS NOT NULL))+(SELECT count(*) FROM workout_sessions WHERE owner_id=1 AND completed_at>$1)`, now).Scan(&invalid); err != nil || invalid != 0 {
 			t.Fatal("invalid tags, targets or dates", invalid, err)
 		}
 		var preserved, foreign int

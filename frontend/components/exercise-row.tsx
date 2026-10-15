@@ -31,6 +31,7 @@ export function ExerciseRow({
   const id = useId();
   const [mode, setMode] = useState<"edit" | "delete" | null>(null);
   const [name, setName] = useState(exercise.name);
+  const [description, setDescription] = useState(exercise.description);
   const [tags, setTags] = useState(exercise.muscle_groups);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -70,6 +71,7 @@ export function ExerciseRow({
   }, [mode, exercise.id, retry]);
   function open(next: "edit" | "delete") {
     setName(exercise.name);
+    setDescription(exercise.description);
     setTags(exercise.muscle_groups);
     setError("");
     setFields({});
@@ -90,7 +92,7 @@ export function ExerciseRow({
       const response = await fetch(`/api/exercises/${exercise.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, muscle_groups: tags }),
+        body: JSON.stringify({ name, description, muscle_groups: tags }),
       });
       const body = await response.json();
       if (!response.ok) {
@@ -135,7 +137,10 @@ export function ExerciseRow({
     }
   }
   return (
-    <li ref={scope} className="relative min-w-0 px-5 py-4 hover:bg-primary/5">
+    <li
+      ref={scope}
+      className="relative min-w-0 rounded-2xl border border-border bg-card px-5 py-4 hover:bg-primary/5"
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="break-words font-medium">
@@ -147,6 +152,11 @@ export function ExerciseRow({
               {exercise.name}
             </Link>
           </p>
+          {exercise.description && (
+            <p className="mt-2 whitespace-pre-wrap break-words text-sm text-muted-foreground">
+              {exercise.description}
+            </p>
+          )}
           <div className="mt-2 flex flex-wrap gap-2">
             {exercise.muscle_groups.map((group) => (
               <span
@@ -214,6 +224,19 @@ export function ExerciseRow({
                   {fields.name}
                 </p>
               )}
+              <label
+                htmlFor={`${id}-description-edit`}
+                className="block text-sm font-medium"
+              >
+                Description (optional)
+              </label>
+              <textarea
+                id={`${id}-description-edit`}
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                rows={3}
+                className="min-h-24 w-full rounded-lg border border-input bg-background p-3 text-base focus-visible:outline-2 focus-visible:outline-ring"
+              />
               <MuscleGroupPicker
                 groups={groups}
                 selected={tags}

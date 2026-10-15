@@ -102,13 +102,13 @@ func (p Postgres) Reset(ctx context.Context, now time.Time) (Result, error) {
 	ids := map[string]string{}
 	templateIDs := make([]string, len(routines))
 	for index, r := range routines {
-		if err = tx.QueryRow(ctx, "INSERT INTO templates(owner_id,name) VALUES($1,$2) RETURNING id::text", owner, r.name).Scan(&templateIDs[index]); err != nil {
+		if err = tx.QueryRow(ctx, "INSERT INTO templates(owner_id,name,description) VALUES($1,$2,$3) RETURNING id::text", owner, r.name, templateDescriptions[r.name]).Scan(&templateIDs[index]); err != nil {
 			return Result{}, err
 		}
 		for position, m := range r.movements {
 			if ids[m.name] == "" {
 				var id string
-				if err = tx.QueryRow(ctx, "INSERT INTO exercises(owner_id,name,muscle_groups) VALUES($1,$2,$3) RETURNING id::text", owner, m.name, m.groups).Scan(&id); err != nil {
+				if err = tx.QueryRow(ctx, "INSERT INTO exercises(owner_id,name,muscle_groups,description) VALUES($1,$2,$3,$4) RETURNING id::text", owner, m.name, m.groups, exerciseDescriptions[m.name]).Scan(&id); err != nil {
 					return Result{}, err
 				}
 				ids[m.name] = id
