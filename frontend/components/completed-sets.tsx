@@ -117,34 +117,20 @@ export function CompletedSets({
           key={workout.id}
           className="rounded-2xl border border-border bg-card p-5"
         >
-          <h2 className="break-words text-xl font-semibold">
-            <Link
-              href={`/history/${workout.id}`}
-              className="text-highlight underline"
-            >
-              {workout.name}
-            </Link>
-          </h2>
-          <time
-            className="mt-2 block text-sm text-muted-foreground"
-            dateTime={workout.completed_at}
-          >
-            {new Date(workout.completed_at).toLocaleString()}
-          </time>
           {workout.occurrences.map((occurrence) => (
             <section
               key={occurrence.position}
               aria-label={`Exercise occurrence ${occurrence.position} in ${workout.name}`}
-              className="mt-4 space-y-3"
+              className="space-y-3 not-first:mt-5"
             >
-              <h3 className="break-words font-medium">
+              <h2 className="break-words text-xl font-semibold text-highlight">
                 Occurrence {occurrence.position}: {occurrence.name}
-              </h3>
-              <ol className="space-y-2 text-sm">
+              </h2>
+              <ol className="space-y-2">
                 {occurrence.sets.map((set, index) => (
                   <li
                     key={set.id}
-                    className="rounded-lg border border-border p-3"
+                    className="rounded-lg border border-border bg-primary/5 p-3 font-medium tabular-nums"
                   >
                     Set {index + 1}: {set.weight} kg × {set.reps} reps
                   </li>
@@ -152,6 +138,22 @@ export function CompletedSets({
               </ol>
             </section>
           ))}
+          <div className="mt-5 border-t border-border pt-4">
+            <p className="break-words text-sm text-muted-foreground">
+              <Link
+                href={`/history/${workout.id}`}
+                className="underline focus-visible:outline-2 focus-visible:outline-ring"
+              >
+                {workout.name}
+              </Link>
+            </p>
+            <time
+              className="mt-2 block text-sm text-muted-foreground"
+              dateTime={workout.completed_at}
+            >
+              {new Date(workout.completed_at).toLocaleString()}
+            </time>
+          </div>
         </li>
       ))}
     </ol>

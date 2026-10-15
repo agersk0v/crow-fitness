@@ -53,7 +53,7 @@ The UI makes one independent request for the session and shares results across r
 
 Go exposes `GET /api/history/sessions` and `/api/history/sessions/{id}`. The list includes all completed workouts for the local owner, including empty workouts, ordered by completion time then session ID descending. Detail reuses the read-only repeatable-read snapshot reader with an explicit completed-state filter. Active detail stays active-only. Detail returns captured configuration and nondeleted saved sets from the same snapshot and never joins mutable library names.
 
-Next.js serves `/history` with Sessions/Sets tabs controlled by the URL's `tab` selector. Sessions is the confirmed default; invalid selectors fall back to it. Roving keyboard focus uses arrows/Home/End, and only the selected tab's data component is mounted. Cards link to `/history/[id]` read-only detail, with separate target and actual-set sections. Legacy `/sets` redirects to `/history?tab=sets`. Existing set data/entry and all mutation/state rules remain intact. No schema migration, extra dependency, or service is needed.
+Next.js serves `/history` with Sessions/Sets tabs controlled by the URL's `tab` selector. Sessions is the confirmed default; invalid selectors fall back to it. Roving keyboard focus uses arrows/Home/End, and only the selected tab's data component is mounted. Cards expand a single-open inline accordion (#54), with separate target and actual-set sections; `/history/[id]` remains available for direct links. Legacy `/sets` redirects to `/history?tab=sets`. Existing set data/entry and all mutation/state rules remain intact. No schema migration, extra dependency, or service is needed.
 
 ## Current validation coverage
 
@@ -147,3 +147,7 @@ TemplateForm reports normalized draft changes and pending saves to detail. A suc
 ## Description persistence (#52)
 
 Migration 008 adds `description text NOT NULL DEFAULT ''` to exercises/templates only. Go create/update validation trims outer whitespace and preserves internal newlines; string JSON fields use empty strings for absence (omitted/null input also clears on full PUT). Existing request body limits apply without a new per-description limit. Template list/detail/update/copy/archive/restore return the saved description; copying reads it under the existing template lock. Snapshot structs/queries stay unchanged. Seed maps provide descriptions for the existing 26 shared identities and four routines. React renders text with preserved whitespace/wrapping; spaced list containers and per-card borders preserve stretched links and independent actions.
+
+## Inline workout history (#54)
+
+The session list controls one expanded workout ID. Native buttons expose expanded state and panel relationships; collapsed panels are hidden from view and keyboard navigation. Details mount only on first expansion and remain mounted while collapsed, reusing the existing abortable detail reader and retry behavior. A shared snapshot-exercise component serves inline and direct-link views with appropriate heading levels. Sets reorders existing grouped content above supporting workout metadata. Backend queries, filters, persistence, dependencies, and schema are unchanged.

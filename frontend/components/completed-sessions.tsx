@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { ChevronDown } from "lucide-react";
+import { CompletedSessionDetail } from "@/components/completed-session-detail";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import type { CompletedSession } from "@/lib/sessions";
@@ -12,6 +14,8 @@ export function CompletedSessions({
   query?: string;
   filtered?: boolean;
 }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [visited, setVisited] = useState<Set<string>>(() => new Set());
   const [items, setItems] = useState<CompletedSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -80,25 +84,59 @@ export function CompletedSessions({
       </div>
     );
   return (
-    <ul className="grid gap-4 sm:grid-cols-2">
-      {items.map((session) => (
-        <li key={session.id}>
-          <Link
-            href={`/history/${session.id}`}
-            className="block h-full rounded-2xl border border-border bg-card p-5 hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+    <ul className="space-y-4" aria-label="Completed workouts">
+      {items.map((session) => {
+        const open = expanded === session.id;
+        const triggerID = `completed-workout-${session.id}-trigger`;
+        const panelID = `completed-workout-${session.id}-panel`;
+        return (
+          <li
+            key={session.id}
+            className="overflow-hidden rounded-2xl border border-border bg-card"
           >
-            <h2 className="break-words text-xl font-semibold text-highlight">
-              {session.name} →
+            <h2>
+              <button
+                type="button"
+                id={triggerID}
+                aria-expanded={open}
+                aria-controls={panelID}
+                className="flex w-full items-center justify-between gap-4 p-5 text-left hover:bg-primary/5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+                onClick={() => {
+                  setExpanded(open ? null : session.id);
+                  setVisited((previous) => new Set(previous).add(session.id));
+                }}
+              >
+                <span className="min-w-0">
+                  <span className="block break-words text-xl font-semibold text-highlight">
+                    {session.name}
+                  </span>
+                  <time
+                    className="mt-3 block text-sm font-normal text-muted-foreground"
+                    dateTime={session.completed_at}
+                  >
+                    {new Date(session.completed_at).toLocaleString()}
+                  </time>
+                </span>
+                <ChevronDown
+                  aria-hidden="true"
+                  className={`size-5 shrink-0 ${open ? "rotate-180" : ""}`}
+                />
+              </button>
             </h2>
-            <time
-              className="mt-3 block text-sm text-muted-foreground"
-              dateTime={session.completed_at}
+            <div
+              id={panelID}
+              role="region"
+              aria-labelledby={triggerID}
+              hidden={!open}
+              className="border-t border-border px-5 pb-5"
             >
-              {new Date(session.completed_at).toLocaleString()}
-            </time>
-          </Link>
-        </li>
-      ))}
+              {visited.has(session.id) && (
+                <CompletedSessionDetail id={session.id} inline />
+              )}
+            </div>
+          </li>
+        );
+      })}
     </ul>
   );
 }
