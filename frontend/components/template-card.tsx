@@ -1,23 +1,57 @@
 "use client";
-import Link from "next/link";
+import { ChevronDown } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { StartSession } from "@/components/start-session";
-import type { TemplateSummary } from "@/lib/templates";
+import {
+  TemplateDetail,
+  type TemplateEditorState,
+} from "@/components/template-detail";
+import type { Template, TemplateSummary } from "@/lib/templates";
 
 export function TemplateCard({
   template,
   onArchived,
+  onSaved,
+  onCopied,
+  onRestored,
+  onEditorStateChange,
+  canLeave,
+  starting,
+  onStartingChange,
 }: {
   template: TemplateSummary;
   onArchived: (id: string) => void;
+  onSaved: (template: Template) => void;
+  onCopied: (template: Template) => void;
+  onRestored: (template: Template) => void;
+  onEditorStateChange: (id: string, state: TemplateEditorState | null) => void;
+  canLeave: () => boolean;
+  starting: boolean;
+  onStartingChange: (busy: boolean) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const [visited, setVisited] = useState(false);
+  const [editor, setEditor] = useState<TemplateEditorState>({
+    dirty: false,
+    busy: false,
+  });
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    onEditorStateChange(template.id, {
+      dirty: editor.dirty,
+      busy: editor.busy || busy,
+    });
+  }, [editor, busy, template.id, onEditorStateChange]);
+  useEffect(
+    () => () => onEditorStateChange(template.id, null),
+    [template.id, onEditorStateChange],
+  );
   const modal = useRef<HTMLDialogElement>(null);
   const title = useId();
   const [confirming, setConfirming] = useState(false);
-  const [busy, setBusy] = useState(false);
   const pending = useRef(false);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -25,7 +59,7 @@ export function TemplateCard({
     else modal.current?.close();
   }, [confirming]);
   async function archive() {
-    if (pending.current) return;
+    if (pending.current || editor.busy || starting) return;
     pending.current = true;
     setBusy(true);
     setError("");
@@ -45,25 +79,47 @@ export function TemplateCard({
     }
   }
   return (
-    <li className="relative min-w-0 rounded-2xl border border-border bg-card px-5 py-4 hover:bg-primary/5">
-      <Link
-        href={`/templates/${template.id}`}
-        aria-label={`${template.archived ? "View archived" : "Edit"} ${template.name}`}
-        className="break-words font-medium text-highlight after:absolute after:inset-0 after:content-[''] hover:underline focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-[-2px] focus-visible:after:outline-ring"
-      >
-        {template.name}
-        {template.archived ? " (Archived)" : ""} →
-      </Link>
-      {template.description && (
-        <p className="mt-2 whitespace-pre-wrap break-words text-sm text-muted-foreground">
-          {template.description}
-        </p>
-      )}
+    <li className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card">
+      <h3>
+        <button
+          type="button"
+          id={`${title}-trigger`}
+          aria-expanded={open}
+          aria-controls={`${title}-panel`}
+          className="flex w-full items-center justify-between gap-4 p-5 text-left hover:bg-primary/5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+          onClick={() => {
+            setOpen(!open);
+            setVisited(true);
+          }}
+        >
+          <span className="min-w-0">
+            <span className="block break-words font-medium text-highlight">
+              {template.name}
+              {template.archived ? " (Archived)" : ""}
+            </span>
+            {template.description && (
+              <span className="mt-2 block whitespace-pre-wrap break-words text-sm font-normal text-muted-foreground">
+                {template.description}
+              </span>
+            )}
+          </span>
+          <ChevronDown
+            aria-hidden="true"
+            className={`size-5 shrink-0 ${open ? "rotate-180" : ""}`}
+          />
+        </button>
+      </h3>
       {!template.archived && (
-        <div className="mt-3 flex flex-wrap items-start gap-3">
-          <StartSession templateID={template.id} compact />
+        <div className="flex flex-wrap items-start gap-3 px-5 pb-4">
+          <StartSession
+            templateID={template.id}
+            compact
+            beforeStart={canLeave}
+            disabled={starting || editor.busy || busy}
+            onBusyChange={onStartingChange}
+          />
           <Button
-            className="relative z-10"
+            disabled={starting || editor.busy || busy}
             variant="outline"
             onClick={() => {
               setError("");
@@ -75,6 +131,25 @@ export function TemplateCard({
           </Button>
         </div>
       )}
+      <div
+        id={`${title}-panel`}
+        role="region"
+        aria-labelledby={`${title}-trigger`}
+        hidden={!open}
+        className="border-t border-border p-5"
+      >
+        {visited && (
+          <TemplateDetail
+            id={template.id}
+            inline
+            disabled={starting || busy}
+            onStateChange={setEditor}
+            onSaved={onSaved}
+            onCopied={onCopied}
+            onRestored={onRestored}
+          />
+        )}
+      </div>
       <dialog
         ref={modal}
         aria-labelledby={title}
@@ -93,6 +168,12 @@ export function TemplateCard({
           It will be hidden from Active and can be restored from Archived.
           Existing active sessions and completed workouts/sets stay intact.
         </p>
+        {editor.dirty && (
+          <p className="mb-4 text-muted-foreground">
+            Unsaved changes to this template will be discarded if you confirm
+            archiving.
+          </p>
+        )}
         {error && (
           <Alert variant="destructive" className="mb-4">
             <AlertTitle>Could not archive template</AlertTitle>

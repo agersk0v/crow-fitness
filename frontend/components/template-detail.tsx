@@ -10,7 +10,27 @@ import { useDraftNavigation } from "@/hooks/use-draft-navigation";
 import type { Exercise } from "@/lib/exercises";
 import type { Template } from "@/lib/templates";
 
-export function TemplateDetail({ id }: { id: string }) {
+export type TemplateEditorState = { dirty: boolean; busy: boolean };
+
+export function TemplateDetail({
+  id,
+  inline = false,
+  disabled = false,
+  onSaved,
+  onCopied,
+  onRestored,
+  onStateChange,
+}: {
+  id: string;
+  inline?: boolean;
+  disabled?: boolean;
+  onSaved?: (template: Template) => void;
+  onCopied?: (template: Template) => void;
+  onRestored?: (template: Template) => void;
+  onStateChange?: (state: TemplateEditorState) => void;
+}) {
+  const Heading = inline ? "h4" : "h1";
+  const ExerciseHeading = inline ? "h5" : "h2";
   const router = useRouter();
   const modal = useRef<HTMLDialogElement>(null);
   const dialogID = useId();
@@ -29,7 +49,22 @@ export function TemplateDetail({ id }: { id: string }) {
   const [saving, setSaving] = useState(false);
   const [version, setVersion] = useState(0);
   const [copied, setCopied] = useState<Template | null>(null);
-  const canLeave = useDraftNavigation(dirty, saving || busy);
+  const canLeave = useDraftNavigation(dirty, saving || busy, !inline);
+  useEffect(() => {
+    onStateChange?.({ dirty, busy: saving || busy });
+  }, [dirty, saving, busy, onStateChange]);
+  function cancel() {
+    if (inline) {
+      if (
+        saving ||
+        busy ||
+        (dirty && !window.confirm("Discard unsaved template changes?"))
+      )
+        return;
+      setDirty(false);
+      setVersion((value) => value + 1);
+    } else if (canLeave()) router.push("/templates");
+  }
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
@@ -75,7 +110,7 @@ export function TemplateDetail({ id }: { id: string }) {
     else modal.current?.close();
   }, [copying]);
   async function mutate(kind: "duplicate" | "restore") {
-    if (pending.current || saving) return;
+    if (pending.current || saving || disabled) return;
     pending.current = true;
     setBusy(true);
     setActionError("");
@@ -97,11 +132,13 @@ export function TemplateDetail({ id }: { id: string }) {
       }
       if (kind === "duplicate") {
         setCopied(body);
+        onCopied?.(body);
         setCopying(false);
         toast.success(`${body.name} copied.`);
         // Keep the original draft intact. Opening the copy is an ordinary guarded link.
       } else {
         setTemplate(body);
+        onRestored?.(body);
         toast.success(`${body.name} restored.`);
       }
     } catch {
@@ -128,9 +165,9 @@ export function TemplateDetail({ id }: { id: string }) {
   if (!template) return null;
   return (
     <>
-      <h1 className="break-words text-3xl font-semibold">
+      <Heading className="break-words text-3xl font-semibold">
         {template.archived ? template.name : "Edit template"}
-      </h1>
+      </Heading>
       {template.archived ? (
         <>
           {template.description && (
@@ -142,7 +179,10 @@ export function TemplateDetail({ id }: { id: string }) {
             Archived — restore this template before editing, copying, or
             starting a workout. Existing workout history remains intact.
           </p>
-          <Button disabled={busy} onClick={() => void mutate("restore")}>
+          <Button
+            disabled={busy || disabled}
+            onClick={() => void mutate("restore")}
+          >
             {busy ? "Restoring…" : "Restore template"}
           </Button>
           {actionError && (
@@ -157,9 +197,9 @@ export function TemplateDetail({ id }: { id: string }) {
                 key={entry.position}
                 className="rounded-xl border border-border bg-card p-5"
               >
-                <h2 className="break-words font-semibold">
+                <ExerciseHeading className="break-words font-semibold">
                   {entry.position}. {entry.name}
-                </h2>
+                </ExerciseHeading>
                 <p className="mt-2">
                   {entry.set_count} working sets · Rep target:{" "}
                   {entry.rep_min === null
@@ -176,7 +216,7 @@ export function TemplateDetail({ id }: { id: string }) {
           <div className="my-5 space-y-3">
             <Button
               variant="outline"
-              disabled={busy || saving}
+              disabled={busy || saving || disabled}
               onClick={() => {
                 setCopyName(`${template.name} (copy)`);
                 setNameError("");
@@ -205,17 +245,16 @@ export function TemplateDetail({ id }: { id: string }) {
             key={version}
             initial={template}
             exercises={exercises}
-            disabled={busy}
+            disabled={busy || disabled}
             onDirtyChange={setDirty}
             onSavingChange={setSaving}
             onSaved={(saved) => {
               setDirty(false);
               setTemplate(saved);
+              onSaved?.(saved);
               setVersion((value) => value + 1);
             }}
-            onCancel={() => {
-              if (canLeave()) router.push("/templates");
-            }}
+            onCancel={cancel}
           />
         </>
       )}
@@ -256,7 +295,7 @@ export function TemplateDetail({ id }: { id: string }) {
             autoFocus
             id={`${dialogID}-name`}
             value={copyName}
-            disabled={busy}
+            disabled={busy || disabled}
             onChange={(event) => setCopyName(event.target.value)}
             aria-invalid={Boolean(nameError)}
             className="min-h-12 w-full rounded-lg border border-input bg-background px-3"
@@ -269,13 +308,13 @@ export function TemplateDetail({ id }: { id: string }) {
             </Alert>
           )}
           <div className="flex flex-wrap gap-3">
-            <Button type="submit" disabled={busy}>
+            <Button type="submit" disabled={busy || disabled}>
               {busy ? "Copying…" : "Create copy"}
             </Button>
             <Button
               type="button"
               variant="outline"
-              disabled={busy}
+              disabled={busy || disabled}
               onClick={() => setCopying(false)}
             >
               Cancel

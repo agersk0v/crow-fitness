@@ -140,7 +140,7 @@ The completed-set query adds captured `session_name` and stable `exercise_id` me
 
 ## Template editor and list actions (#48)
 
-List cards use a stretched real link with independent StartSession and Delete controls. The card's native confirmation dialog calls the existing archive endpoint and removes the successful archive from Active. Detail mounts TemplateForm immediately for active templates; archived detail stays read-only until restored. Copy uses the existing duplicate endpoint and preserves the mounted original draft.
+List cards now use inline accordion triggers (#55) with independent StartSession and Delete controls. The card's native confirmation dialog calls the existing archive endpoint and removes the successful archive from Active. Detail mounts TemplateForm immediately for active templates; archived detail stays read-only until restored. Copy uses the existing duplicate endpoint and preserves the mounted original draft.
 
 TemplateForm reports normalized draft changes and pending saves to detail. A successful save updates the baseline and remounts the saved form. A small navigation hook guards ordinary same-origin links, native beforeunload, and browser Back via a temporary same-URL history entry while changes/writes are pending; modified/new-tab links preserve the current editor. Cancel uses the same discard check. No backend/schema/dependency changes are needed.
 
@@ -151,3 +151,9 @@ Migration 008 adds `description text NOT NULL DEFAULT ''` to exercises/templates
 ## Inline workout history (#54)
 
 The session list controls one expanded workout ID. Native buttons expose expanded state and panel relationships; collapsed panels are hidden from view and keyboard navigation. Details mount only on first expansion and remain mounted while collapsed, reusing the existing abortable detail reader and retry behavior. A shared snapshot-exercise component serves inline and direct-link views with appropriate heading levels. Sets reorders existing grouped content above supporting workout metadata. Backend queries, filters, persistence, dependencies, and schema are unchanged.
+
+## Inline template editors (#55)
+
+TemplateCard lazily mounts the existing TemplateDetail editor in a labelled hidden panel, retaining component state during collapse/reopen. Detail supports inline heading levels and callbacks for successful save/copy/restore; the library reconciles summaries without reloading or unmounting unrelated drafts. Direct detail routes retain their existing behavior.
+
+Inline editors report dirty/pending state to the library. The library owns a single navigation guard, including collapsed editors, while inline detail disables its standalone guard. Active/Archived switching checks that guard. StartSession accepts a pre-start guard and reports pending state to disable edits until start resolves. Archive confirmation discloses draft loss for its own template. Native buttons/panels provide expanded state, keyboard access, and hidden-control isolation without new dependencies or backend/schema changes.

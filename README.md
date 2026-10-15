@@ -272,7 +272,7 @@ Sets history now groups matching completed sets by workout, then source exercise
 
 ## Direct template editing and card actions (#48)
 
-Template cards open `/templates/[id]` directly in the editor; Start workout and Delete are independent list-card actions. Delete calls the existing archive endpoint: its confirmation explicitly says the template is only archived, can be restored from Archived, and existing active/completed workouts remain intact. Archived cards open read-only detail with Restore template; restoration opens the editor. No permanent deletion is added.
+Template cards expand inline editors under #55; `/templates/[id]` remains available for direct links. Start workout and Delete are independent list-card actions. Delete calls the existing archive endpoint: its confirmation explicitly says the template is only archived, can be restored from Archived, and existing active/completed workouts remain intact. Archived cards expand read-only details with Restore template; restoration returns the template to Active. Direct archived-detail URLs remain available. No permanent deletion is added.
 
 The editor offers Save template, Cancel, and Copy workout. Saving stays in editing mode and resets the saved draft baseline; failed saves retain field values and ordering. Cancel and ordinary navigation ask before discarding unsaved changes. Browser refresh/exit uses the native unsaved-changes prompt, and browser Back is guarded while a draft is changed or a save/copy is pending. Modified/new-tab links keep the current draft mounted.
 
@@ -285,3 +285,9 @@ Exercises and active/archived templates have optional plain-text descriptions an
 The exercise and template create/update/read/list resources include `description` as a string. Omitted, null, empty, and whitespace-only input normalize to `""`; surrounding whitespace is trimmed, internal line breaks remain, and rich text/HTML is rendered literally. PUT replaces the full resource, so omission also clears a description. There is no separate description character limit; existing total JSON body limits remain 16 KiB for exercises and 64 KiB for templates. Wrong JSON types are rejected without truncation. Descriptions are not included in search matching.
 
 Migration 008 adds nonnull text columns with empty defaults, preserving existing records and migration history. Descriptions belong only to exercises/templates; active and completed snapshots are neither expanded nor rewritten. Card navigation and independent controls retain their destinations/behavior. No dependency or environment changes are required.
+
+## Inline template editing (#55)
+
+Click a template header to expand its editor on the list page. Start workout and Delete stay independently available on active cards. Copy workout appears only inside an expanded editor and copies the last saved configuration, with a notice about unsaved changes. Saving updates the card name/description in place; a copy is added to Active without replacing the original draft.
+
+Collapsing retains drafts and removes editor controls from keyboard navigation until reopened. Cancel confirms discarding edits and resets the inline editor to its last saved configuration. Leaving the list, switching Active/Archived, or starting a workout protects unsaved edits across all mounted editors, including collapsed ones. Delete still archives, explicitly warns about discarding that template’s draft, and preserves active/completed history. Archived accordions are read-only until Restore moves the template back to Active. Direct template URLs retain their existing editor and navigation behavior.
