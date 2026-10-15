@@ -1,0 +1,36 @@
+package devdata
+
+var templateDescriptions = map[string]string{
+	"Upper 1": "Upper-body routine with dips, pulls, cable accessories, and arm work.",
+	"Lower 1": "Squat-focused lower-body routine with hamstrings, calves, core, and arm accessories.",
+	"Upper 2": "Upper-body routine with pressing, rows, weighted pull-ups, and arm accessories.",
+	"Lower 2": "Hinge-focused lower-body routine with quadriceps, shoulder, core, and forearm accessories.",
+}
+var exerciseDescriptions = map[string]string{
+	"Dips":                             "Bodyweight pressing movement for chest and triceps.",
+	"Machine wide-grip pull-ups":       "Machine-assisted vertical pull using a wide grip.",
+	"Low-to-high cable fly":            "Bring the cable handles upward and together through a comfortable range.",
+	"Cable lateral raise":              "Cable shoulder accessory. Keep the movement controlled.",
+	"Close-grip cable row (lats)":      "Close-grip horizontal pull with the elbows near the torso.",
+	"Preacher curl":                    "Supported curl with the upper arms resting on a preacher pad.",
+	"JM press":                         "Triceps-focused pressing accessory using a comfortable elbow position.",
+	"Platz squat":                      "Squat variation with a quadriceps focus.",
+	"Leg curl":                         "Hamstring curl using the available leg-curl machine.",
+	"Dumbbell pullover":                "Pullover accessory using a dumbbell and a controlled range.",
+	"Decline crunches":                 "Core exercise on a decline bench.",
+	"Pushdowns":                        "Cable triceps extension with the elbows near the torso.",
+	"Calf raises":                      "Calf accessory with a controlled rise and lowering phase.",
+	"Wrist curls":                      "Forearm accessory using wrist flexion.",
+	"Hammer curls":                     "Curl with a neutral grip for biceps and forearms.",
+	"Smith bench press":                "Bench press using the Smith machine.",
+	"Chest-supported flared-elbow row": "Supported row with the elbows held wider from the torso.",
+	"OHP":                              "Overhead press for shoulders and triceps.",
+	"Neutral-grip weighted pull-up":    "Vertical pull using a neutral grip and optional added weight.",
+	"Face pulls":                       "Cable pull toward the face for rear-shoulder and upper-back work.",
+	"Overhead extensions":              "Overhead triceps extension using a cable or suitable attachment.",
+	"Incline dumbbell curls":           "Dumbbell curl performed seated on an incline bench.",
+	"RDL":                              "Romanian deadlift: a hip-hinge movement for hamstrings and glutes.",
+	"Leg extensions":                   "Quadriceps accessory using a leg-extension machine.",
+	"Pronated curls":                   "Curl with an overhand grip for forearm and arm work.",
+	"Reverse cable crossover":          "Rear-shoulder cable accessory with the arms opening outward.",
+}

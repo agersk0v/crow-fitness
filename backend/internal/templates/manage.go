@@ -63,7 +63,7 @@ func (p Postgres) Update(ctx context.Context, owner int64, id string, input Inpu
 	if err = lockExercises(ctx, tx, owner, input); err != nil {
 		return Template{}, err
 	}
-	if _, err = tx.Exec(ctx, "UPDATE templates SET name=$3 WHERE owner_id=$1 AND id=$2", owner, id, input.Name); err != nil {
+	if _, err = tx.Exec(ctx, "UPDATE templates SET name=$3,description=$4 WHERE owner_id=$1 AND id=$2", owner, id, input.Name, input.Description); err != nil {
 		return Template{}, err
 	}
 	if _, err = tx.Exec(ctx, "DELETE FROM template_exercises WHERE owner_id=$1 AND template_id=$2", owner, id); err != nil {
@@ -99,7 +99,7 @@ func (p Postgres) Duplicate(ctx context.Context, owner int64, id, name string) (
 		return Template{}, ErrArchived
 	}
 	var copyID string
-	if err = tx.QueryRow(ctx, "INSERT INTO templates(owner_id,name) VALUES($1,$2) RETURNING id::text", owner, name).Scan(&copyID); err != nil {
+	if err = tx.QueryRow(ctx, "INSERT INTO templates(owner_id,name,description) SELECT owner_id,$3,description FROM templates WHERE owner_id=$1 AND id=$2 RETURNING id::text", owner, id, name).Scan(&copyID); err != nil {
 		return Template{}, err
 	}
 	// Copy numeric values in PostgreSQL without client-side rounding. The parent

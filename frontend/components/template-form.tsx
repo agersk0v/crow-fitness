@@ -50,6 +50,7 @@ export function TemplateForm({
 }) {
   const formID = useId();
   const [name, setName] = useState(initial?.name ?? "");
+  const [description, setDescription] = useState(initial?.description ?? "");
   const [entries, setEntries] = useState<DraftEntry[]>(
     () =>
       initial?.exercises.map((entry) => ({
@@ -66,10 +67,12 @@ export function TemplateForm({
   const [fields, setFields] = useState<Record<string, string>>({});
   const current = JSON.stringify({
     name,
+    description,
     entries: entries.map(({ key, ...values }) => values),
   });
   const baseline = JSON.stringify({
     name: initial?.name ?? "",
+    description: initial?.description ?? "",
     entries:
       initial?.exercises.map((entry) => ({
         exercise_id: entry.exercise_id,
@@ -141,6 +144,7 @@ export function TemplateForm({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             name,
+            description,
             exercises: entries.map((entry) => ({
               exercise_id: entry.exercise_id,
               set_count: numeric(entry.set_count),
@@ -161,6 +165,7 @@ export function TemplateForm({
       }
       if (!initial) {
         setName("");
+        setDescription("");
         setEntries([]);
       }
       onSaved(body);
@@ -192,6 +197,21 @@ export function TemplateForm({
             placeholder="e.g. Push day"
           />
           {fieldError("name")}
+        </div>
+        <div>
+          <label
+            htmlFor={`${formID}-description`}
+            className="mb-2 block text-sm font-medium"
+          >
+            Description (optional)
+          </label>
+          <textarea
+            id={`${formID}-description`}
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+            rows={3}
+            className={`${inputClass} py-3`}
+          />
         </div>
         <p
           id={`${formID}-reorder-help`}

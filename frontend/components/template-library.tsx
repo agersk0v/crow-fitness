@@ -93,7 +93,7 @@ export function TemplateLibrary() {
               : "No templates yet. Create your first routine below."}
           </p>
         ) : (
-          <ul className="divide-y divide-border rounded-2xl border border-border bg-card">
+          <ul className="space-y-4">
             {templates.map((template) => (
               <TemplateCard
                 key={template.id}

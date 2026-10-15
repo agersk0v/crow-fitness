@@ -1,6 +1,7 @@
 export type Exercise = {
   id: string;
   name: string;
+  description: string;
   muscle_groups: string[];
 };
 export type TemplateReference = { id: string; name: string; archived: boolean };

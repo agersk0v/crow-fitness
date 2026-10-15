@@ -50,19 +50,22 @@ type InputEntry struct {
 	TargetRIR  *Decimal `json:"target_rir"`
 }
 type Input struct {
-	Name      string       `json:"name"`
-	Exercises []InputEntry `json:"exercises"`
+	Description string       `json:"description"`
+	Name        string       `json:"name"`
+	Exercises   []InputEntry `json:"exercises"`
 }
 type Template struct {
-	Archived  bool    `json:"archived"`
-	ID        string  `json:"id"`
-	Name      string  `json:"name"`
-	Exercises []Entry `json:"exercises"`
+	Description string  `json:"description"`
+	Archived    bool    `json:"archived"`
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Exercises   []Entry `json:"exercises"`
 }
 type Summary struct {
-	Archived bool   `json:"archived"`
-	ID       string `json:"id"`
-	Name     string `json:"name"`
+	Description string `json:"description"`
+	Archived    bool   `json:"archived"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
 }
 type ValidationError map[string]string
 
@@ -81,6 +84,7 @@ type Store interface {
 
 func Validate(input *Input) ValidationError {
 	input.Name = strings.TrimSpace(input.Name)
+	input.Description = strings.TrimSpace(input.Description)
 	fields := ValidationError{}
 	if input.Name == "" {
 		fields["name"] = "Enter a template name."
@@ -132,7 +136,7 @@ func (p Postgres) Create(ctx context.Context, owner int64, input Input) (Templat
 		return Template{}, err
 	}
 	var item Template
-	if err = tx.QueryRow(ctx, "INSERT INTO templates(owner_id,name) VALUES ($1,$2) RETURNING id::text,name", owner, input.Name).Scan(&item.ID, &item.Name); err != nil {
+	if err = tx.QueryRow(ctx, "INSERT INTO templates(owner_id,name,description) VALUES ($1,$2,$3) RETURNING id::text,name", owner, input.Name, input.Description).Scan(&item.ID, &item.Name); err != nil {
 		return Template{}, err
 	}
 	if err = insertEntries(ctx, tx, owner, item.ID, input.Exercises); err != nil {
@@ -148,7 +152,7 @@ func (p Postgres) Create(ctx context.Context, owner int64, input Input) (Templat
 	return item, nil
 }
 func (p Postgres) List(ctx context.Context, owner int64, archived bool) ([]Summary, error) {
-	rows, err := p.Pool.Query(ctx, "SELECT id::text,name,archived FROM templates WHERE owner_id=$1 AND archived=$2 ORDER BY id", owner, archived)
+	rows, err := p.Pool.Query(ctx, "SELECT id::text,name,archived,description FROM templates WHERE owner_id=$1 AND archived=$2 ORDER BY id", owner, archived)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +160,7 @@ func (p Postgres) List(ctx context.Context, owner int64, archived bool) ([]Summa
 	items := []Summary{}
 	for rows.Next() {
 		var item Summary
-		if err = rows.Scan(&item.ID, &item.Name, &item.Archived); err != nil {
+		if err = rows.Scan(&item.ID, &item.Name, &item.Archived, &item.Description); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
@@ -186,7 +190,7 @@ func (p Postgres) Get(ctx context.Context, owner int64, id string) (Template, er
 }
 func get(ctx context.Context, db queryer, owner int64, id string) (Template, error) {
 	var item Template
-	err := db.QueryRow(ctx, "SELECT id::text,name,archived FROM templates WHERE owner_id=$1 AND id=$2", owner, id).Scan(&item.ID, &item.Name, &item.Archived)
+	err := db.QueryRow(ctx, "SELECT id::text,name,archived,description FROM templates WHERE owner_id=$1 AND id=$2", owner, id).Scan(&item.ID, &item.Name, &item.Archived, &item.Description)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return item, ErrNotFound
 	}
