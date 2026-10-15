@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { TemplateCard } from "@/components/template-card";
 import { TemplateForm } from "@/components/template-form";
 import type { Exercise } from "@/lib/exercises";
 import type { TemplateSummary } from "@/lib/templates";
@@ -94,15 +95,15 @@ export function TemplateLibrary() {
         ) : (
           <ul className="divide-y divide-border rounded-2xl border border-border bg-card">
             {templates.map((template) => (
-              <li key={template.id}>
-                <Link
-                  href={`/templates/${template.id}`}
-                  className="block break-words px-5 py-4 font-medium text-highlight hover:bg-primary/5"
-                >
-                  {template.name}
-                  {template.archived ? " (Archived)" : ""} →
-                </Link>
-              </li>
+              <TemplateCard
+                key={template.id}
+                template={template}
+                onArchived={(id) =>
+                  setTemplates((current) =>
+                    current.filter((item) => item.id !== id),
+                  )
+                }
+              />
             ))}
           </ul>
         )}

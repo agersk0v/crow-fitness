@@ -137,3 +137,9 @@ Focused disposable-schema tests cover gates/confirmation, exact counts, ordinary
 The exercise name's real link uses a positioned pseudo-element to cover its card, with Edit/Delete controls layered above it; dialogs remain sibling interactive elements in the browser top layer. No click handler wraps or redirects form/button events. The shared navbar removes its Sets destination and treats all history routes/tabs as Workout history.
 
 The completed-set query adds captured `session_name` and stable `exercise_id` metadata without changing selection/order. The UI groups already filtered ordered rows by session ID and occurrence position, omitting empty groups and retaining repeated occurrences, captured names, and exact decimal weights. This avoids extra per-workout fetches or new backend rules. No schema/dependency changes are required.
+
+## Template editor and list actions (#48)
+
+List cards use a stretched real link with independent StartSession and Delete controls. The card's native confirmation dialog calls the existing archive endpoint and removes the successful archive from Active. Detail mounts TemplateForm immediately for active templates; archived detail stays read-only until restored. Copy uses the existing duplicate endpoint and preserves the mounted original draft.
+
+TemplateForm reports normalized draft changes and pending saves to detail. A successful save updates the baseline and remounts the saved form. A small navigation hook guards ordinary same-origin links, native beforeunload, and browser Back via a temporary same-URL history entry while changes/writes are pending; modified/new-tab links preserve the current editor. Cancel uses the same discard check. No backend/schema/dependency changes are needed.

@@ -6,7 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import type { Session } from "@/lib/sessions";
 
-export function StartSession({ templateID }: { templateID: string }) {
+export function StartSession({
+  templateID,
+  compact = false,
+}: {
+  templateID: string;
+  compact?: boolean;
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -42,7 +48,9 @@ export function StartSession({ templateID }: { templateID: string }) {
     }
   }
   return (
-    <div className="my-5 space-y-3">
+    <div
+      className={compact ? "relative z-10 min-w-0 space-y-3" : "my-5 space-y-3"}
+    >
       <Button disabled={busy} onClick={() => void start()}>
         {busy ? "Starting…" : "Start workout"}
       </Button>

@@ -1,11 +1,12 @@
 "use client";
+import Link from "next/link";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { StartSession } from "@/components/start-session";
 import { TemplateForm } from "@/components/template-form";
+import { useDraftNavigation } from "@/hooks/use-draft-navigation";
 import type { Exercise } from "@/lib/exercises";
 import type { Template } from "@/lib/templates";
 
@@ -18,12 +19,17 @@ export function TemplateDetail({ id }: { id: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
-  const [editing, setEditing] = useState(false);
-  const [action, setAction] = useState<"duplicate" | "archive" | null>(null);
+  const [copying, setCopying] = useState(false);
   const [copyName, setCopyName] = useState("");
   const [nameError, setNameError] = useState("");
   const [actionError, setActionError] = useState("");
   const [busy, setBusy] = useState(false);
+  const pending = useRef(false);
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [version, setVersion] = useState(0);
+  const [copied, setCopied] = useState<Template | null>(null);
+  const canLeave = useDraftNavigation(dirty, saving || busy);
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
@@ -65,17 +71,12 @@ export function TemplateDetail({ id }: { id: string }) {
     return () => controller.abort();
   }, [id, retry]);
   useEffect(() => {
-    if (action) modal.current?.showModal();
+    if (copying) modal.current?.showModal();
     else modal.current?.close();
-  }, [action]);
-  function open(next: "duplicate" | "archive") {
-    setCopyName(`${template?.name ?? ""} (copy)`);
-    setNameError("");
-    setActionError("");
-    setAction(next);
-  }
-  async function mutate(kind: "duplicate" | "archive" | "restore") {
-    if (busy) return;
+  }, [copying]);
+  async function mutate(kind: "duplicate" | "restore") {
+    if (pending.current || saving) return;
+    pending.current = true;
     setBusy(true);
     setActionError("");
     setNameError("");
@@ -95,19 +96,18 @@ export function TemplateDetail({ id }: { id: string }) {
         return;
       }
       if (kind === "duplicate") {
-        setAction(null);
-        toast.success(`${body.name} created.`);
-        router.push(`/templates/${body.id}`);
+        setCopied(body);
+        setCopying(false);
+        toast.success(`${body.name} copied.`);
+        // Keep the original draft intact. Opening the copy is an ordinary guarded link.
       } else {
         setTemplate(body);
-        setAction(null);
-        toast.success(
-          `${body.name} ${kind === "archive" ? "archived" : "restored"}.`,
-        );
+        toast.success(`${body.name} restored.`);
       }
     } catch {
       setActionError("Could not change template. Please try again.");
     } finally {
+      pending.current = false;
       setBusy(false);
     }
   }
@@ -117,189 +117,166 @@ export function TemplateDetail({ id }: { id: string }) {
       <Alert variant="destructive">
         <AlertTitle>Could not open template</AlertTitle>
         <AlertDescription>{error}</AlertDescription>
-        <Button className="mt-3" onClick={() => setRetry(retry + 1)}>
+        <Button
+          className="col-start-2 mt-3"
+          onClick={() => setRetry(retry + 1)}
+        >
           Try again
         </Button>
       </Alert>
     );
   if (!template) return null;
-  if (editing)
-    return (
-      <>
-        <h1 className="text-3xl font-semibold">Edit template</h1>
-        <TemplateForm
-          initial={template}
-          exercises={exercises}
-          onSaved={(saved) => {
-            setTemplate(saved);
-            setEditing(false);
-          }}
-          onCancel={() => {
-            setEditing(false);
-            setRetry(retry + 1);
-          }}
-        />
-      </>
-    );
   return (
     <>
-      <h1 className="break-words text-4xl font-semibold">{template.name}</h1>
-      {template.archived && (
-        <p className="mt-3 rounded-lg border border-border bg-primary/5 p-3 text-sm">
-          Archived — restore this template before editing, duplicating, or
-          starting a workout. Exercise references are preserved.
-        </p>
-      )}
-      {!template.archived && <StartSession templateID={template.id} />}
-      <div className="my-5 flex flex-wrap gap-3">
-        {template.archived ? (
+      <h1 className="break-words text-3xl font-semibold">
+        {template.archived ? template.name : "Edit template"}
+      </h1>
+      {template.archived ? (
+        <>
+          <p className="my-4 text-muted-foreground">
+            Archived — restore this template before editing, copying, or
+            starting a workout. Existing workout history remains intact.
+          </p>
           <Button disabled={busy} onClick={() => void mutate("restore")}>
             {busy ? "Restoring…" : "Restore template"}
           </Button>
-        ) : (
-          <>
-            <Button onClick={() => setEditing(true)}>Edit template</Button>
-            <Button variant="outline" onClick={() => open("duplicate")}>
-              Duplicate template
+          {actionError && (
+            <Alert variant="destructive" className="mt-4">
+              <AlertTitle>Could not restore template</AlertTitle>
+              <AlertDescription>{actionError}</AlertDescription>
+            </Alert>
+          )}
+          <ol className="mt-6 space-y-4">
+            {template.exercises.map((entry) => (
+              <li
+                key={entry.position}
+                className="rounded-xl border border-border bg-card p-5"
+              >
+                <h2 className="break-words font-semibold">
+                  {entry.position}. {entry.name}
+                </h2>
+                <p className="mt-2">
+                  {entry.set_count} working sets · Rep target:{" "}
+                  {entry.rep_min === null
+                    ? "Not specified"
+                    : `${entry.rep_min}–${entry.rep_max}`}{" "}
+                  · RIR: {entry.target_rir ?? "Not specified"}
+                </p>
+              </li>
+            ))}
+          </ol>
+        </>
+      ) : (
+        <>
+          <div className="my-5 space-y-3">
+            <Button
+              variant="outline"
+              disabled={busy || saving}
+              onClick={() => {
+                setCopyName(`${template.name} (copy)`);
+                setNameError("");
+                setActionError("");
+                setCopying(true);
+              }}
+            >
+              Copy workout
             </Button>
-            <Button variant="outline" onClick={() => open("archive")}>
-              Archive template
-            </Button>
-          </>
-        )}
-      </div>
-      {!action && actionError && (
-        <Alert variant="destructive">
-          <AlertTitle>Could not change template</AlertTitle>
-          <AlertDescription>{actionError}</AlertDescription>
-        </Alert>
+            {dirty && (
+              <p className="text-sm text-muted-foreground">
+                Copy workout uses the last saved configuration. Save first to
+                include your unsaved changes.
+              </p>
+            )}
+            {copied && (
+              <Link
+                href={`/templates/${copied.id}`}
+                className="block break-words text-highlight underline"
+              >
+                Edit copied workout: {copied.name}
+              </Link>
+            )}
+          </div>
+          <TemplateForm
+            key={version}
+            initial={template}
+            exercises={exercises}
+            disabled={busy}
+            onDirtyChange={setDirty}
+            onSavingChange={setSaving}
+            onSaved={(saved) => {
+              setDirty(false);
+              setTemplate(saved);
+              setVersion((value) => value + 1);
+            }}
+            onCancel={() => {
+              if (canLeave()) router.push("/templates");
+            }}
+          />
+        </>
       )}
-      <p className="mb-6 text-muted-foreground">
-        Targets apply to every working set of each exercise. Warm-up sets are
-        excluded.
-      </p>
-      <ol className="space-y-4">
-        {template.exercises.map((entry) => (
-          <li
-            key={entry.position}
-            className="rounded-2xl border border-border bg-card p-5"
-          >
-            <h2 className="break-words text-xl font-semibold">
-              {entry.position}. {entry.name}
-            </h2>
-            <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-              <dt>Working sets</dt>
-              <dd>{entry.set_count}</dd>
-              <dt>Rep target</dt>
-              <dd>
-                {entry.rep_min === null
-                  ? "Not specified"
-                  : entry.rep_min === entry.rep_max
-                    ? entry.rep_min
-                    : `${entry.rep_min}–${entry.rep_max}`}
-              </dd>
-              <dt>Target RIR</dt>
-              <dd>{entry.target_rir ?? "Not specified"}</dd>
-            </dl>
-          </li>
-        ))}
-      </ol>
       <dialog
         ref={modal}
         aria-labelledby={`${dialogID}-title`}
         onCancel={(event) => {
-          event.preventDefault();
-          if (!busy) setAction(null);
+          if (pending.current) event.preventDefault();
+          else setCopying(false);
         }}
-        onClose={() => setAction(null)}
-        className="m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-2xl border border-border bg-card p-5 text-foreground shadow-xl backdrop:bg-black/60"
+        onClose={() => setCopying(false)}
+        className="m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-2xl border border-border bg-card p-5 text-foreground backdrop:bg-black/60"
       >
-        <h2
-          id={`${dialogID}-title`}
-          className="break-words text-xl font-semibold"
-        >
-          {action === "duplicate"
-            ? "Duplicate template"
-            : `Archive ${template.name}?`}
+        <h2 id={`${dialogID}-title`} className="text-xl font-semibold">
+          Copy workout
         </h2>
-        {action === "duplicate" ? (
-          <form
-            className="mt-4 space-y-4"
-            onSubmit={(event: FormEvent<HTMLFormElement>) => {
-              event.preventDefault();
-              void mutate("duplicate");
-            }}
-            noValidate
+        <p className="mt-3 text-sm text-muted-foreground">
+          This creates an independent copy of the last saved template.{" "}
+          {dirty
+            ? "Unsaved edits are not included; your current draft will stay here."
+            : ""}
+        </p>
+        <form
+          className="mt-4 space-y-4"
+          noValidate
+          onSubmit={(event: FormEvent<HTMLFormElement>) => {
+            event.preventDefault();
+            void mutate("duplicate");
+          }}
+        >
+          <label
+            htmlFor={`${dialogID}-name`}
+            className="block text-sm font-medium"
           >
-            <label
-              htmlFor={`${dialogID}-name`}
-              className="block text-sm font-medium"
-            >
-              Name for the copy
-            </label>
-            <input
-              autoFocus
-              id={`${dialogID}-name`}
-              value={copyName}
+            Name for the copy
+          </label>
+          <input
+            autoFocus
+            id={`${dialogID}-name`}
+            value={copyName}
+            disabled={busy}
+            onChange={(event) => setCopyName(event.target.value)}
+            aria-invalid={Boolean(nameError)}
+            className="min-h-12 w-full rounded-lg border border-input bg-background px-3"
+          />
+          {nameError && <p className="text-sm text-destructive">{nameError}</p>}
+          {actionError && (
+            <Alert variant="destructive">
+              <AlertTitle>Could not copy workout</AlertTitle>
+              <AlertDescription>{actionError}</AlertDescription>
+            </Alert>
+          )}
+          <div className="flex flex-wrap gap-3">
+            <Button type="submit" disabled={busy}>
+              {busy ? "Copying…" : "Create copy"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
               disabled={busy}
-              onChange={(event) => setCopyName(event.target.value)}
-              aria-invalid={Boolean(nameError)}
-              aria-describedby={nameError ? `${dialogID}-error` : undefined}
-              className="min-h-12 w-full rounded-lg border border-input bg-background px-3 text-base focus-visible:outline-2 focus-visible:outline-ring"
-            />
-            {nameError && (
-              <p id={`${dialogID}-error`} className="text-sm text-destructive">
-                {nameError}
-              </p>
-            )}
-            {actionError && (
-              <Alert variant="destructive">
-                <AlertTitle>Could not duplicate template</AlertTitle>
-                <AlertDescription>{actionError}</AlertDescription>
-              </Alert>
-            )}
-            <div className="flex flex-wrap gap-3">
-              <Button type="submit" disabled={busy}>
-                {busy ? "Duplicating…" : "Create copy"}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={busy}
-                onClick={() => setAction(null)}
-              >
-                Cancel
-              </Button>
-            </div>
-          </form>
-        ) : (
-          <div className="mt-4 space-y-4">
-            <p className="break-words text-sm text-muted-foreground">
-              Archive “{template.name}”? It will be hidden from the active list.
-              You can inspect and restore it from Archived. Its exercise
-              references will remain.
-            </p>
-            {actionError && (
-              <Alert variant="destructive">
-                <AlertTitle>Could not archive template</AlertTitle>
-                <AlertDescription>{actionError}</AlertDescription>
-              </Alert>
-            )}
-            <div className="flex flex-wrap gap-3">
-              <Button
-                autoFocus
-                variant="outline"
-                disabled={busy}
-                onClick={() => setAction(null)}
-              >
-                Cancel
-              </Button>
-              <Button disabled={busy} onClick={() => void mutate("archive")}>
-                {busy ? "Archiving…" : "Confirm archive"}
-              </Button>
-            </div>
+              onClick={() => setCopying(false)}
+            >
+              Cancel
+            </Button>
           </div>
-        )}
+        </form>
       </dialog>
     </>
   );

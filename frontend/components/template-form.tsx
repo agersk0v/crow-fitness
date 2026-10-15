@@ -1,5 +1,5 @@
 "use client";
-import { useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import {
   DndContext,
@@ -37,12 +37,16 @@ export function TemplateForm({
   disabled = false,
   onSaved,
   onCancel,
+  onDirtyChange,
+  onSavingChange,
 }: {
   exercises: Exercise[];
   initial?: Template;
   disabled?: boolean;
   onSaved: (template: Template) => void;
   onCancel?: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
+  onSavingChange?: (saving: boolean) => void;
 }) {
   const formID = useId();
   const [name, setName] = useState(initial?.name ?? "");
@@ -60,6 +64,27 @@ export function TemplateForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [fields, setFields] = useState<Record<string, string>>({});
+  const current = JSON.stringify({
+    name,
+    entries: entries.map(({ key, ...values }) => values),
+  });
+  const baseline = JSON.stringify({
+    name: initial?.name ?? "",
+    entries:
+      initial?.exercises.map((entry) => ({
+        exercise_id: entry.exercise_id,
+        set_count: String(entry.set_count),
+        rep_min: entry.rep_min === null ? "" : String(entry.rep_min),
+        rep_max: entry.rep_max === null ? "" : String(entry.rep_max),
+        target_rir: entry.target_rir === null ? "" : String(entry.target_rir),
+      })) ?? [],
+  });
+  useEffect(() => {
+    onDirtyChange?.(current !== baseline);
+  }, [current, baseline, onDirtyChange]);
+  useEffect(() => {
+    onSavingChange?.(saving);
+  }, [saving, onSavingChange]);
   function update(key: string, field: keyof DraftEntry, value: string) {
     setEntries((current) =>
       current.map((entry) =>
@@ -149,7 +174,7 @@ export function TemplateForm({
 
   return (
     <form onSubmit={save} noValidate className="mt-5 space-y-5">
-      <fieldset disabled={saving} className="min-w-0 space-y-5">
+      <fieldset disabled={saving || disabled} className="min-w-0 space-y-5">
         <div>
           <label
             htmlFor={`${formID}-name`}
@@ -353,7 +378,7 @@ export function TemplateForm({
         <Button
           type="button"
           variant="outline"
-          disabled={saving}
+          disabled={saving || disabled}
           onClick={onCancel}
         >
           Cancel
