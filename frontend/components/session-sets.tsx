@@ -88,6 +88,14 @@ export function SessionSets({
   plannedCount: number;
 }) {
   const formID = useId();
+  const alternativesID = `session-${sessionID}-exercise-${position}-alternatives`;
+  const [alternativesOpen, setAlternativesOpen] = useState(false);
+  function acceptSelection(saved: Session) {
+    onSelected(saved, position);
+    requestAnimationFrame(() =>
+      document.getElementById(`${alternativesID}-trigger`)?.focus(),
+    );
+  }
   const [switchTo, setSwitchTo] = useState<string | null>(null);
   const [switchPending, setSwitchPending] = useState<string | null>(null);
   const [switchBusy, setSwitchBusy] = useState(false);
@@ -291,7 +299,7 @@ export function SessionSets({
         saved.exercises.find((e) => e.position === position)
           ?.selection_revision !== revision
       ) {
-        onSelected(saved, position);
+        acceptSelection(saved);
         return;
       }
       setSets(saved.sets.filter((set) => set.exercise_position === position));
@@ -414,7 +422,7 @@ export function SessionSets({
       });
       if (response.ok) {
         const saved: Session = await response.json();
-        onSelected(saved, position);
+        acceptSelection(saved);
         return;
       }
       const body = await response.json();
@@ -432,7 +440,7 @@ export function SessionSets({
             ?.selection_revision === revision
         )
           throw new Error();
-        onSelected(saved, position);
+        acceptSelection(saved);
         return;
       }
       if (response.status >= 500 || switchPending) {
@@ -462,44 +470,96 @@ export function SessionSets({
   }
   return (
     <div className="space-y-4">
-      <h2
-        aria-label={exercise.name}
-        className="min-w-0 break-words text-xl font-semibold"
-      >
-        {(exercise.choices?.length ?? 0) > 1 ? (
-          <span className="group relative block">
-            <select
-              id={`${formID}-choice`}
-              aria-label="Exercise choice"
-              value={exercise.exercise_id}
-              disabled={disabled || switchingBlocked || sets.length > 0}
-              className="min-h-11 w-full min-w-0 cursor-pointer appearance-none rounded-md border-0 bg-transparent py-1 pr-7 text-xl font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
-              onChange={(e) => {
-                const target = e.target.value;
-                if (target === exercise.exercise_id) return;
-                if (hasDraft) setSwitchTo(target);
-                else void selectExercise(target);
-              }}
-            >
-              {exercise.choices!.map((c) => (
-                <option
-                  key={c.exercise_id}
-                  value={c.exercise_id}
-                  className="bg-popover text-popover-foreground"
-                >
-                  {c.name}
-                </option>
-              ))}
-            </select>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="min-w-0 flex-1 break-words text-xl font-semibold">
+          {exercise.name}
+        </h2>
+        {(exercise.choices?.length ?? 0) > 1 && (
+          <Button
+            id={`${alternativesID}-trigger`}
+            type="button"
+            variant="ghost"
+            size="sm"
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                setAlternativesOpen(false);
+              }
+            }}
+            aria-expanded={alternativesOpen}
+            aria-controls={alternativesID}
+            disabled={disabled || switchingBlocked || sets.length > 0}
+            onClick={() => setAlternativesOpen((open) => !open)}
+          >
+            {alternativesOpen ? "Hide alternatives" : "Change exercise"}
             <ChevronDown
               aria-hidden="true"
-              className="pointer-events-none absolute right-0 top-1/2 size-4 -translate-y-1/2 text-muted-foreground opacity-50 group-hover:opacity-100"
+              className={`size-4 ${alternativesOpen ? "rotate-180" : ""}`}
             />
-          </span>
-        ) : (
-          exercise.name
+          </Button>
         )}
-      </h2>
+      </div>
+      {(exercise.choices?.length ?? 0) > 1 && (
+        <div
+          id={alternativesID}
+          hidden={!alternativesOpen}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              setAlternativesOpen(false);
+              document.getElementById(`${alternativesID}-trigger`)?.focus();
+            }
+          }}
+        >
+          <ul
+            aria-label="Exercise alternatives"
+            className="divide-y divide-border rounded-xl border border-border"
+          >
+            {exercise.choices!.map((choice, index) => {
+              const selected = choice.exercise_id === exercise.exercise_id;
+              return (
+                <li key={choice.exercise_id}>
+                  <button
+                    type="button"
+                    aria-label={`Use ${choice.name}`}
+                    disabled={
+                      selected ||
+                      disabled ||
+                      switchingBlocked ||
+                      sets.length > 0
+                    }
+                    className="flex min-h-12 w-full cursor-pointer flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-3 text-left hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-default disabled:hover:bg-transparent"
+                    onClick={() => {
+                      if (hasDraft) setSwitchTo(choice.exercise_id);
+                      else void selectExercise(choice.exercise_id);
+                    }}
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block break-words font-medium">
+                        {choice.name}
+                      </span>
+                      <span className="mt-1 block text-sm text-muted-foreground">
+                        {choice.set_count}{" "}
+                        {choice.set_count === 1 ? "set" : "sets"}
+                        {choice.rep_min !== null &&
+                          ` · ${choice.rep_min === choice.rep_max ? choice.rep_min : `${choice.rep_min}–${choice.rep_max}`} reps`}
+                        {choice.target_rir !== null &&
+                          ` · RIR ${choice.target_rir}`}
+                        {index === 0 && " · Default"}
+                      </span>
+                    </span>
+                    {selected && (
+                      <span className="text-xs font-medium text-highlight">
+                        Selected
+                      </span>
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
       {children}
       {(exercise.choices?.length ?? 0) > 1 && (
         <div className="space-y-2">
