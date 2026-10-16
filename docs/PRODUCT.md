@@ -177,7 +177,7 @@ Group Sets results by captured workout and then exercise occurrence, with local 
 
 ## Approved template editor/actions (#48)
 
-The owner confirmed that Copy workout copies saved configuration, explains any unsaved edits, and never silently saves/discards the draft. Cancel/navigation confirms discarding changed drafts; Cancel returns to the list. Template cards expand inline editors under #55, with independent Start workout/Delete actions; direct detail URLs remain editable. Delete is a label for archiving only, and its popup explains restoration and preserved active/completed history. Archived/Restore behavior remains. Copy workout lives in the editor, creates an independent named template, preserves the original draft, and offers a link to edit the copy. Saves retain the existing template identity and stay editable; drag/input/error behavior remains intact.
+The owner confirmed that Copy workout copies saved configuration, explains any unsaved edits, and never silently saves/discards the draft. Cancel/navigation confirms discarding changed drafts; Cancel returns to the list. Template cards show their exercises by default under #55, with Edit workout and Start workout actions; Copy workout and Delete live on the dedicated edit page. Delete is a label for archiving only, and its popup explains restoration and preserved active/completed history. Archived/Restore behavior remains. Copy workout lives in the editor, creates an independent named template, preserves the original draft, and offers a link to edit the copy. Saves retain the existing template identity and stay editable; drag/input/error behavior remains intact.
 
 ## Optional descriptions and individual cards (#52)
 
@@ -189,8 +189,8 @@ The owner confirmed a single-open accordion: opening a completed workout collaps
 
 Sets emphasizes captured exercise names and exact logged set values above smaller workout-name/date metadata. Grouping by workout and occurrence, query filtering, source order, and read-only behavior remain unchanged.
 
-## Inline template editors (#55)
+## Template overview and dedicated editing (#55, revised)
 
-Template headers expand/collapse inline editors instead of navigating away. Saved name, description, ordered exercises, working-set counts, rep ranges, and RIR remain editable with the existing validation, save, and drag behavior. Copy workout is visible only in expanded active editors and continues to copy saved configuration while preserving drafts. Saving updates the card summary without leaving the list.
+The owner replaced the accordion proposal with always-visible exercise lists. Each template card shows its name, optional description, and every ordered exercise occurrence with working-set counts and compact optional rep/RIR targets. Unset targets are omitted. Active cards have exactly two actions: Edit workout and Start workout, with Start visually primary. Templates do not expand into editors on the list.
 
-Collapsed editors retain their drafts. One list-level guard protects navigation and list-view changes across all edited templates, including collapsed drafts. Starting a workout checks the same guard; editors are disabled while starting. Inline Cancel confirms discard and resets the editor to saved values; direct-detail Cancel still returns to the list. Archiving warns when its template has unsaved edits and removes only that card; restoring an archived template returns it to Active. Archived details remain read-only before restoration. Existing template URLs keep working.
+Edit workout opens the dedicated editor with Save, Cancel, Copy workout, and Delete. Existing copy and discard-confirmation rules continue to apply. Delete only archives, explicitly confirms restoration and snapshot preservation, warns about unsaved changes, and returns to the list after success. Archived cards retain a View workout link to read-only detail with Restore; editing, starting, copying, and deleting remain unavailable until restored.

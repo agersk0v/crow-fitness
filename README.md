@@ -272,7 +272,7 @@ Sets history now groups matching completed sets by workout, then source exercise
 
 ## Direct template editing and card actions (#48)
 
-Template cards expand inline editors under #55; `/templates/[id]` remains available for direct links. Start workout and Delete are independent list-card actions. Delete calls the existing archive endpoint: its confirmation explicitly says the template is only archived, can be restored from Archived, and existing active/completed workouts remain intact. Archived cards expand read-only details with Restore template; restoration returns the template to Active. Direct archived-detail URLs remain available. No permanent deletion is added.
+Template cards show every ordered exercise and compact set/optional rep/RIR targets by default. Active cards have Edit workout and Start workout actions; Edit opens `/templates/[id]`. Copy workout and Delete live on the edit page. Delete confirms that it only archives the template, can be restored from Archived, and preserves active/completed workouts. Archived cards show their exercises and a View workout link to read-only detail with Restore template. No permanent deletion is added.
 
 The editor offers Save template, Cancel, and Copy workout. Saving stays in editing mode and resets the saved draft baseline; failed saves retain field values and ordering. Cancel and ordinary navigation ask before discarding unsaved changes. Browser refresh/exit uses the native unsaved-changes prompt, and browser Back is guarded while a draft is changed or a save/copy is pending. Modified/new-tab links keep the current draft mounted.
 
@@ -286,8 +286,8 @@ The exercise and template create/update/read/list resources include `description
 
 Migration 008 adds nonnull text columns with empty defaults, preserving existing records and migration history. Descriptions belong only to exercises/templates; active and completed snapshots are neither expanded nor rewritten. Card navigation and independent controls retain their destinations/behavior. No dependency or environment changes are required.
 
-## Inline template editing (#55)
+## Template overview cards (#55)
 
-Click a template header to expand its editor on the list page. Start workout and Delete sit beside the template name and stay independently available on active cards. Accordion headers show a pointer cursor on hover. Copy workout appears only inside an expanded editor and copies the last saved configuration, with a notice about unsaved changes. Saving updates the card name/description in place; a copy is added to Active without replacing the original draft.
+The template list is a read-only overview with names, optional descriptions, and all exercises in source order. Each occurrence shows working-set counts and only the rep/RIR targets that are set, including zero RIR. Each card loads its configuration through the existing detail endpoint, with independent loading and retry states. Active cards offer exactly Edit workout and Start workout; there are no template accordions or list-side Copy/Delete controls.
 
-Collapsing retains drafts and removes editor controls from keyboard navigation until reopened. Cancel confirms discarding edits and resets the inline editor to its last saved configuration. Leaving the list, switching Active/Archived, or starting a workout protects unsaved edits across all mounted editors, including collapsed ones. Delete still archives, explicitly warns about discarding that template’s draft, and preserves active/completed history. Archived accordions are read-only until Restore moves the template back to Active. Direct template URLs retain their existing editor and navigation behavior.
+The dedicated editor keeps Save, Cancel, Copy workout, and Delete. Copy still uses saved configuration and preserves unsaved edits. Delete uses the existing archive confirmation, warns about unsaved changes, and returns to the list on success; failures retain the editor draft for retry. Archived templates remain read-only until restored. Existing validation, drag reordering, navigation guards, and saved workout snapshots are preserved.

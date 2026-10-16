@@ -3,11 +3,7 @@ import { useEffect, useRef } from "react";
 
 // Guard ordinary in-app links and browser navigation without changing Next's
 // routing. Modified/new-tab links leave the current draft mounted.
-export function useDraftNavigation(
-  dirty: boolean,
-  saving: boolean,
-  enabled = true,
-) {
+export function useDraftNavigation(dirty: boolean, saving: boolean) {
   const state = useRef({ dirty, saving });
   state.current = { dirty, saving };
   function canLeave() {
@@ -18,7 +14,6 @@ export function useDraftNavigation(
     return confirmed;
   }
   useEffect(() => {
-    if (!enabled) return;
     function click(event: MouseEvent) {
       if (
         event.button !== 0 ||
@@ -58,9 +53,9 @@ export function useDraftNavigation(
       document.removeEventListener("click", click, true);
       window.removeEventListener("beforeunload", unload);
     };
-  }, [enabled]);
+  }, []);
   useEffect(() => {
-    if (!enabled || (!dirty && !saving)) return;
+    if (!dirty && !saving) return;
     const marker = "template-draft";
     history.pushState(
       { ...history.state, draftGuard: marker },
@@ -86,6 +81,6 @@ export function useDraftNavigation(
       )
         history.back();
     };
-  }, [enabled, dirty || saving]);
+  }, [dirty || saving]);
   return canLeave;
 }

@@ -1,41 +1,14 @@
 "use client";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { TemplateCard } from "@/components/template-card";
 import { TemplateForm } from "@/components/template-form";
 import type { Exercise } from "@/lib/exercises";
-import { useDraftNavigation } from "@/hooks/use-draft-navigation";
-import type { TemplateEditorState } from "@/components/template-detail";
 import type { TemplateSummary } from "@/lib/templates";
 
 export function TemplateLibrary() {
-  const [editorStates, setEditorStates] = useState<
-    Record<string, TemplateEditorState>
-  >({});
-  const [starting, setStarting] = useState(false);
-  const changeEditorState = useCallback(
-    (id: string, state: TemplateEditorState | null) => {
-      setEditorStates((current) => {
-        if (
-          state &&
-          current[id]?.dirty === state.dirty &&
-          current[id]?.busy === state.busy
-        )
-          return current;
-        const next = { ...current };
-        if (state) next[id] = state;
-        else delete next[id];
-        return next;
-      });
-    },
-    [],
-  );
-  const canLeave = useDraftNavigation(
-    Object.values(editorStates).some((state) => state.dirty),
-    starting || Object.values(editorStates).some((state) => state.busy),
-  );
   const [templates, setTemplates] = useState<TemplateSummary[]>([]);
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [archived, setArchived] = useState(false);
@@ -91,18 +64,14 @@ export function TemplateLibrary() {
           <Button
             variant={archived ? "outline" : "default"}
             aria-pressed={!archived}
-            onClick={() => {
-              if (archived && canLeave()) setArchived(false);
-            }}
+            onClick={() => setArchived(false)}
           >
             Active
           </Button>
           <Button
             variant={archived ? "default" : "outline"}
             aria-pressed={archived}
-            onClick={() => {
-              if (!archived && canLeave()) setArchived(true);
-            }}
+            onClick={() => setArchived(true)}
           >
             Archived
           </Button>
@@ -126,34 +95,7 @@ export function TemplateLibrary() {
         ) : (
           <ul className="space-y-4">
             {templates.map((template) => (
-              <TemplateCard
-                key={template.id}
-                template={template}
-                canLeave={canLeave}
-                starting={starting}
-                onStartingChange={setStarting}
-                onEditorStateChange={changeEditorState}
-                onSaved={(saved) =>
-                  setTemplates((current) =>
-                    current.map((item) =>
-                      item.id === saved.id ? saved : item,
-                    ),
-                  )
-                }
-                onCopied={(copy) =>
-                  setTemplates((current) => [...current, copy])
-                }
-                onRestored={(saved) =>
-                  setTemplates((current) =>
-                    current.filter((item) => item.id !== saved.id),
-                  )
-                }
-                onArchived={(id) =>
-                  setTemplates((current) =>
-                    current.filter((item) => item.id !== id),
-                  )
-                }
-              />
+              <TemplateCard key={template.id} template={template} />
             ))}
           </ul>
         )}
@@ -180,7 +122,7 @@ export function TemplateLibrary() {
           )}
           <TemplateForm
             exercises={exercises}
-            disabled={starting || loading || Boolean(error)}
+            disabled={loading || Boolean(error)}
             onSaved={(template) =>
               setTemplates((current) => [...current, template])
             }

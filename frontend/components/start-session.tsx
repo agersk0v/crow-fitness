@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -9,25 +9,16 @@ import type { Session } from "@/lib/sessions";
 export function StartSession({
   templateID,
   compact = false,
-  beforeStart,
-  disabled = false,
-  onBusyChange,
 }: {
   templateID: string;
   compact?: boolean;
-  beforeStart?: () => boolean;
-  disabled?: boolean;
-  onBusyChange?: (busy: boolean) => void;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [active, setActive] = useState<Session | null>(null);
-  useEffect(() => {
-    onBusyChange?.(busy);
-  }, [busy, onBusyChange]);
   async function start() {
-    if (busy || disabled || (beforeStart && !beforeStart())) return;
+    if (busy) return;
     setBusy(true);
     setError("");
     setActive(null);
@@ -58,15 +49,9 @@ export function StartSession({
   }
   return (
     <div
-      className={
-        compact ? "relative z-10 w-28 min-w-0 space-y-3" : "my-5 space-y-3"
-      }
+      className={compact ? "relative z-10 min-w-0 space-y-3" : "my-5 space-y-3"}
     >
-      <Button
-        size={compact ? "sm" : "default"}
-        disabled={busy || disabled}
-        onClick={() => void start()}
-      >
+      <Button disabled={busy} onClick={() => void start()}>
         {busy ? "Starting…" : "Start workout"}
       </Button>
       {active && (
