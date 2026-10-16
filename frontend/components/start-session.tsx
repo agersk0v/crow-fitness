@@ -9,9 +9,11 @@ import type { Session } from "@/lib/sessions";
 export function StartSession({
   templateID,
   compact = false,
+  prominent = false,
 }: {
   templateID: string;
   compact?: boolean;
+  prominent?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -49,9 +51,22 @@ export function StartSession({
   }
   return (
     <div
-      className={compact ? "relative z-10 min-w-0 space-y-3" : "my-5 space-y-3"}
+      className={
+        prominent
+          ? "w-40 min-w-0 shrink-0 space-y-3 break-words sm:w-44"
+          : compact
+            ? "relative z-10 min-w-0 space-y-3"
+            : "my-5 space-y-3"
+      }
     >
-      <Button disabled={busy} onClick={() => void start()}>
+      <Button
+        size={prominent ? "lg" : "default"}
+        className={
+          prominent ? "min-h-12 w-full text-base font-semibold" : undefined
+        }
+        disabled={busy}
+        onClick={() => void start()}
+      >
         {busy ? "Starting…" : "Start workout"}
       </Button>
       {active && (

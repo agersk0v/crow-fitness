@@ -17,6 +17,13 @@ export function ArchiveTemplate({
   onArchived: () => void;
   onBusyChange: (busy: boolean) => void;
 }) {
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     onBusyChange(busy);
@@ -42,15 +49,16 @@ export function ArchiveTemplate({
       });
       if (!response.ok) throw new Error();
       archived = true;
+      if (!mounted.current) return;
       setConfirming(false);
       onArchived();
       toast.success(`${template.name} archived.`);
     } catch {
-      setError("Could not archive this template. Please try again.");
+      if (mounted.current)
+        setError("Could not archive this template. Please try again.");
     } finally {
-      // Keep the editor guarded until successful archive navigation unmounts it.
-      // Releasing the guard here could pop its history marker during router.push.
-      if (!archived) {
+      // Keep the archived editor disabled until navigation unmounts it.
+      if (!archived && mounted.current) {
         pending.current = false;
         setBusy(false);
       }

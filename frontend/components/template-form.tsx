@@ -32,7 +32,8 @@ export function TemplateForm({
   initial,
   disabled = false,
   onSaved,
-  onCancel,
+  id,
+  externalSave = false,
   onDirtyChange,
   onSavingChange,
 }: {
@@ -40,7 +41,8 @@ export function TemplateForm({
   initial?: Template;
   disabled?: boolean;
   onSaved: (template: Template) => void;
-  onCancel?: () => void;
+  id?: string;
+  externalSave?: boolean;
   onDirtyChange?: (dirty: boolean) => void;
   onSavingChange?: (saving: boolean) => void;
 }) {
@@ -170,7 +172,12 @@ export function TemplateForm({
 
   return (
     <>
-      <form onSubmit={save} noValidate className="mt-5 space-y-5">
+      <form
+        id={id ?? formID}
+        onSubmit={save}
+        noValidate
+        className="mt-5 space-y-5"
+      >
         <fieldset disabled={saving || disabled} className="min-w-0 space-y-5">
           <div>
             <label
@@ -369,21 +376,13 @@ export function TemplateForm({
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
-        <Button
-          type="submit"
-          disabled={saving || disabled || exercises.length === 0}
-          className="min-h-12 w-full sm:w-auto"
-        >
-          {saving ? "Saving…" : "Save template"}
-        </Button>
-        {onCancel && (
+        {!externalSave && (
           <Button
-            type="button"
-            variant="outline"
-            disabled={saving || disabled}
-            onClick={onCancel}
+            type="submit"
+            disabled={saving || disabled || exercises.length === 0}
+            className="min-h-12 w-full sm:w-auto"
           >
-            Cancel
+            {saving ? "Saving…" : "Save template"}
           </Button>
         )}
       </form>
