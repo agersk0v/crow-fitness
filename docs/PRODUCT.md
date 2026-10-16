@@ -36,7 +36,7 @@ Renaming preserves exercise identity and updates template displays. Edit offers 
 
 ## Approved template management (#29)
 
-Active templates can change their names, exercise occurrences/order, working-set counts, and optional rep/RIR targets. Reorder occurrences by dragging the card background, holding briefly before touch dragging, or using the keyboard. Inputs, labels, dropdowns, and buttons do not start a drag; ordinary touch swipes can still scroll. Save applies the complete draft atomically; Cancel discards it, and failures retain it for retry. Removing an occurrence leaves its exercise library record intact. Existing validation rules and ownership apply.
+Active templates can change their names, exercise occurrences/order, working-set counts, and optional rep/RIR targets. Reorder occurrences by dragging the card background, holding briefly before touch dragging, or using the keyboard. Inputs, labels, dropdowns, and buttons do not start a drag; ordinary touch swipes can still scroll. Save applies the complete draft atomically; Leaving the editor discards unsaved changes without confirmation, and failures retain the draft for retry. Removing an occurrence leaves its exercise library record intact. Existing validation rules and ownership apply.
 
 Duplication creates an independent template with a supplied nonblank name and the same ordered configuration and targets. Later changes or archiving of either template do not affect the other. Names are not required to be globally unique.
 
@@ -177,7 +177,7 @@ Group Sets results by captured workout and then exercise occurrence, with local 
 
 ## Approved template editor/actions (#48)
 
-The owner confirmed that Copy workout copies saved configuration, explains any unsaved edits, and never silently saves/discards the draft. Cancel/navigation confirms discarding changed drafts; Cancel returns to the list. Template cards link directly to editable detail with independent Start workout/Delete actions. Delete is a label for archiving only, and its popup explains restoration and preserved active/completed history. Archived/Restore behavior remains. Copy workout lives in the editor, creates an independent named template, preserves the original draft, and offers a link to edit the copy. Saves retain the existing template identity and stay editable; drag/input/error behavior remains intact.
+The owner confirmed that Copy workout copies saved configuration, explains any unsaved edits, and never silently saves/discards the draft. The revised #55 behavior removes page-level Cancel and discards unsaved edits on navigation without confirmation. Template cards show their exercises by default under #55, with Edit workout and Start workout actions; Copy workout and Delete live on the dedicated edit page. Delete is a label for archiving only, and its popup explains restoration and preserved active/completed history. Archived/Restore behavior remains. Copy workout lives in the editor, creates an independent named template, preserves the original draft, and offers a link to edit the copy. Saves retain the existing template identity and stay editable; drag/input/error behavior remains intact.
 
 ## Optional descriptions and individual cards (#52)
 
@@ -188,3 +188,13 @@ Exercise and active/archived template lists use individual cards with borders, b
 The owner confirmed a single-open accordion: opening a completed workout collapses the previous one, and the open workout can be collapsed. Expansion stays on the history page and preserves applied URL criteria and list context. Saved snapshot details load on first expansion and are retained during collapse/reopen in the same list view; loading, retry, not-found, and empty-set states remain clear. Existing `/history/[id]` direct links remain available.
 
 Sets emphasizes captured exercise names and exact logged set values above smaller workout-name/date metadata. Grouping by workout and occurrence, query filtering, source order, and read-only behavior remain unchanged.
+
+## Template overview and dedicated editing (#55, revised)
+
+The owner replaced the accordion proposal with always-visible exercise lists. Each template card shows its name, optional description, and every ordered exercise occurrence with working-set counts and compact optional rep/RIR targets. Unset targets are omitted. Active cards have exactly two actions: Edit workout and Start workout, with Start larger and visually primary at the card’s top right. Templates do not expand into editors on the list.
+
+Edit workout opens the dedicated editor with top-of-page Save template, Copy workout, and Delete. The red Unsaved changes label sits beside the title when the draft differs from saved values. There is no page-level Cancel or navigation confirmation; leaving or refreshing discards unsaved changes. Copy continues to use the saved configuration. Delete only archives, explicitly confirms restoration and snapshot preservation, warns about unsaved changes, and returns to the list after success. Archived cards retain a View workout link to read-only detail with Restore; editing, starting, copying, and deleting remain unavailable until restored.
+
+Within the template editor, occurrences resemble exercise-library cards with the library name, tags, optional description, and current targets. Edit opens a popup for that occurrence’s set count, optional rep range, and RIR. Apply changes updates the template draft; Cancel/Escape leaves the occurrence unchanged. Delete removes only that occurrence, never the library record. Adding an exercise opens a popup for selection and targets. The full Save template action persists changes with the existing validation rules; popup-only edits also contribute to the unsaved-state label. Drag reordering remains available. Library metadata is edited only on the Exercises page.
+
+Template list/editor buttons and links show pointer cursors. Add exercise below lives at the lower right of each editor occurrence card and inserts immediately after it in the draft, preserving repeated exercise occurrences. There is no global bottom Add action when cards exist. An empty template offers Add first exercise. Cancelling the popup leaves the draft order unchanged.

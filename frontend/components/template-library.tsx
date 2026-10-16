@@ -95,15 +95,7 @@ export function TemplateLibrary() {
         ) : (
           <ul className="space-y-4">
             {templates.map((template) => (
-              <TemplateCard
-                key={template.id}
-                template={template}
-                onArchived={(id) =>
-                  setTemplates((current) =>
-                    current.filter((item) => item.id !== id),
-                  )
-                }
-              />
+              <TemplateCard key={template.id} template={template} />
             ))}
           </ul>
         )}

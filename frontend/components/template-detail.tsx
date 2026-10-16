@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { ArchiveTemplate } from "@/components/archive-template";
 import { TemplateForm } from "@/components/template-form";
-import { useDraftNavigation } from "@/hooks/use-draft-navigation";
 import type { Exercise } from "@/lib/exercises";
 import type { Template } from "@/lib/templates";
 
@@ -14,6 +14,7 @@ export function TemplateDetail({ id }: { id: string }) {
   const router = useRouter();
   const modal = useRef<HTMLDialogElement>(null);
   const dialogID = useId();
+  const editFormID = useId();
   const [template, setTemplate] = useState<Template | null>(null);
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,10 +27,10 @@ export function TemplateDetail({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
   const [dirty, setDirty] = useState(false);
+  const [archiving, setArchiving] = useState(false);
   const [saving, setSaving] = useState(false);
   const [version, setVersion] = useState(0);
   const [copied, setCopied] = useState<Template | null>(null);
-  const canLeave = useDraftNavigation(dirty, saving || busy);
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
@@ -75,7 +76,7 @@ export function TemplateDetail({ id }: { id: string }) {
     else modal.current?.close();
   }, [copying]);
   async function mutate(kind: "duplicate" | "restore") {
-    if (pending.current || saving) return;
+    if (pending.current || saving || archiving) return;
     pending.current = true;
     setBusy(true);
     setActionError("");
@@ -99,7 +100,7 @@ export function TemplateDetail({ id }: { id: string }) {
         setCopied(body);
         setCopying(false);
         toast.success(`${body.name} copied.`);
-        // Keep the original draft intact. Opening the copy is an ordinary guarded link.
+        // Keep the original draft intact until the user saves or leaves this editor.
       } else {
         setTemplate(body);
         toast.success(`${body.name} restored.`);
@@ -128,9 +129,31 @@ export function TemplateDetail({ id }: { id: string }) {
   if (!template) return null;
   return (
     <>
-      <h1 className="break-words text-3xl font-semibold">
-        {template.archived ? template.name : "Edit template"}
-      </h1>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
+          <h1 className="break-words text-3xl font-semibold">
+            {template.archived ? template.name : "Edit template"}
+          </h1>
+          {!template.archived && dirty && (
+            <span
+              role="status"
+              className="text-xs font-medium text-red-600 dark:text-red-400"
+            >
+              Unsaved changes
+            </span>
+          )}
+        </div>
+        {!template.archived && (
+          <Button
+            type="submit"
+            form={editFormID}
+            className="min-h-12"
+            disabled={saving || busy || archiving || exercises.length === 0}
+          >
+            {saving ? "Saving…" : "Save template"}
+          </Button>
+        )}
+      </div>
       {template.archived ? (
         <>
           {template.description && (
@@ -142,7 +165,10 @@ export function TemplateDetail({ id }: { id: string }) {
             Archived — restore this template before editing, copying, or
             starting a workout. Existing workout history remains intact.
           </p>
-          <Button disabled={busy} onClick={() => void mutate("restore")}>
+          <Button
+            disabled={busy || archiving}
+            onClick={() => void mutate("restore")}
+          >
             {busy ? "Restoring…" : "Restore template"}
           </Button>
           {actionError && (
@@ -174,18 +200,29 @@ export function TemplateDetail({ id }: { id: string }) {
       ) : (
         <>
           <div className="my-5 space-y-3">
-            <Button
-              variant="outline"
-              disabled={busy || saving}
-              onClick={() => {
-                setCopyName(`${template.name} (copy)`);
-                setNameError("");
-                setActionError("");
-                setCopying(true);
-              }}
-            >
-              Copy workout
-            </Button>
+            <div className="flex flex-wrap gap-3">
+              <Button
+                variant="outline"
+                disabled={busy || saving || archiving}
+                onClick={() => {
+                  setCopyName(`${template.name} (copy)`);
+                  setNameError("");
+                  setActionError("");
+                  setCopying(true);
+                }}
+              >
+                Copy workout
+              </Button>
+              <ArchiveTemplate
+                template={template}
+                dirty={dirty}
+                disabled={busy || saving}
+                onBusyChange={setArchiving}
+                onArchived={() => {
+                  router.push("/templates");
+                }}
+              />
+            </div>
             {dirty && (
               <p className="text-sm text-muted-foreground">
                 Copy workout uses the last saved configuration. Save first to
@@ -203,18 +240,18 @@ export function TemplateDetail({ id }: { id: string }) {
           </div>
           <TemplateForm
             key={version}
+            id={editFormID}
+            externalSave
             initial={template}
             exercises={exercises}
-            disabled={busy}
+            disabled={busy || archiving}
             onDirtyChange={setDirty}
             onSavingChange={setSaving}
             onSaved={(saved) => {
               setDirty(false);
+              setSaving(false);
               setTemplate(saved);
               setVersion((value) => value + 1);
-            }}
-            onCancel={() => {
-              if (canLeave()) router.push("/templates");
             }}
           />
         </>
@@ -256,7 +293,7 @@ export function TemplateDetail({ id }: { id: string }) {
             autoFocus
             id={`${dialogID}-name`}
             value={copyName}
-            disabled={busy}
+            disabled={busy || archiving}
             onChange={(event) => setCopyName(event.target.value)}
             aria-invalid={Boolean(nameError)}
             className="min-h-12 w-full rounded-lg border border-input bg-background px-3"
@@ -269,13 +306,13 @@ export function TemplateDetail({ id }: { id: string }) {
             </Alert>
           )}
           <div className="flex flex-wrap gap-3">
-            <Button type="submit" disabled={busy}>
+            <Button type="submit" disabled={busy || archiving}>
               {busy ? "Copying…" : "Create copy"}
             </Button>
             <Button
               type="button"
               variant="outline"
-              disabled={busy}
+              disabled={busy || archiving}
               onClick={() => setCopying(false)}
             >
               Cancel
