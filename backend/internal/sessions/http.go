@@ -218,6 +218,26 @@ func Register(mux *http.ServeMux, store Store) {
 		write(w, 200, item)
 	})
 
+	mux.HandleFunc("PUT /api/sessions/{id}/sets/order", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		if !validID(id) {
+			problem(w, 400, "validation_error", "Invalid session ID.")
+			return
+		}
+		var input SetOrderInput
+		if !decode(w, r, &input) {
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+		items, err := store.ReorderSets(ctx, exercises.LocalOwnerID, id, input)
+		if err != nil {
+			operationError(w, err)
+			return
+		}
+		write(w, 200, map[string]any{"items": items})
+	})
+
 	for _, method := range []string{"PUT", "DELETE"} {
 		mux.HandleFunc(method+" /api/sessions/{id}/sets/{setID}", func(w http.ResponseWriter, r *http.Request) {
 			id, setID := r.PathValue("id"), r.PathValue("setID")

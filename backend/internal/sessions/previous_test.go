@@ -93,6 +93,7 @@ func TestPostgresPrevious(t *testing.T) {
 		t.Fatal(err)
 	}
 	save(first.ID, "22222222-2222-4222-8222-222222222222", 2, "20.25")
+	save(first.ID, "44444444-4444-4444-8444-444444444444", 3, "2.50")
 	if err = store.Complete(ctx, 81, first.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -195,10 +196,10 @@ func TestPostgresPrevious(t *testing.T) {
 	for _, best := range bests {
 		byExercise[best.ExerciseID] = best
 	}
-	if best := byExercise[press]; best.Set.ID != setID || best.Set.Weight != "30.75" || best.Set.Reps != 9 {
+	if best := byExercise[press]; best.Occurrences[0].Sets[0].ID != setID || best.Occurrences[0].Sets[0].Weight != "30.75" || best.Occurrences[0].Sets[0].Reps != 9 || len(best.Occurrences) != 2 {
 		t.Fatal("heaviest set or reps tie breaker", best)
 	}
-	if best := byExercise[squat]; best.Set.Weight != "20.25" {
+	if best := byExercise[squat]; best.Occurrences[0].Sets[0].Weight != "20.25" {
 		t.Fatal("best across templates", best)
 	}
 	if _, ok := byExercise[unseen]; ok {

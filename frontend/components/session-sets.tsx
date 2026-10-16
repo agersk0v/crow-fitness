@@ -1,5 +1,20 @@
 "use client";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import {
+  DndContext,
+  KeyboardSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CardMouseSensor, CardTouchSensor } from "@/lib/template-drag-sensors";
+import { SortableExercise } from "@/components/sortable-exercise";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import type { SavedSet } from "@/lib/sessions";
@@ -41,6 +56,16 @@ export function SessionSets({
   previousWeight?: string;
 }) {
   const formID = useId();
+  const sensors = useSensors(
+    useSensor(CardMouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(CardTouchSensor, {
+      activationConstraint: { delay: 250, tolerance: 5 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+  const [pendingOrder, setPendingOrder] = useState<SavedSet[] | null>(null);
   const [sets, setSets] = useState(initial);
   const [entry, setEntry] = useState<Values>(() => ({
     weight: previousWeight ?? "",
@@ -56,7 +81,6 @@ export function SessionSets({
   const [error, setError] = useState("");
   const [pendingDelete, setPendingDelete] = useState<{
     id: string;
-    discard: boolean;
   } | null>(null);
   const [addFields, setAddFields] = useState<Record<string, string>>({});
   const [editFields, setEditFields] = useState<Record<string, string>>({});
@@ -75,6 +99,7 @@ export function SessionSets({
         busy ||
         attempted ||
         !!pendingDelete ||
+        !!pendingOrder ||
         Object.keys(addFields).length > 0 ||
         entry.reps.trim() !== "" ||
         entry.rir.trim() !== "",
@@ -86,6 +111,7 @@ export function SessionSets({
     busy,
     attempted,
     pendingDelete,
+    pendingOrder,
     entry.reps,
     entry.rir,
     addFields,
@@ -98,7 +124,13 @@ export function SessionSets({
     setError("");
   }
   async function save(editing: boolean) {
-    if (inFlight.current || disabled || pendingDelete || (!editing && draft))
+    if (
+      inFlight.current ||
+      disabled ||
+      pendingDelete ||
+      pendingOrder ||
+      (!editing && draft)
+    )
       return;
     const values = editing ? draft : entry;
     if (!values) return;
@@ -145,19 +177,17 @@ export function SessionSets({
         setEditFields({});
       } else resetAdd();
     } catch {
-      setError(
-        "Could not confirm the save. Retry using the same set, or discard the new set.",
-      );
+      setError("Could not confirm the save. Retry using the same set.");
     } finally {
       inFlight.current = false;
       setBusy(false);
     }
   }
-  async function remove(id: string, discard = false) {
+  async function remove(id: string) {
     if (inFlight.current || disabled) return;
     inFlight.current = true;
     setBusy(true);
-    setPendingDelete({ id, discard });
+    setPendingDelete({ id });
     setError("");
     onBlocked(position, true);
     try {
@@ -173,7 +203,6 @@ export function SessionSets({
       }
       setSets((current) => current.filter((set) => set.id !== id));
       setPendingDelete(null);
-      if (discard) resetAdd();
     } catch {
       setError("Could not delete set. Please try again.");
     } finally {
@@ -181,6 +210,44 @@ export function SessionSets({
       setBusy(false);
     }
   }
+  async function reorder(next: SavedSet[]) {
+    if (inFlight.current || disabled || draft || attempted || pendingDelete)
+      return;
+    inFlight.current = true;
+    setBusy(true);
+    setPendingOrder(next);
+    setSets(next);
+    setError("");
+    onBlocked(position, true);
+    try {
+      const response = await fetch(`/api/sessions/${sessionID}/sets/order`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          exercise_position: position,
+          set_ids: next.map((set) => set.id),
+        }),
+      });
+      const body = await response.json();
+      if (!response.ok) {
+        setError(
+          body.error?.message ??
+            "Could not save set order. Retry the order or refresh to reload saved sets.",
+        );
+        return;
+      }
+      setSets(body.items);
+      setPendingOrder(null);
+    } catch {
+      setError(
+        "Could not confirm set order. Retry the same order or refresh to reload saved sets.",
+      );
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="mt-5 space-y-4">
       <form
@@ -196,41 +263,36 @@ export function SessionSets({
           id={`${formID}-add`}
           values={entry}
           fields={addFields}
-          disabled={busy || disabled || !!draft || !!pendingDelete}
+          disabled={
+            busy || disabled || !!draft || !!pendingDelete || !!pendingOrder
+          }
           onChange={(key, value) => {
             if (key === "weight") initialized.current = true;
-            setEntry((current) => ({ ...current, [key]: value }));
+            const next = { ...entry, [key]: value };
+            setEntry(next);
+            setAddFields((current) => {
+              const remaining = { ...current };
+              delete remaining[key];
+              return !attempted && !next.reps.trim() && !next.rir.trim()
+                ? {}
+                : remaining;
+            });
+            if (!attempted) setError("");
           }}
         />
         <div className="flex flex-wrap gap-3">
           <Button
             type="submit"
-            disabled={busy || disabled || !!draft || !!pendingDelete}
+            disabled={
+              busy || disabled || !!draft || !!pendingDelete || !!pendingOrder
+            }
           >
             Add set
           </Button>
-          {(entry.reps !== "" ||
-            entry.rir !== "" ||
-            attempted ||
-            Object.keys(addFields).length > 0) && (
-            <Button
-              type="button"
-              variant="outline"
-              disabled={busy || disabled || !!draft || !!pendingDelete}
-              onClick={() => {
-                if (attempted && addID.current)
-                  void remove(addID.current, true);
-                else resetAdd();
-              }}
-            >
-              Discard set
-            </Button>
-          )}
         </div>
         {attempted && !busy && (
           <p className="text-xs text-muted-foreground">
-            Retry Add set to confirm the save. Discard also removes it if the
-            save reached the server.
+            Retry Add set to confirm the save.
           </p>
         )}
       </form>
@@ -238,132 +300,197 @@ export function SessionSets({
       {sets.length === 0 ? (
         <p className="text-sm text-muted-foreground">No sets saved yet.</p>
       ) : (
-        <ol className="divide-y divide-border" aria-label="Saved sets">
-          {sets.map((set, index) => (
-            <li
-              key={set.id}
-              aria-label={`Set ${index + 1}`}
-              className="space-y-3 py-4"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-medium">Set {index + 1}</span>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    disabled={
-                      disabled ||
-                      busy ||
-                      !!draft ||
-                      !!pendingDelete ||
-                      attempted
-                    }
-                    onClick={() => {
-                      setError("");
-                      setEditFields({});
-                      setDraft({
-                        id: set.id,
-                        weight: set.weight,
-                        reps: String(set.reps),
-                        rir: set.rir ?? "",
-                        attempted: false,
-                      });
-                    }}
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    variant="outline"
-                    disabled={
-                      disabled ||
-                      busy ||
-                      !!draft ||
-                      !!pendingDelete ||
-                      attempted
-                    }
-                    onClick={() => void remove(set.id)}
-                  >
-                    Delete
-                  </Button>
-                </div>
-              </div>
-              <dl className="grid grid-cols-3 gap-3 text-sm">
-                <div>
-                  <dt className="text-muted-foreground">Weight (kg)</dt>
-                  <dd className="mt-1 tabular-nums">{set.weight}</dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground">Reps</dt>
-                  <dd className="mt-1 tabular-nums">{set.reps}</dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground">RIR</dt>
-                  <dd className="mt-1 tabular-nums">{set.rir ?? "—"}</dd>
-                </div>
-              </dl>
-            </li>
-          ))}
-        </ol>
-      )}
-      {draft && (
-        <form
-          className="space-y-3 rounded-xl border border-border p-3"
-          aria-label="Edit a set"
-          noValidate
-          onSubmit={(event) => {
-            event.preventDefault();
-            void save(true);
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={({ active, over }) => {
+            if (
+              !over ||
+              active.id === over.id ||
+              busy ||
+              disabled ||
+              draft ||
+              attempted ||
+              pendingDelete ||
+              pendingOrder
+            )
+              return;
+            const from = sets.findIndex((set) => set.id === active.id),
+              to = sets.findIndex((set) => set.id === over.id);
+            if (from >= 0 && to >= 0) void reorder(arrayMove(sets, from, to));
           }}
         >
-          <p className="text-sm font-medium">Edit set</p>
-          <SetInputs
-            id={`${formID}-edit`}
-            values={draft}
-            fields={editFields}
-            disabled={busy || disabled}
-            onChange={(key, value) =>
-              setDraft((current) => current && { ...current, [key]: value })
-            }
-          />
-          <div className="flex flex-wrap gap-3">
-            <Button type="submit" disabled={busy || disabled}>
-              Save set
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={busy || disabled || draft.attempted}
-              onClick={() => {
-                setDraft(null);
-                setError("");
-                setEditFields({});
-              }}
-            >
-              Cancel edit
-            </Button>
-          </div>
-          {draft.attempted && (
-            <p className="text-xs text-muted-foreground">
-              Retry Save to resolve this edit before cancelling it.
-            </p>
-          )}
-        </form>
+          <SortableContext
+            items={sets.map((set) => set.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <ol className="divide-y divide-border" aria-label="Saved sets">
+              {sets.map((set, index) => (
+                <li
+                  key={set.id}
+                  aria-label={`Set ${index + 1}`}
+                  className="space-y-3 py-4"
+                >
+                  <SortableExercise
+                    id={set.id}
+                    label={`set ${index + 1}`}
+                    kind="set"
+                    disabled={
+                      disabled ||
+                      busy ||
+                      !!draft ||
+                      !!pendingDelete ||
+                      attempted ||
+                      !!pendingOrder
+                    }
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-lg font-semibold">
+                        Set {index + 1}
+                      </span>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          disabled={
+                            disabled ||
+                            busy ||
+                            !!draft ||
+                            !!pendingDelete ||
+                            attempted ||
+                            !!pendingOrder
+                          }
+                          onClick={() => {
+                            setError("");
+                            setEditFields({});
+                            setDraft({
+                              id: set.id,
+                              weight: set.weight,
+                              reps: String(set.reps),
+                              rir: set.rir ?? "",
+                              attempted: false,
+                            });
+                          }}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          variant="outline"
+                          disabled={
+                            disabled ||
+                            busy ||
+                            !!draft ||
+                            !!pendingDelete ||
+                            attempted ||
+                            !!pendingOrder
+                          }
+                          onClick={() => void remove(set.id)}
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                    <dl className="mt-3 grid grid-cols-3 gap-3 text-sm">
+                      <div>
+                        <dt className="text-muted-foreground">Weight (kg)</dt>
+                        <dd className="mt-1 tabular-nums">{set.weight}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground">Reps</dt>
+                        <dd className="mt-1 tabular-nums">{set.reps}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground">RIR</dt>
+                        <dd className="mt-1 tabular-nums">{set.rir ?? "—"}</dd>
+                      </div>
+                    </dl>
+                  </SortableExercise>
+                </li>
+              ))}
+            </ol>
+          </SortableContext>
+        </DndContext>
+      )}
+      {draft && (
+        <SetEditDialog
+          locked={busy || draft.attempted}
+          onCancel={() => {
+            setDraft(null);
+            setEditFields({});
+            setError("");
+          }}
+        >
+          <form
+            className="space-y-3 rounded-xl border border-border p-3"
+            aria-label="Edit a set"
+            noValidate
+            onSubmit={(event) => {
+              event.preventDefault();
+              void save(true);
+            }}
+          >
+            <p className="text-sm font-medium">Edit set</p>
+            <SetInputs
+              id={`${formID}-edit`}
+              values={draft}
+              fields={editFields}
+              disabled={busy || disabled}
+              onChange={(key, value) =>
+                setDraft((current) => current && { ...current, [key]: value })
+              }
+            />
+            <div className="flex flex-wrap gap-3">
+              <Button type="submit" disabled={busy || disabled}>
+                Save set
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy || disabled || draft.attempted}
+                onClick={() => {
+                  setDraft(null);
+                  setError("");
+                  setEditFields({});
+                }}
+              >
+                Cancel edit
+              </Button>
+            </div>
+            {draft.attempted && (
+              <p className="text-xs text-muted-foreground">
+                Retry Save to resolve this edit before cancelling it.
+              </p>
+            )}
+            {error && (
+              <p role="alert" className="text-sm text-destructive">
+                {error}
+              </p>
+            )}
+          </form>
+        </SetEditDialog>
       )}
       {busy && (
         <p role="status" className="text-sm text-muted-foreground">
           Saving changes…
         </p>
       )}
-      {error && (
+      {error && !draft && (
         <Alert variant="destructive">
           <AlertTitle>Set could not be saved or removed</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
+          {pendingOrder && (
+            <Button
+              className="col-start-2 mt-3"
+              disabled={busy || disabled}
+              onClick={() => void reorder(pendingOrder)}
+            >
+              Retry set order
+            </Button>
+          )}
           {pendingDelete && (
             <Button
               className="col-start-2 mt-3"
               disabled={busy || disabled}
-              onClick={() =>
-                void remove(pendingDelete.id, pendingDelete.discard)
-              }
+              onClick={() => void remove(pendingDelete.id)}
             >
               Retry delete
             </Button>
@@ -423,5 +550,42 @@ function SetInputs({
         </div>
       ))}
     </div>
+  );
+}
+
+function SetEditDialog({
+  locked,
+  onCancel,
+  children,
+}: {
+  locked: boolean;
+  onCancel: () => void;
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const opener =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const dialog = ref.current;
+    dialog?.showModal();
+    return () => {
+      dialog?.close();
+      opener?.focus();
+    };
+  }, []);
+  return (
+    <dialog
+      ref={ref}
+      aria-label="Edit set"
+      onCancel={(event) => {
+        event.preventDefault();
+        if (!locked) onCancel();
+      }}
+      className="m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-2xl border border-border bg-card p-5 text-foreground shadow-xl backdrop:bg-black/60"
+    >
+      {children}
+    </dialog>
   );
 }

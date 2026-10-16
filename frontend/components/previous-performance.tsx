@@ -10,7 +10,7 @@ export type PreviousPerformance = {
   completed_at: string;
   occurrences: { position: number; name: string; sets: SavedSet[] }[];
 };
-type PersonalBest = { exercise_id: string; set: SavedSet };
+type PersonalBest = PreviousPerformance;
 
 // Reference requests never remount or reset the independent entry controls.
 function useSessionReference<T>(
@@ -140,38 +140,45 @@ export function ExerciseReferences({
                   Retry {tabs[index].toLowerCase()}
                 </Button>
               </div>
-            ) : index === 0 ? (
-              previous?.occurrences.length ? (
-                previous.occurrences.map((occurrence, occurrenceIndex) => (
-                  <div key={occurrence.position} className="not-first:mt-4">
-                    {previous.occurrences.length > 1 && (
-                      <p className="mb-1 text-sm text-muted-foreground">
-                        Occurrence {occurrenceIndex + 1}
-                      </p>
-                    )}
-                    <RecordedSetsTable
-                      sets={occurrence.sets}
-                      caption={`Previous session sets for ${label}, occurrence ${occurrenceIndex + 1}`}
-                    />
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No previous session yet.
-                </p>
-              )
-            ) : best ? (
-              <RecordedSetsTable
-                sets={[best.set]}
-                caption={`Personal best for ${label}`}
-              />
             ) : (
-              <p className="text-sm text-muted-foreground">
-                No personal best yet.
-              </p>
+              <ReferenceTables
+                reference={index === 0 ? previous : best}
+                label={label}
+                kind={tabs[index]}
+              />
             ))}
         </div>
       ))}
     </section>
   );
+}
+
+function ReferenceTables({
+  reference,
+  label,
+  kind,
+}: {
+  reference?: PreviousPerformance;
+  label: string;
+  kind: string;
+}) {
+  if (!reference?.occurrences.length)
+    return (
+      <p className="text-sm text-muted-foreground">
+        No {kind.toLowerCase()} yet.
+      </p>
+    );
+  return reference.occurrences.map((occurrence, index) => (
+    <div key={occurrence.position} className="not-first:mt-4">
+      {reference.occurrences.length > 1 && (
+        <p className="mb-1 text-sm text-muted-foreground">
+          Occurrence {index + 1}
+        </p>
+      )}
+      <RecordedSetsTable
+        sets={occurrence.sets}
+        caption={`${kind} sets for ${label}, occurrence ${index + 1}`}
+      />
+    </div>
+  ));
 }

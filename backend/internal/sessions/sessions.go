@@ -38,6 +38,7 @@ type Store interface {
 	Complete(context.Context, int64, string) error
 	SaveSet(context.Context, int64, string, string, SetInput) (SavedSet, error)
 	DeleteSet(context.Context, int64, string, string) error
+	ReorderSets(context.Context, int64, string, SetOrderInput) ([]SavedSet, error)
 	CompletedSets(context.Context, int64, HistoryFilter) ([]CompletedSet, error)
 	Previous(context.Context, int64, string) ([]PreviousPerformance, error)
 	PersonalBests(context.Context, int64, string) ([]PersonalBest, error)

@@ -131,6 +131,33 @@ func TestPostgresSets(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(saved, replay) {
 		t.Fatal("save retry diverged", replay, err)
 	}
+	extraID := "99999999-9999-4999-8999-999999999999"
+	if _, err = store.SaveSet(ctx, 71, session.ID, extraID, SetInput{Position: 1, Weight: "40", Reps: 6}); err != nil {
+		t.Fatal(err)
+	}
+	ordered, err := store.ReorderSets(ctx, 71, session.ID, SetOrderInput{Position: 1, IDs: []string{extraID, setID}})
+	if err != nil || len(ordered) != 2 || ordered[0].ID != extraID || ordered[1].ID != setID {
+		t.Fatal("set reorder", ordered, err)
+	}
+	if _, err = store.SaveSet(ctx, 71, session.ID, setID, input); err != nil {
+		t.Fatal(err)
+	}
+	reordered, err := store.Get(ctx, 71, session.ID)
+	if err != nil || reordered.Sets[0].ID != extraID {
+		t.Fatal("edit changed saved order", reordered, err)
+	}
+	for _, ids := range [][]string{{setID}, {setID, setID}, {setID, "88888888-8888-4888-8888-888888888888"}} {
+		if _, err = store.ReorderSets(ctx, 71, session.ID, SetOrderInput{Position: 1, IDs: ids}); err == nil {
+			t.Fatal("invalid permutation accepted", ids)
+		}
+	}
+	if _, err = store.ReorderSets(ctx, 72, session.ID, SetOrderInput{Position: 1, IDs: []string{extraID, setID}}); !errors.Is(err, ErrNotFound) {
+		t.Fatal("foreign reorder", err)
+	}
+	if err = store.DeleteSet(ctx, 71, session.ID, extraID); err != nil {
+		t.Fatal(err)
+	}
+
 	if _, err = store.SaveSet(ctx, 72, session.ID, setID, input); !errors.Is(err, ErrNotFound) {
 		t.Fatal("foreign session write", err)
 	}
@@ -200,6 +227,10 @@ func TestPostgresSets(t *testing.T) {
 	snapshot, err := store.GetCompleted(ctx, 71, session.ID)
 	if err != nil || snapshot.Sets[1].RIR == nil || *snapshot.Sets[1].RIR != "1.5" {
 		t.Fatal("completed RIR", snapshot, err)
+	}
+
+	if _, err = store.ReorderSets(ctx, 71, session.ID, SetOrderInput{Position: 1, IDs: []string{setID}}); !errors.Is(err, ErrCompleted) {
+		t.Fatal("completed reorder", err)
 	}
 
 	var completed time.Time

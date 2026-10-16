@@ -47,7 +47,7 @@ func (p Postgres) ExerciseHistory(ctx context.Context, owner int64, id string) (
  FROM workout_sessions s JOIN session_exercises e ON e.owner_id=s.owner_id AND e.session_id=s.id
  JOIN session_sets ss ON ss.owner_id=e.owner_id AND ss.session_id=e.session_id AND ss.exercise_position=e.position
  WHERE s.owner_id=$1 AND s.completed_at IS NOT NULL AND e.exercise_id=$2 AND NOT ss.deleted
- ORDER BY s.completed_at DESC,s.id DESC,e.position,ss.saved_at,ss.id`, owner, id)
+ ORDER BY s.completed_at DESC,s.id DESC,e.position,ss.set_order,ss.saved_at,ss.id`, owner, id)
 	if err != nil {
 		return item, err
 	}

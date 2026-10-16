@@ -165,3 +165,8 @@ func (f *fakeStore) PersonalBests(_ context.Context, owner int64, id string) ([]
 	f.owner, f.id = owner, id
 	return []PersonalBest{}, f.err
 }
+
+func (f *fakeStore) ReorderSets(_ context.Context, owner int64, id string, _ SetOrderInput) ([]SavedSet, error) {
+	f.owner, f.id = owner, id
+	return []SavedSet{}, f.err
+}

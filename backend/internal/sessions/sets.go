@@ -134,8 +134,8 @@ func (p Postgres) SaveSet(ctx context.Context, owner int64, sessionID, id string
 	if input.RIR != nil {
 		rir = string(*input.RIR)
 	}
-	err = tx.QueryRow(ctx, `INSERT INTO session_sets(session_id,owner_id,id,exercise_position,weight,reps,rir)
- VALUES($1,$2,$3,$4,$5::text::numeric,$6,$7::text::numeric)
+	err = tx.QueryRow(ctx, `INSERT INTO session_sets(session_id,owner_id,id,exercise_position,weight,reps,rir,set_order)
+ VALUES($1,$2,$3,$4,$5::text::numeric,$6,$7::text::numeric,(SELECT COALESCE(max(set_order),0)+1 FROM session_sets WHERE session_id=$1 AND exercise_position=$4))
  ON CONFLICT(session_id,id) DO UPDATE SET weight=EXCLUDED.weight,reps=EXCLUDED.reps,rir=EXCLUDED.rir
  RETURNING id::text,exercise_position,weight::text,reps,rir::text`, sessionID, owner, id, input.Position, input.Weight, input.Reps, rir).Scan(&item.ID, &item.Position, &item.Weight, &item.Reps, &item.RIR)
 	if err != nil {
@@ -161,7 +161,7 @@ func (p Postgres) DeleteSet(ctx context.Context, owner int64, sessionID, id stri
 	return tx.Commit(ctx)
 }
 func readSets(ctx context.Context, tx pgx.Tx, owner int64, id string) ([]SavedSet, error) {
-	rows, err := tx.Query(ctx, "SELECT id::text,exercise_position,weight::text,reps,rir::text FROM session_sets WHERE owner_id=$1 AND session_id=$2 AND NOT deleted ORDER BY exercise_position,saved_at,id", owner, id)
+	rows, err := tx.Query(ctx, "SELECT id::text,exercise_position,weight::text,reps,rir::text FROM session_sets WHERE owner_id=$1 AND session_id=$2 AND NOT deleted ORDER BY exercise_position,set_order,saved_at,id", owner, id)
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +185,7 @@ func (p Postgres) CompletedSets(ctx context.Context, owner int64, filter History
  AND ($3::text='' OR se.exercise_id::text=$3)
  AND ($4::timestamptz IS NULL OR s.completed_at >= $4)
  AND ($5::timestamptz IS NULL OR s.completed_at < $5)
- ORDER BY s.completed_at DESC,s.id DESC,ss.exercise_position,ss.saved_at,ss.id`, owner, filter.Query, filter.Exercise, filter.From, filter.Until)
+ ORDER BY s.completed_at DESC,s.id DESC,ss.exercise_position,ss.set_order,ss.saved_at,ss.id`, owner, filter.Query, filter.Exercise, filter.From, filter.Until)
 	if err != nil {
 		return nil, err
 	}

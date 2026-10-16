@@ -188,7 +188,7 @@ export function SessionDetail({ id }: { id: string }) {
       </ol>
       {blocked && (
         <p role="status" className="mt-5 text-sm text-muted-foreground">
-          Save or discard open drafts and resolve failed changes before
+          Save edits, clear unfinished inputs, and resolve failed changes before
           completing.
         </p>
       )}

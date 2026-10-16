@@ -16,7 +16,7 @@ const completedSetComparisons = `WITH occurrences AS (
  WHERE e.owner_id=$1 AND s.completed_at IS NOT NULL
 ), numbered_sets AS (
  SELECT ss.*,e.exercise_id,e.completed_at,e.occurrence_number,
- row_number() OVER (PARTITION BY ss.session_id,ss.exercise_position ORDER BY ss.saved_at,ss.id) AS set_number
+ row_number() OVER (PARTITION BY ss.session_id,ss.exercise_position ORDER BY ss.set_order,ss.saved_at,ss.id) AS set_number
  FROM session_sets ss JOIN occurrences e ON e.owner_id=ss.owner_id AND e.session_id=ss.session_id AND e.position=ss.exercise_position
  WHERE NOT ss.deleted
 ), compared_sets AS (
@@ -50,7 +50,7 @@ func setChange(weight, reps *string) *SetChange {
 func readCompletedSets(ctx context.Context, tx pgx.Tx, owner int64, id string) ([]SavedSet, error) {
 	rows, err := tx.Query(ctx, completedSetComparisons+`
  SELECT id::text,exercise_position,weight::text,reps,weight_change,reps_change,rir::text
- FROM compared_sets WHERE session_id=$2 ORDER BY exercise_position,saved_at,id`, owner, id)
+ FROM compared_sets WHERE session_id=$2 ORDER BY exercise_position,set_order,saved_at,id`, owner, id)
 	if err != nil {
 		return nil, err
 	}

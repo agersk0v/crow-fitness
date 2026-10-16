@@ -49,7 +49,7 @@ func (p Postgres) Previous(ctx context.Context, owner int64, sessionID string) (
  SELECT l.exercise_id::text,l.session_id::text,l.completed_at,e.position,e.name,ss.id::text,ss.weight::text,ss.reps,ss.rir::text
  FROM latest l JOIN session_exercises e ON e.session_id=l.session_id AND e.owner_id=$1 AND e.exercise_id=l.exercise_id
  JOIN session_sets ss ON ss.session_id=e.session_id AND ss.owner_id=e.owner_id AND ss.exercise_position=e.position AND NOT ss.deleted
- ORDER BY l.exercise_id,e.position,ss.saved_at,ss.id`, owner, sessionID)
+ ORDER BY l.exercise_id,e.position,ss.set_order,ss.saved_at,ss.id`, owner, sessionID)
 	if err != nil {
 		return nil, err
 	}
