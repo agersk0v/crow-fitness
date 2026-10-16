@@ -152,8 +152,19 @@ func TestPostgresSetChanges(t *testing.T) {
 	if err != nil || len(all) != 4 {
 		t.Fatal(all, err)
 	}
+	// Partial counts are contextual only, even when changed on both baseline and current sets.
+	if _, err = pool.Exec(ctx, "UPDATE session_sets SET partial_reps=99 WHERE owner_id=171"); err != nil {
+		t.Fatal(err)
+	}
+	all, err = store.CompletedSets(ctx, 171, HistoryFilter{Query: "Current", Exercise: press.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, set := range all {
 		want := changes[set.ID]
+		if set.PartialReps == nil || *set.PartialReps != 99 {
+			t.Fatal("partial count missing from history", set)
+		}
 		if (want == nil) != (set.Change == nil) || (want != nil && *want != *set.Change) {
 			t.Fatal("views disagree", set, want)
 		}

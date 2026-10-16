@@ -157,10 +157,16 @@ func TestPostgresResetReplacementRollbackAndWrites(t *testing.T) {
 		t.Fatal("history not readable", len(history), err)
 	}
 	hasZero, hasDecimals := false, false
+	hasPartials, hasNoPartials := false, false
 	ratings := map[string]bool{}
 	changes := map[string]bool{}
 	for _, set := range history {
 		ratings[set.Technique] = true
+		if set.PartialReps == nil {
+			hasNoPartials = true
+		} else if *set.PartialReps > 0 {
+			hasPartials = true
+		}
 		if set.Change != nil {
 			changes[set.Change.Technique] = true
 		}
@@ -174,7 +180,7 @@ func TestPostgresResetReplacementRollbackAndWrites(t *testing.T) {
 	if len(ratings) != 3 || !ratings["good"] || !ratings["decent"] || !ratings["bad"] || !changes["improved"] || !changes["regressed"] || !changes["unchanged"] {
 		t.Fatal("technique seed coverage", ratings, changes)
 	}
-	if !hasZero || !hasDecimals {
+	if !hasZero || !hasDecimals || !hasPartials || !hasNoPartials {
 		t.Fatal("weight edge values missing")
 	}
 	active, err := workouts.Get(ctx, 1, first.ActiveSessionID)

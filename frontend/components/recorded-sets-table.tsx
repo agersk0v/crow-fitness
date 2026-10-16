@@ -1,4 +1,8 @@
-import { techniqueLabel, type SavedSet } from "@/lib/sessions";
+import {
+  partialRepsLabel,
+  techniqueLabel,
+  type SavedSet,
+} from "@/lib/sessions";
 
 export function RecordedSetsTable({
   sets,
@@ -35,6 +39,11 @@ export function RecordedSetsTable({
             </td>
             <td className="py-3 pr-3">
               {set.reps} <SetDelta value={set.change?.reps} label="Reps" />
+              {!!set.partial_reps && (
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  {partialRepsLabel(set.partial_reps)}
+                </span>
+              )}
             </td>
             <td className="py-3">
               {set.rir ?? <span aria-label="Not recorded">—</span>}

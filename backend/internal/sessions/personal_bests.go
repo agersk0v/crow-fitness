@@ -32,7 +32,7 @@ func (p Postgres) PersonalBests(ctx context.Context, owner int64, sessionID stri
  AND EXISTS(SELECT 1 FROM session_exercises wanted WHERE wanted.owner_id=$1 AND wanted.session_id=$2 AND wanted.exercise_id=e.exercise_id)
  ORDER BY e.exercise_id,ss.weight DESC,ss.reps DESC,array_position(ARRAY['bad','decent','good'],ss.technique) DESC,s.completed_at DESC,s.id DESC,e.position,ss.set_order,ss.saved_at,ss.id
  )
- SELECT b.exercise_id::text,b.session_id::text,b.completed_at,e.position,e.name,ss.id::text,ss.weight::text,ss.reps,ss.rir::text,ss.technique
+ SELECT b.exercise_id::text,b.session_id::text,b.completed_at,e.position,e.name,ss.id::text,ss.weight::text,ss.reps,ss.rir::text,ss.technique,ss.partial_reps
  FROM best b JOIN session_exercises e ON e.owner_id=$1 AND e.session_id=b.session_id AND e.exercise_id=b.exercise_id
  JOIN session_sets ss ON ss.owner_id=e.owner_id AND ss.session_id=e.session_id AND ss.exercise_position=e.position AND NOT ss.deleted
  ORDER BY b.exercise_id,e.position,ss.set_order,ss.saved_at,ss.id`, owner, sessionID)
@@ -45,7 +45,7 @@ func (p Postgres) PersonalBests(ctx context.Context, owner int64, sessionID stri
 		var exerciseID, sourceID, name string
 		var date time.Time
 		var set SavedSet
-		if err = rows.Scan(&exerciseID, &sourceID, &date, &set.Position, &name, &set.ID, &set.Weight, &set.Reps, &set.RIR, &set.Technique); err != nil {
+		if err = rows.Scan(&exerciseID, &sourceID, &date, &set.Position, &name, &set.ID, &set.Weight, &set.Reps, &set.RIR, &set.Technique, &set.PartialReps); err != nil {
 			return nil, err
 		}
 		if len(items) == 0 || items[len(items)-1].ExerciseID != exerciseID {

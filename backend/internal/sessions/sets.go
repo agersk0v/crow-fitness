@@ -12,20 +12,22 @@ import (
 )
 
 type SetInput struct {
-	Technique string             `json:"technique"`
-	RIR       *templates.Decimal `json:"rir"`
-	Position  int64              `json:"exercise_position"`
-	Weight    string             `json:"weight"`
-	Reps      int64              `json:"reps"`
+	PartialReps *int64             `json:"partial_reps"`
+	Technique   string             `json:"technique"`
+	RIR         *templates.Decimal `json:"rir"`
+	Position    int64              `json:"exercise_position"`
+	Weight      string             `json:"weight"`
+	Reps        int64              `json:"reps"`
 }
 type SavedSet struct {
-	Technique string     `json:"technique"`
-	RIR       *string    `json:"rir"`
-	Change    *SetChange `json:"change,omitempty"`
-	ID        string     `json:"id"`
-	Position  int64      `json:"exercise_position"`
-	Weight    string     `json:"weight"`
-	Reps      int64      `json:"reps"`
+	PartialReps *int64     `json:"partial_reps"`
+	Technique   string     `json:"technique"`
+	RIR         *string    `json:"rir"`
+	Change      *SetChange `json:"change,omitempty"`
+	ID          string     `json:"id"`
+	Position    int64      `json:"exercise_position"`
+	Weight      string     `json:"weight"`
+	Reps        int64      `json:"reps"`
 }
 type CompletedSet struct {
 	SavedSet
@@ -48,6 +50,9 @@ var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a
 
 func ValidateSet(input SetInput) ValidationError {
 	fields := ValidationError{}
+	if input.PartialReps != nil && (*input.PartialReps < 0 || *input.PartialReps > 1<<53-1) {
+		fields["partial_reps"] = "Enter a nonnegative whole-number partial-rep count, or leave it blank."
+	}
 	if input.Technique != "good" && input.Technique != "decent" && input.Technique != "bad" {
 		fields["technique"] = "Choose Good, Decent, or Bad technique."
 	}
@@ -145,14 +150,18 @@ func (p Postgres) SaveSet(ctx context.Context, owner int64, sessionID, id string
 		}
 	}
 	var item SavedSet
+	partials := input.PartialReps
+	if partials != nil && *partials == 0 {
+		partials = nil
+	}
 	var rir any
 	if input.RIR != nil {
 		rir = string(*input.RIR)
 	}
-	err = tx.QueryRow(ctx, `INSERT INTO session_sets(session_id,owner_id,id,exercise_position,weight,reps,rir,technique,set_order)
- VALUES($1,$2,$3,$4,$5::text::numeric,$6,$7::text::numeric,$8,(SELECT COALESCE(max(set_order),0)+1 FROM session_sets WHERE session_id=$1 AND exercise_position=$4))
- ON CONFLICT(session_id,id) DO UPDATE SET weight=EXCLUDED.weight,reps=EXCLUDED.reps,rir=EXCLUDED.rir,technique=EXCLUDED.technique
- RETURNING id::text,exercise_position,weight::text,reps,rir::text,technique`, sessionID, owner, id, input.Position, input.Weight, input.Reps, rir, input.Technique).Scan(&item.ID, &item.Position, &item.Weight, &item.Reps, &item.RIR, &item.Technique)
+	err = tx.QueryRow(ctx, `INSERT INTO session_sets(session_id,owner_id,id,exercise_position,weight,reps,rir,technique,partial_reps,set_order)
+ VALUES($1,$2,$3,$4,$5::text::numeric,$6,$7::text::numeric,$8,$9,(SELECT COALESCE(max(set_order),0)+1 FROM session_sets WHERE session_id=$1 AND exercise_position=$4))
+ ON CONFLICT(session_id,id) DO UPDATE SET weight=EXCLUDED.weight,reps=EXCLUDED.reps,rir=EXCLUDED.rir,technique=EXCLUDED.technique,partial_reps=EXCLUDED.partial_reps
+ RETURNING id::text,exercise_position,weight::text,reps,rir::text,technique,partial_reps`, sessionID, owner, id, input.Position, input.Weight, input.Reps, rir, input.Technique, partials).Scan(&item.ID, &item.Position, &item.Weight, &item.Reps, &item.RIR, &item.Technique, &item.PartialReps)
 	if err != nil {
 		return item, err
 	}
@@ -176,7 +185,7 @@ func (p Postgres) DeleteSet(ctx context.Context, owner int64, sessionID, id stri
 	return tx.Commit(ctx)
 }
 func readSets(ctx context.Context, tx pgx.Tx, owner int64, id string) ([]SavedSet, error) {
-	rows, err := tx.Query(ctx, "SELECT id::text,exercise_position,weight::text,reps,rir::text,technique FROM session_sets WHERE owner_id=$1 AND session_id=$2 AND NOT deleted ORDER BY exercise_position,set_order,saved_at,id", owner, id)
+	rows, err := tx.Query(ctx, "SELECT id::text,exercise_position,weight::text,reps,rir::text,technique,partial_reps FROM session_sets WHERE owner_id=$1 AND session_id=$2 AND NOT deleted ORDER BY exercise_position,set_order,saved_at,id", owner, id)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +193,7 @@ func readSets(ctx context.Context, tx pgx.Tx, owner int64, id string) ([]SavedSe
 	items := []SavedSet{}
 	for rows.Next() {
 		var item SavedSet
-		if err = rows.Scan(&item.ID, &item.Position, &item.Weight, &item.Reps, &item.RIR, &item.Technique); err != nil {
+		if err = rows.Scan(&item.ID, &item.Position, &item.Weight, &item.Reps, &item.RIR, &item.Technique, &item.PartialReps); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
@@ -192,7 +201,7 @@ func readSets(ctx context.Context, tx pgx.Tx, owner int64, id string) ([]SavedSe
 	return items, rows.Err()
 }
 func (p Postgres) CompletedSets(ctx context.Context, owner int64, filter HistoryFilter) ([]CompletedSet, error) {
-	rows, err := p.Pool.Query(ctx, completedSetComparisons+`SELECT ss.id::text,ss.exercise_position,ss.weight::text,ss.reps,s.id::text,se.name,s.completed_at,s.name,se.exercise_id::text,ss.weight_change,ss.reps_change,ss.rir::text,ss.technique,ss.previous_technique
+	rows, err := p.Pool.Query(ctx, completedSetComparisons+`SELECT ss.id::text,ss.exercise_position,ss.weight::text,ss.reps,s.id::text,se.name,s.completed_at,s.name,se.exercise_id::text,ss.weight_change,ss.reps_change,ss.rir::text,ss.technique,ss.previous_technique,ss.partial_reps
  FROM compared_sets ss JOIN workout_sessions s ON s.owner_id=ss.owner_id AND s.id=ss.session_id
  JOIN session_exercises se ON se.session_id=ss.session_id AND se.owner_id=ss.owner_id AND se.position=ss.exercise_position
  WHERE ss.owner_id=$1
@@ -209,7 +218,7 @@ func (p Postgres) CompletedSets(ctx context.Context, owner int64, filter History
 	for rows.Next() {
 		var item CompletedSet
 		var weight, reps, previousTechnique *string
-		if err = rows.Scan(&item.ID, &item.Position, &item.Weight, &item.Reps, &item.SessionID, &item.ExerciseName, &item.CompletedAt, &item.SessionName, &item.ExerciseID, &weight, &reps, &item.RIR, &item.Technique, &previousTechnique); err != nil {
+		if err = rows.Scan(&item.ID, &item.Position, &item.Weight, &item.Reps, &item.SessionID, &item.ExerciseName, &item.CompletedAt, &item.SessionName, &item.ExerciseID, &weight, &reps, &item.RIR, &item.Technique, &previousTechnique, &item.PartialReps); err != nil {
 			return nil, err
 		}
 		item.Change = setChange(weight, reps, item.Technique, previousTechnique)

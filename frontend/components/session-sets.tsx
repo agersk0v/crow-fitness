@@ -19,12 +19,14 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import {
   techniqueLabel,
+  partialRepsLabel,
   type Technique,
   type SavedSet,
   type Session,
 } from "@/lib/sessions";
 
 type Values = {
+  partial_reps: string;
   weight: string;
   reps: string;
   rir: string;
@@ -33,6 +35,13 @@ type Values = {
 type EditDraft = Values & { id: string; attempted: boolean };
 function validate(values: Values) {
   const fields: Record<string, string> = {};
+  if (
+    values.partial_reps.trim() !== "" &&
+    (!/^[0-9]+$/.test(values.partial_reps.trim()) ||
+      !Number.isSafeInteger(Number(values.partial_reps)))
+  )
+    fields.partial_reps =
+      "Enter a nonnegative whole-number partial-rep count, or leave it blank.";
   if (!["good", "decent", "bad"].includes(values.technique))
     fields.technique = "Choose Good, Decent, or Bad technique.";
   if (!/^(0|[1-9][0-9]*)(\.[0-9]{1,2})?$/.test(values.weight.trim()))
@@ -86,6 +95,7 @@ export function SessionSets({
     weight: previousWeight ?? "",
     reps: "",
     rir: "",
+    partial_reps: "",
     technique: "decent",
   }));
   const initialized = useRef(previousWeight !== undefined);
@@ -120,7 +130,8 @@ export function SessionSets({
         !!pendingOrder ||
         Object.keys(addFields).length > 0 ||
         entry.reps.trim() !== "" ||
-        entry.rir.trim() !== "",
+        entry.rir.trim() !== "" ||
+        entry.partial_reps.trim() !== "",
     );
   }, [
     position,
@@ -133,6 +144,7 @@ export function SessionSets({
     pendingOrder,
     entry.reps,
     entry.rir,
+    entry.partial_reps,
     addFields,
   ]);
   function resetAdd() {
@@ -142,6 +154,7 @@ export function SessionSets({
       ...current,
       reps: "",
       rir: "",
+      partial_reps: "",
       technique: "decent",
     }));
     setAddFields({});
@@ -179,6 +192,10 @@ export function SessionSets({
         body: JSON.stringify({
           exercise_position: position,
           technique: values.technique,
+          partial_reps:
+            values.partial_reps.trim() === ""
+              ? null
+              : Number(values.partial_reps),
           weight: values.weight.trim(),
           reps: Number(values.reps),
           rir: values.rir.trim() === "" ? null : Number(values.rir),
@@ -329,8 +346,8 @@ export function SessionSets({
             <p>{staleCount}</p>
             <p className="mt-2">
               Reload saved sets updates this exercise and clears its unsaved
-              reps, RIR, and technique selection (reset to Decent). Your weight
-              and drafts for other exercises are kept.
+              reps, RIR, partial reps, and technique selection (reset to
+              Decent). Your weight and drafts for other exercises are kept.
             </p>
             {error && <p className="mt-2">{error}</p>}
           </AlertDescription>
@@ -376,7 +393,10 @@ export function SessionSets({
               setAddFields((current) => {
                 const remaining = { ...current };
                 delete remaining[key];
-                return !attempted && !next.reps.trim() && !next.rir.trim()
+                return !attempted &&
+                  !next.reps.trim() &&
+                  !next.rir.trim() &&
+                  !next.partial_reps.trim()
                   ? {}
                   : remaining;
               });
@@ -480,6 +500,10 @@ export function SessionSets({
                               weight: set.weight,
                               reps: String(set.reps),
                               rir: set.rir ?? "",
+                              partial_reps:
+                                set.partial_reps == null
+                                  ? ""
+                                  : String(set.partial_reps),
                               technique: set.technique,
                               attempted: false,
                             });
@@ -511,7 +535,14 @@ export function SessionSets({
                       </div>
                       <div>
                         <dt className="text-muted-foreground">Reps</dt>
-                        <dd className="mt-1 tabular-nums">{set.reps}</dd>
+                        <dd className="mt-1 tabular-nums">
+                          {set.reps}
+                          {!!set.partial_reps && (
+                            <span className="mt-1 block text-xs text-muted-foreground">
+                              {partialRepsLabel(set.partial_reps)}
+                            </span>
+                          )}
+                        </dd>
                       </div>
                       <div>
                         <dt className="text-muted-foreground">RIR</dt>
@@ -670,8 +701,11 @@ function SetInputs({
           )}
         </div>
       ))}
-      <div className="col-span-3">
-        <label htmlFor={`${id}-technique`} className="mb-2 block text-sm">
+      <div className="col-span-2">
+        <label
+          htmlFor={`${id}-technique`}
+          className="mb-2 block min-h-10 text-sm sm:min-h-0"
+        >
           Technique
         </label>
         <select
@@ -695,6 +729,35 @@ function SetInputs({
             className="mt-1 text-sm text-destructive"
           >
             {fields.technique}
+          </p>
+        )}
+      </div>
+      <div>
+        <label
+          htmlFor={`${id}-partial_reps`}
+          className="mb-2 block min-h-10 text-sm sm:min-h-0"
+        >
+          Partial reps (optional)
+        </label>
+        <input
+          id={`${id}-partial_reps`}
+          type="text"
+          inputMode="numeric"
+          value={values.partial_reps}
+          disabled={disabled}
+          onChange={(event) => onChange("partial_reps", event.target.value)}
+          aria-invalid={!!fields.partial_reps}
+          aria-describedby={
+            fields.partial_reps ? `${id}-partial_reps-error` : undefined
+          }
+          className="min-h-12 w-full min-w-0 rounded-lg border border-input bg-background px-3 text-base focus-visible:outline-2 focus-visible:outline-ring"
+        />
+        {fields.partial_reps && (
+          <p
+            id={`${id}-partial_reps-error`}
+            className="mt-1 text-sm text-destructive"
+          >
+            {fields.partial_reps}
           </p>
         )}
       </div>
