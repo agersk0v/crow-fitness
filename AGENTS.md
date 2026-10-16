@@ -10,8 +10,8 @@ The owner delegates implementation to agents and reviews their pull requests; do
 
 - Read the assigned issue, its acceptance criteria, and relevant discussion.
 - Read `README.md` for the project overview and implemented setup instructions.
-- Read `docs/PRODUCT.md` when available for product requirements, proposed behavior, and unresolved choices.
-- Read `docs/ARCHITECTURE.md` for the proposed technical design. Follow approved product requirements if a design proposal conflicts with them.
+- Read `docs/PRODUCT.md` for authoritative current product behavior and separately identified future work.
+- Read `docs/ARCHITECTURE.md` for the implemented technical design and API contracts. Follow approved product requirements if a technical proposal conflicts with them.
 - Inspect the current repository and any applicable instructions before changing files. Documentation about future components does not mean those components exist.
 
 Do not silently turn a recommendation or unresolved product choice into an approved requirement. If a decision is necessary to implement correct behavior, obtain the owner's decision before implementing that behavior; continue independent authorized work where possible.
@@ -40,7 +40,9 @@ These are agent working instructions, not a security boundary. GitHub permission
 
 ## Validation and documentation
 
-Use the repository's actual tools and commands. The runnable foundation includes frontend package scripts, a Go module with health/configuration tests, Docker Compose, and CI. Exercise/template management, session/set persistence, completed-workout history with a Sets tab, and read-only previous performance are implemented. Exercise-specific completed-set history is implemented; progress charts remain planned. The README documents the supported setup and check commands.
+Use the repository's actual tools and commands from README.md. PRODUCT.md owns current user-visible rules; ARCHITECTURE.md owns current technical contracts. Update those sections rather than appending issue-by-issue histories or duplicating them in the README. Keep proposals separate from implemented behavior; an open PR is not shipped.
+
+Keep detailed validation and data-integrity checks in Go/PostgreSQL tests. The smoke script owns representative frontend-proxy integration, readiness recovery, and restart persistence on its disposable Compose project. Preserve meaningful coverage rather than removing checks just to reduce their count.
 
 Do not invent setup, build, or test commands, or claim checks passed when they did not run. As tooling is implemented, document working commands in the README and use the relevant checks for each change.
 
