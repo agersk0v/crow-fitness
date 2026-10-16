@@ -67,7 +67,7 @@ export function CompletedSessions({
           No matching completed sessions. Try different criteria or clear
           filters.
         </p>
-        <Link href="/history" className="text-highlight underline">
+        <Link href="/history?tab=sessions" className="text-highlight underline">
           Clear filters
         </Link>
       </div>

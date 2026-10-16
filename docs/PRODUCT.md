@@ -72,13 +72,13 @@ References load independently of current-session data. Failed loads show retry w
 
 ## Approved exercise set history (#36)
 
-Exercise-library history links open `/exercises/[id]/history`, showing completed, nondeleted sets for the same exercise identity across all templates. Group by workout, newest first, using captured workout names and browser-local dates. Distinguish repeated occurrences in their original occurrence/set order and display exact weight/reps, including zero kilograms. Active/cancelled workouts and workouts without eligible sets are excluded.
+Exercise-library cards now open Workout history filtered to the exercise in the Sets tab (#57), showing completed, nondeleted sets across all templates. Group by workout, newest first, using captured names and local completion dates; repeated occurrences remain separate with exact weight/reps. Active/cancelled workouts and workouts without eligible sets stay excluded.
 
-The page is read-only, with useful empty/not-found/loading states, retry, and navigation to exercises and completed workouts. Renames preserve identity; template changes/archives and removal of an unused library exercise preserve snapshots and the historical URL. Completed-workout detail also links to exercise history. Missing or foreign identities are not found. Filters, charts, editing, progression, and active-session changes remain outside scope.
+The dedicated exercise-history UI and links from completed workouts are removed. Stable identities, snapshots, previous-performance references, and existing backend read endpoints are preserved. Progress charts remain separate work.
 
 ## Approved workout history (#37)
 
-The owner confirmed Sessions as the first tab. Home's Workout history link opens `/history`; Sessions and Sets tabs store selection in the URL for refresh and back navigation. Sessions lists completed workouts as template-style cards using captured names and local completion dates, newest first. Repeated workouts remain separate records. Sets retains the plain completed-set list. Active and cancelled sessions appear in neither tab.
+Under #57, Sets is the first/default tab; Sessions remains available second. Home's Workout history link opens `/history`; Sessions and Sets tabs store selection in the URL for refresh and back navigation. Sessions lists completed workouts as template-style cards using captured names and local completion dates, newest first. Repeated workouts remain separate records. Sets retains the plain completed-set list. Active and cancelled sessions appear in neither tab.
 
 A session card expands an inline read-only saved snapshot (#54) with ordered exercise occurrences, captured names, template targets, and actually recorded sets in separate sections. Empty completed workouts still appear in Sessions and explain that no sets were recorded; they contribute no Sets rows. Source edits, archiving, renames, or removal of an otherwise unused exercise do not change history.
 
@@ -93,8 +93,8 @@ Home links to exercises and templates and offers continuation of an active sessi
 | Workout templates | `/templates`, `/templates/[id]` | Create, edit, duplicate, archive, inspect, restore, start (implemented) |
 | Workout session | `/sessions/[id]` | View the active snapshot, add/edit/delete sets, continue later, cancel, or complete (implemented) |
 | Completed sets | `/history?tab=sets`; `/sets` redirects | Completed sets grouped by workout and occurrence (implemented) |
-| Exercise history | `/exercises/[id]/history` | Completed sets grouped by workout and occurrence (implemented) |
-| Workout history | `/history`, `/history/[id]` | Completed session cards and read-only snapshots (implemented) |
+| Exercise history | `/history?exercise=<id>` | Sets filtered to one exercise (implemented) |
+| Workout history | `/history`, `/history/[id]` | Sets-first tabs, completed-workout accordions, and saved snapshots (implemented) |
 | Exercises | `/exercises` | Create, search/filter, tag, rename, and safely delete personal exercises (implemented) |
 | Exercise progress | To be defined | Future charts and progress views |
 
@@ -171,7 +171,7 @@ The seed uses Upper 1, Lower 1, Upper 2, Lower 2 with the issue's ordered workin
 
 ## Approved exercise-card navigation and grouped Sets history (#45)
 
-Exercise-library cards link by stable identity to `/history?tab=sets&exercise=<id>` without unrelated criteria. Replace the separate View history button; Edit/Delete and their forms/dialogs remain independent. Remove Sets from the shared navbar and highlight Workout history for both tabs. Retain the Sets tab, URL criteria, legacy redirect, dedicated exercise-history route, and completed-detail links.
+Exercise-library cards link by stable identity to `/history?tab=sets&exercise=<id>` without unrelated criteria. Replace the separate View history button; Edit/Delete and their forms/dialogs remain independent. Remove Sets from the shared navbar and highlight Workout history for both tabs. Retain the Sets tab, URL criteria, legacy `/sets` redirect; #57 removes the separate exercise-history UI and its completed-detail links.
 
 Group Sets results by captured workout and then exercise occurrence, with local completion dates, exact recorded values, and completed-detail navigation. Preserve newest-workout and source occurrence/set order, distinguish repeated names/occurrences, and group only rows matching the existing criteria. Active/cancelled workouts, deleted sets, and empty result groups stay excluded. The view remains read-only, with useful empty/no-match and retry states.
 
@@ -198,3 +198,9 @@ Edit workout opens the dedicated editor with top-of-page Save template, Copy wor
 Within the template editor, occurrences resemble exercise-library cards with the library name, tags, optional description, and current targets. Edit opens a popup for that occurrence’s set count, optional rep range, and RIR. Apply changes updates the template draft; Cancel/Escape leaves the occurrence unchanged. Delete removes only that occurrence, never the library record. Adding an exercise opens a popup for selection and targets. The full Save template action persists changes with the existing validation rules; popup-only edits also contribute to the unsaved-state label. Drag reordering remains available. Library metadata is edited only on the Exercises page.
 
 Template list/editor buttons and links show pointer cursors. Add exercise below lives at the lower right of each editor occurrence card and inserts immediately after it in the draft, preserving repeated exercise occurrences. There is no global bottom Add action when cards exist. An empty template offers Add first exercise. Cancelling the popup leaves the draft order unchanged.
+
+## Sets-first workout history (#57)
+
+Sets is selected at `/history` when the tab parameter is missing or unknown. Explicit `tab=sets` remains valid, and `tab=sessions` selects the second tab. Tab changes and filter Apply/Clear retain the intended view and applied criteria through URL navigation, refresh, and Back/Forward. Keyboard order follows Sets then Sessions. Inline completed-workout accordions and direct detail routes remain read-only and keep their saved targets/sets without exercise-history links.
+
+The owner confirmed that `/exercises/[id]/history` is removed completely and returns 404, with no compatibility redirect. Exercise-specific browsing uses the existing Sets exercise filter.

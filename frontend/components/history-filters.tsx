@@ -159,7 +159,7 @@ export function HistoryFilters({
             setDraft({ q: "", exercise: "", from: "", to: "" });
             setError("");
             router.push(
-              selected === "sets" ? "/history?tab=sets" : "/history",
+              selected === "sessions" ? "/history?tab=sessions" : "/history",
               { scroll: false },
             );
           }}

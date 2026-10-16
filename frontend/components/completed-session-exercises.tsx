@@ -1,4 +1,3 @@
-import Link from "next/link";
 import type { Session } from "@/lib/sessions";
 
 export function CompletedSessionExercises({
@@ -30,13 +29,6 @@ export function CompletedSessionExercises({
               <ExerciseHeading className="break-words text-xl font-semibold">
                 {entry.position}. {entry.name}
               </ExerciseHeading>
-              <Link
-                href={`/exercises/${entry.exercise_id}/history`}
-                className="mt-2 inline-block text-sm text-highlight underline"
-                aria-label={`View history for occurrence ${entry.position}: ${entry.name}`}
-              >
-                View exercise history
-              </Link>
               <section
                 className="mt-4 rounded-xl border border-border p-4"
                 aria-label={`Template targets for exercise ${entry.position}`}

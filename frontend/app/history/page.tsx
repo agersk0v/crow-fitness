@@ -5,7 +5,7 @@ export default async function HistoryPage({
   searchParams: Promise<{ tab?: string | string[] }>;
 }) {
   const query = await searchParams;
-  const selected = query.tab === "sets" ? "sets" : "sessions";
+  const selected = query.tab === "sessions" ? "sessions" : "sets";
   return (
     <main className="mx-auto min-h-screen max-w-5xl px-6 py-8 sm:px-12">
       <div className="space-y-6 py-10">

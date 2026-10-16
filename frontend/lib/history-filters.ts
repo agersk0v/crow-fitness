@@ -33,7 +33,7 @@ export function historyFilterError(params: URLSearchParams): string {
 }
 export function historyQuery(criteria: Record<string, string>, tab?: string) {
   const params = new URLSearchParams();
-  if (tab === "sets") params.set("tab", "sets");
+  if (tab === "sessions") params.set("tab", "sessions");
   for (const key of historyKeys) {
     const value = key === "q" ? criteria[key]?.trim() : criteria[key];
     if (value) params.set(key, value);
