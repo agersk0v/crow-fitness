@@ -470,35 +470,42 @@ export function SessionSets({
   }
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="min-w-0 flex-1 break-words text-xl font-semibold">
-          {exercise.name}
-        </h2>
-        {(exercise.choices?.length ?? 0) > 1 && (
-          <Button
+      <h2
+        aria-label={exercise.name}
+        className="min-w-0 break-words text-xl font-semibold"
+      >
+        {(exercise.choices?.length ?? 0) > 1 ? (
+          <button
             id={`${alternativesID}-trigger`}
             type="button"
-            variant="ghost"
-            size="sm"
+            aria-label={`Variations for ${exercise.name}`}
+            aria-expanded={alternativesOpen}
+            aria-controls={alternativesID}
+            disabled={disabled || switchingBlocked || sets.length > 0}
+            className="flex min-h-11 w-full cursor-pointer items-center justify-between gap-3 rounded-lg text-left focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-default"
             onKeyDown={(event) => {
               if (event.key === "Escape") {
                 event.preventDefault();
                 setAlternativesOpen(false);
               }
             }}
-            aria-expanded={alternativesOpen}
-            aria-controls={alternativesID}
-            disabled={disabled || switchingBlocked || sets.length > 0}
             onClick={() => setAlternativesOpen((open) => !open)}
           >
-            {alternativesOpen ? "Hide alternatives" : "Change exercise"}
+            <span className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+              <span className="break-words">{exercise.name}</span>
+              <span className="text-xs font-normal text-muted-foreground">
+                Variations
+              </span>
+            </span>
             <ChevronDown
               aria-hidden="true"
-              className={`size-4 ${alternativesOpen ? "rotate-180" : ""}`}
+              className={`size-4 shrink-0 text-muted-foreground ${alternativesOpen ? "rotate-180" : ""}`}
             />
-          </Button>
+          </button>
+        ) : (
+          exercise.name
         )}
-      </div>
+      </h2>
       {(exercise.choices?.length ?? 0) > 1 && (
         <div
           id={alternativesID}
@@ -511,10 +518,7 @@ export function SessionSets({
             }
           }}
         >
-          <ul
-            aria-label="Exercise alternatives"
-            className="divide-y divide-border rounded-xl border border-border"
-          >
+          <ul aria-label="Exercise alternatives" className="space-y-2">
             {exercise.choices!.map((choice, index) => {
               const selected = choice.exercise_id === exercise.exercise_id;
               return (
@@ -528,31 +532,25 @@ export function SessionSets({
                       switchingBlocked ||
                       sets.length > 0
                     }
-                    className="flex min-h-12 w-full cursor-pointer flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-3 text-left hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-default disabled:hover:bg-transparent"
+                    className={`flex min-h-12 w-full cursor-pointer flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-3 text-left focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-default ${selected ? "bg-primary/10" : "bg-muted/30 hover:bg-muted/60"}`}
                     onClick={() => {
                       if (hasDraft) setSwitchTo(choice.exercise_id);
                       else void selectExercise(choice.exercise_id);
                     }}
                   >
-                    <span className="min-w-0 flex-1">
-                      <span className="block break-words font-medium">
-                        {choice.name}
-                      </span>
-                      <span className="mt-1 block text-sm text-muted-foreground">
-                        {choice.set_count}{" "}
-                        {choice.set_count === 1 ? "set" : "sets"}
-                        {choice.rep_min !== null &&
-                          ` · ${choice.rep_min === choice.rep_max ? choice.rep_min : `${choice.rep_min}–${choice.rep_max}`} reps`}
-                        {choice.target_rir !== null &&
-                          ` · RIR ${choice.target_rir}`}
-                        {index === 0 && " · Default"}
-                      </span>
+                    <span className="min-w-0 flex-1 break-words font-medium">
+                      {choice.name}
                     </span>
-                    {selected && (
-                      <span className="text-xs font-medium text-highlight">
-                        Selected
-                      </span>
-                    )}
+                    <span className="flex flex-wrap items-center gap-2 text-xs">
+                      {index === 0 && (
+                        <span className="text-muted-foreground">Default</span>
+                      )}
+                      {selected && (
+                        <span className="font-medium text-highlight">
+                          Selected
+                        </span>
+                      )}
+                    </span>
                   </button>
                 </li>
               );
