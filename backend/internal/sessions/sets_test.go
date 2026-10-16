@@ -32,6 +32,16 @@ func TestSetValidationAndHTTP(t *testing.T) {
 			t.Fatal(tc, fields)
 		}
 	}
+	for _, value := range []int64{-1, 0, 2, 1<<53 - 1, 1 << 53} {
+		fields := ValidateSet(SetInput{Technique: "decent", Position: 1, Weight: "10", Reps: 8, PartialReps: &value})
+		if (fields["partial_reps"] == "") != (value >= 0 && value <= 1<<53-1) {
+			t.Fatal("partial validation", value, fields)
+		}
+	}
+	partialOnly := int64(2)
+	if ValidateSet(SetInput{Technique: "decent", Position: 1, Weight: "10", Reps: 0, PartialReps: &partialOnly})["reps"] == "" {
+		t.Fatal("partials replaced required full reps")
+	}
 	for _, value := range []string{"good", "decent", "bad", "", "Good", "excellent"} {
 		fields := ValidateSet(SetInput{Technique: value, Position: 1, Weight: "10", Reps: 8})
 		valid := value == "good" || value == "decent" || value == "bad"
@@ -64,6 +74,8 @@ func TestSetValidationAndHTTP(t *testing.T) {
 		{"PUT", "/api/sessions/7/sets/" + setID, `{"technique":"decent","exercise_position":1,"weight":"10","reps":8}`, ValidationError{"weight": "Invalid weight"}, 400},
 		{"PUT", "/api/sessions/7/sets/" + setID, `{"technique":"decent","exercise_position":1,"weight":"10","reps":8}`, ErrCompleted, 409},
 		{"PUT", "/api/sessions/7/sets/" + setID, `{"technique":7,"exercise_position":1,"weight":"10","reps":8}`, nil, 400},
+		{"PUT", "/api/sessions/7/sets/" + setID, `{"technique":"decent","exercise_position":1,"weight":"10","reps":8,"partial_reps":1.5}`, nil, 400},
+		{"PUT", "/api/sessions/7/sets/" + setID, `{"technique":"decent","exercise_position":1,"weight":"10","reps":8,"partial_reps":"2"}`, nil, 400},
 		{"PUT", "/api/sessions/7/sets/bad", `{}`, nil, 400},
 		{"DELETE", "/api/sessions/7/sets/" + setID, "", nil, 204},
 		{"DELETE", "/api/sessions/7/sets/" + setID, "", ErrCompleted, 409},
@@ -127,12 +139,13 @@ func TestPostgresSets(t *testing.T) {
 		t.Fatal(err)
 	}
 	zeroRIR := templates.Decimal("0")
-	input := SetInput{Technique: "decent", Position: 1, Weight: "12.50", Reps: 8, RIR: &zeroRIR}
+	partials := int64(2)
+	input := SetInput{Technique: "decent", Position: 1, Weight: "12.50", Reps: 8, RIR: &zeroRIR, PartialReps: &partials}
 	saved, err := store.SaveSet(ctx, 71, session.ID, setID, input)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if saved.RIR == nil || *saved.RIR != "0" || saved.Technique != "decent" {
+	if saved.RIR == nil || *saved.RIR != "0" || saved.Technique != "decent" || saved.PartialReps == nil || *saved.PartialReps != 2 {
 		t.Fatal("zero recorded RIR", saved)
 	}
 	replay, err := store.SaveSet(ctx, 71, session.ID, setID, input)
@@ -144,7 +157,7 @@ func TestPostgresSets(t *testing.T) {
 		t.Fatal(err)
 	}
 	ordered, err := store.ReorderSets(ctx, 71, session.ID, SetOrderInput{Position: 1, IDs: []string{extraID, setID}})
-	if err != nil || len(ordered) != 2 || ordered[0].ID != extraID || ordered[1].ID != setID {
+	if err != nil || len(ordered) != 2 || ordered[0].ID != extraID || ordered[1].ID != setID || ordered[1].PartialReps == nil || *ordered[1].PartialReps != 2 {
 		t.Fatal("set reorder", ordered, err)
 	}
 	if _, err = store.SaveSet(ctx, 71, session.ID, setID, input); err != nil {
@@ -234,6 +247,8 @@ func TestPostgresSets(t *testing.T) {
 		t.Fatal("clear RIR", cleared, err)
 	}
 
+	zeroPartials := int64(0)
+	input.PartialReps = &zeroPartials
 	input.Technique = "good"
 	input.Weight = "0"
 	input.Reps = 10
@@ -241,7 +256,7 @@ func TestPostgresSets(t *testing.T) {
 		t.Fatal(err)
 	}
 	secondID := "22222222-2222-4222-8222-222222222222"
-	if _, err = store.SaveSet(ctx, 71, session.ID, secondID, SetInput{Technique: "decent", Position: 2, Weight: "20.25", Reps: 5, RIR: &decimalRIR}); err != nil {
+	if _, err = store.SaveSet(ctx, 71, session.ID, secondID, SetInput{Technique: "decent", Position: 2, Weight: "20.25", Reps: 5, RIR: &decimalRIR, PartialReps: &partials}); err != nil {
 		t.Fatal(err)
 	}
 	deleteID := "33333333-3333-4333-8333-333333333333"
@@ -249,7 +264,7 @@ func TestPostgresSets(t *testing.T) {
 		t.Fatal(err)
 	}
 	updatedTechnique, err := store.Get(ctx, 71, session.ID)
-	if err != nil || updatedTechnique.Sets[0].Technique != "good" {
+	if err != nil || updatedTechnique.Sets[0].Technique != "good" || updatedTechnique.Sets[0].PartialReps != nil {
 		t.Fatal("edited technique was not retained", updatedTechnique, err)
 	}
 	if err = store.DeleteSet(ctx, 71, session.ID, deleteID); err != nil {

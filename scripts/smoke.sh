@@ -75,7 +75,7 @@ template_id="$(curl --fail --silent --show-error "$base_url/api/templates" -H 'C
 assert_page "/templates/$template_id" 'Loading template'
 # Session transport and restart persistence share this disposable stack.
 session_id="$(curl --fail --silent --show-error "$base_url/api/sessions" -H 'Content-Type: application/json' --data "{\"template_id\":\"$template_id\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
-curl --fail --silent --show-error "$base_url/api/sessions/$session_id/sets/11111111-1111-4111-8111-111111111111" -X PUT -H 'Content-Type: application/json' --data '{"technique":"decent","exercise_position":1,"weight":"12.50","reps":8,"rir":1.5}' --output "$response_file"
+curl --fail --silent --show-error "$base_url/api/sessions/$session_id/sets/11111111-1111-4111-8111-111111111111" -X PUT -H 'Content-Type: application/json' --data '{"technique":"decent","exercise_position":1,"weight":"12.50","reps":8,"rir":1.5,"partial_reps":2}' --output "$response_file"
 curl --fail --silent --show-error "$base_url/api/sets" --output "$response_file"
 python3 - "$response_file" <<'CHECK'
 import json,sys
@@ -89,7 +89,7 @@ with open(sys.argv[1]) as f: saved=json.load(f)['session']
 assert saved['id']==sys.argv[2] and saved['template_id']==sys.argv[3] and saved['name']=='Smoke routine',saved
 assert saved['exercises'][0]['name']=='Smoke squat' and saved['exercises'][0]['set_count']==3,saved
 assert len(saved['sets'])==1,saved
-assert saved['sets'][0]['weight']=='12.50' and saved['sets'][0]['reps']==8 and saved['sets'][0]['rir']=='1.5' and saved['sets'][0]['technique']=='decent',saved
+assert saved['sets'][0]['weight']=='12.50' and saved['sets'][0]['reps']==8 and saved['sets'][0]['rir']=='1.5' and saved['sets'][0]['technique']=='decent' and saved['sets'][0]['partial_reps']==2,saved
 CHECK
   curl --fail --silent --show-error "$base_url/api/sessions/$session_id" --output "$response_file"
 }

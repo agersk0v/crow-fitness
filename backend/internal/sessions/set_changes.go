@@ -64,7 +64,7 @@ func setChange(weight, reps *string, technique string, previous *string) *SetCha
 
 func readCompletedSets(ctx context.Context, tx pgx.Tx, owner int64, id string) ([]SavedSet, error) {
 	rows, err := tx.Query(ctx, completedSetComparisons+`
- SELECT id::text,exercise_position,weight::text,reps,weight_change,reps_change,rir::text,technique,previous_technique
+ SELECT id::text,exercise_position,weight::text,reps,weight_change,reps_change,rir::text,technique,previous_technique,partial_reps
  FROM compared_sets WHERE session_id=$2 ORDER BY exercise_position,set_order,saved_at,id`, owner, id)
 	if err != nil {
 		return nil, err
@@ -74,7 +74,7 @@ func readCompletedSets(ctx context.Context, tx pgx.Tx, owner int64, id string) (
 	for rows.Next() {
 		var item SavedSet
 		var weight, reps, previousTechnique *string
-		if err = rows.Scan(&item.ID, &item.Position, &item.Weight, &item.Reps, &weight, &reps, &item.RIR, &item.Technique, &previousTechnique); err != nil {
+		if err = rows.Scan(&item.ID, &item.Position, &item.Weight, &item.Reps, &weight, &reps, &item.RIR, &item.Technique, &previousTechnique, &item.PartialReps); err != nil {
 			return nil, err
 		}
 		item.Change = setChange(weight, reps, item.Technique, previousTechnique)

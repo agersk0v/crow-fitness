@@ -262,4 +262,27 @@ func TestPostgresPrevious(t *testing.T) {
 		}
 	}
 
+	// More partials must not change the winner with fewer full reps.
+	if _, err = pool.Exec(ctx, "UPDATE session_sets SET partial_reps=999 WHERE session_id=$1", second.ID); err != nil {
+		t.Fatal(err)
+	}
+	unchanged, err := store.PersonalBests(ctx, 81, current.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, result := range unchanged {
+		if result.ExerciseID == press && result.SessionID != first.ID {
+			t.Fatal("partials changed best source", result)
+		}
+	}
+	refsWithPartials, err := store.Previous(ctx, 81, current.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, result := range refsWithPartials {
+		if result.ExerciseID == press && (result.Occurrences[0].Sets[0].PartialReps == nil || *result.Occurrences[0].Sets[0].PartialReps != 999) {
+			t.Fatal("reference partials missing", result)
+		}
+	}
+
 }

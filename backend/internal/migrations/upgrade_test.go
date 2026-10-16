@@ -74,7 +74,7 @@ func TestSessionUpgradePreservesActiveWorkout(t *testing.T) {
 	}
 }
 
-func TestTechniqueUpgradeBackfillsWithoutChangingSets(t *testing.T) {
+func TestSetMetadataUpgradePreservesExistingSets(t *testing.T) {
 	url := os.Getenv("TEST_DATABASE_URL")
 	if url == "" {
 		t.Skip("TEST_DATABASE_URL required for disposable PostgreSQL test")
@@ -136,15 +136,19 @@ func TestTechniqueUpgradeBackfillsWithoutChangingSets(t *testing.T) {
 		t.Fatal(err)
 	}
 	var before, after string
-	const records = `SELECT jsonb_agg(to_jsonb(s) - 'technique' ORDER BY session_id,id)::text FROM session_sets s`
+	const records = `SELECT jsonb_agg(to_jsonb(s) - 'technique' - 'partial_reps' ORDER BY session_id,id)::text FROM session_sets s`
 	if err = pool.QueryRow(ctx, records).Scan(&before); err != nil {
 		t.Fatal(err)
 	}
 	if err = Apply(ctx, pool); err != nil {
 		t.Fatal(err)
 	}
+	var noPartials bool
+	if err = pool.QueryRow(ctx, "SELECT count(*)=3 AND count(*) FILTER(WHERE partial_reps IS NOT NULL)=0 FROM session_sets").Scan(&noPartials); err != nil || !noPartials {
+		t.Fatal("migration invented partial counts", noPartials, err)
+	}
 	// Re-running migration application must preserve user changes.
-	if _, err = pool.Exec(ctx, "UPDATE session_sets SET technique='good' WHERE session_id=1"); err != nil {
+	if _, err = pool.Exec(ctx, "UPDATE session_sets SET technique='good',partial_reps=2 WHERE session_id=1"); err != nil {
 		t.Fatal(err)
 	}
 	if err = Apply(ctx, pool); err != nil {
@@ -154,7 +158,7 @@ func TestTechniqueUpgradeBackfillsWithoutChangingSets(t *testing.T) {
 		t.Fatal("migration changed existing set data", before, after, err)
 	}
 	var valid bool
-	if err = pool.QueryRow(ctx, "SELECT count(*)=3 AND count(*) FILTER(WHERE technique='decent')=2 AND count(*) FILTER(WHERE technique='good')=1 FROM session_sets").Scan(&valid); err != nil || !valid {
+	if err = pool.QueryRow(ctx, "SELECT count(*)=3 AND count(*) FILTER(WHERE technique='decent')=2 AND count(*) FILTER(WHERE technique='good')=1 AND count(*) FILTER(WHERE partial_reps=2)=1 AND count(*) FILTER(WHERE partial_reps IS NULL)=2 FROM session_sets").Scan(&valid); err != nil || !valid {
 		t.Fatal("wrong backfill/rerun", valid, err)
 	}
 	if _, err = pool.Exec(ctx, "UPDATE session_sets SET technique='excellent'"); err == nil {
@@ -163,4 +167,10 @@ func TestTechniqueUpgradeBackfillsWithoutChangingSets(t *testing.T) {
 	if _, err = pool.Exec(ctx, "UPDATE session_sets SET technique=NULL"); err == nil {
 		t.Fatal("null stored technique accepted")
 	}
+	for _, value := range []int{0, -1} {
+		if _, err = pool.Exec(ctx, "UPDATE session_sets SET partial_reps=$1", value); err == nil {
+			t.Fatal("invalid stored partial count accepted", value)
+		}
+	}
+
 }

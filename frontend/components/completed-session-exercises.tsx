@@ -3,7 +3,7 @@
 import { useId, useState } from "react";
 import { RecordedSetsTable } from "@/components/recorded-sets-table";
 import { ChevronDown } from "lucide-react";
-import { techniqueLabel, type Session } from "@/lib/sessions";
+import { partialRepsLabel, techniqueLabel, type Session } from "@/lib/sessions";
 
 export function CompletedSessionExercises({
   session,
@@ -147,8 +147,11 @@ export function CompletedSessionExercises({
                         key={set.id}
                         className="rounded-lg border border-border p-3"
                       >
-                        Set {index + 1}: {set.weight} kg × {set.reps} reps · RIR{" "}
-                        {set.rir ?? "—"} · Technique{" "}
+                        Set {index + 1}: {set.weight} kg × {set.reps} reps
+                        {set.partial_reps
+                          ? ` · ${partialRepsLabel(set.partial_reps)}`
+                          : ""}{" "}
+                        · RIR {set.rir ?? "—"} · Technique{" "}
                         {techniqueLabel(set.technique)}
                       </li>
                     ))}

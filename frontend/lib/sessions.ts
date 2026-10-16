@@ -18,7 +18,12 @@ export function techniqueLabel(value: Technique | null | undefined) {
     : "Not recorded";
 }
 
+export function partialRepsLabel(value: number | null | undefined) {
+  return value ? `${value} partial ${value === 1 ? "rep" : "reps"}` : "";
+}
+
 export type SavedSet = {
+  partial_reps: number | null;
   technique: Technique;
   rir?: string | null;
   change?: {
