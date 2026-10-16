@@ -482,7 +482,11 @@ export function SessionSets({
               }}
             >
               {exercise.choices!.map((c) => (
-                <option key={c.exercise_id} value={c.exercise_id}>
+                <option
+                  key={c.exercise_id}
+                  value={c.exercise_id}
+                  className="bg-popover text-popover-foreground"
+                >
                   {c.name}
                 </option>
               ))}
