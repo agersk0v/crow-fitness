@@ -73,3 +73,94 @@ func TestSessionUpgradePreservesActiveWorkout(t *testing.T) {
 		t.Fatal("upgrade rewrote active snapshot", err)
 	}
 }
+
+func TestTechniqueUpgradeBackfillsWithoutChangingSets(t *testing.T) {
+	url := os.Getenv("TEST_DATABASE_URL")
+	if url == "" {
+		t.Skip("TEST_DATABASE_URL required for disposable PostgreSQL test")
+	}
+	ctx := context.Background()
+	root, err := pgxpool.New(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	if _, err = root.Exec(ctx, "CREATE SCHEMA technique_upgrade"); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if _, err := root.Exec(ctx, "DROP SCHEMA technique_upgrade CASCADE"); err != nil {
+			t.Error(err)
+		}
+	}()
+	config, err := pgxpool.ParseConfig(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.ConnConfig.RuntimeParams["search_path"] = "technique_upgrade"
+	pool, err := pgxpool.NewWithConfig(ctx, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	if _, err = pool.Exec(ctx, "CREATE TABLE schema_migrations(version text PRIMARY KEY)"); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := files.ReadDir(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if entry.Name() >= "011_set_technique.sql" {
+			continue
+		}
+		sql, err := files.ReadFile(entry.Name())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = pool.Exec(ctx, string(sql)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = pool.Exec(ctx, "INSERT INTO schema_migrations(version) VALUES($1)", entry.Name()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err = pool.Exec(ctx, `INSERT INTO exercises(owner_id,name) VALUES(1,'Legacy');
+ INSERT INTO templates(owner_id,name) VALUES(1,'Legacy');
+ INSERT INTO workout_sessions(owner_id,template_id,name,completed_at) VALUES(1,1,'Active',NULL),(1,1,'Completed',now());
+ INSERT INTO session_exercises(session_id,owner_id,position,exercise_id,name,set_count) VALUES(1,1,1,1,'Legacy',2),(2,1,1,1,'Legacy',2);
+ INSERT INTO session_sets(session_id,owner_id,id,exercise_position,weight,reps,rir,set_order,deleted) VALUES
+ (1,1,'11111111-1111-4111-8111-111111111111',1,12.50,8,1.5,2,false),
+ (2,1,'22222222-2222-4222-8222-222222222222',1,12.50,8,1.5,2,false),
+ (2,1,'33333333-3333-4333-8333-333333333333',1,12.50,8,1.5,2,true)`); err != nil {
+		t.Fatal(err)
+	}
+	var before, after string
+	const records = `SELECT jsonb_agg(to_jsonb(s) - 'technique' ORDER BY session_id,id)::text FROM session_sets s`
+	if err = pool.QueryRow(ctx, records).Scan(&before); err != nil {
+		t.Fatal(err)
+	}
+	if err = Apply(ctx, pool); err != nil {
+		t.Fatal(err)
+	}
+	// Re-running migration application must preserve user changes.
+	if _, err = pool.Exec(ctx, "UPDATE session_sets SET technique='good' WHERE session_id=1"); err != nil {
+		t.Fatal(err)
+	}
+	if err = Apply(ctx, pool); err != nil {
+		t.Fatal(err)
+	}
+	if err = pool.QueryRow(ctx, records).Scan(&after); err != nil || before != after {
+		t.Fatal("migration changed existing set data", before, after, err)
+	}
+	var valid bool
+	if err = pool.QueryRow(ctx, "SELECT count(*)=3 AND count(*) FILTER(WHERE technique='decent')=2 AND count(*) FILTER(WHERE technique='good')=1 FROM session_sets").Scan(&valid); err != nil || !valid {
+		t.Fatal("wrong backfill/rerun", valid, err)
+	}
+	if _, err = pool.Exec(ctx, "UPDATE session_sets SET technique='excellent'"); err == nil {
+		t.Fatal("invalid stored technique accepted")
+	}
+	if _, err = pool.Exec(ctx, "UPDATE session_sets SET technique=NULL"); err == nil {
+		t.Fatal("null stored technique accepted")
+	}
+}

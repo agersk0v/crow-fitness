@@ -95,10 +95,10 @@ func TestPostgresHistory(t *testing.T) {
 	if list, err := store.CompletedSessions(ctx, 91, HistoryFilter{}); err != nil || len(list) != 0 {
 		t.Fatal("active session listed", list, err)
 	}
-	if _, err = store.SaveSet(ctx, 91, first.ID, setID, SetInput{Position: 1, Weight: "0.00", Reps: 8}); err != nil {
+	if _, err = store.SaveSet(ctx, 91, first.ID, setID, SetInput{Technique: "decent", Position: 1, Weight: "0.00", Reps: 8}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = store.SaveSet(ctx, 91, first.ID, "22222222-2222-4222-8222-222222222222", SetInput{Position: 3, Weight: "12.50", Reps: 5}); err != nil {
+	if _, err = store.SaveSet(ctx, 91, first.ID, "22222222-2222-4222-8222-222222222222", SetInput{Technique: "decent", Position: 3, Weight: "12.50", Reps: 5}); err != nil {
 		t.Fatal(err)
 	}
 	if err = store.Complete(ctx, 91, first.ID); err != nil {

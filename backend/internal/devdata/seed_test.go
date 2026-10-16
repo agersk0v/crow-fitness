@@ -102,7 +102,7 @@ func TestPostgresResetReplacementRollbackAndWrites(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = workouts.SaveSet(ctx, 1, session.ID, "11111111-1111-4111-8111-111111111111", sessions.SetInput{Position: 1, Weight: "10", Reps: 8}); err != nil {
+	if _, err = workouts.SaveSet(ctx, 1, session.ID, "11111111-1111-4111-8111-111111111111", sessions.SetInput{Technique: "decent", Position: 1, Weight: "10", Reps: 8}); err != nil {
 		t.Fatal(err)
 	}
 	if err = workouts.Complete(ctx, 1, session.ID); err != nil {
@@ -157,13 +157,22 @@ func TestPostgresResetReplacementRollbackAndWrites(t *testing.T) {
 		t.Fatal("history not readable", len(history), err)
 	}
 	hasZero, hasDecimals := false, false
+	ratings := map[string]bool{}
+	changes := map[string]bool{}
 	for _, set := range history {
+		ratings[set.Technique] = true
+		if set.Change != nil {
+			changes[set.Change.Technique] = true
+		}
 		if set.Weight == "0.00" {
 			hasZero = true
 		}
 		if strings.HasSuffix(set.Weight, ".25") {
 			hasDecimals = true
 		}
+	}
+	if len(ratings) != 3 || !ratings["good"] || !ratings["decent"] || !ratings["bad"] || !changes["improved"] || !changes["regressed"] || !changes["unchanged"] {
+		t.Fatal("technique seed coverage", ratings, changes)
 	}
 	if !hasZero || !hasDecimals {
 		t.Fatal("weight edge values missing")

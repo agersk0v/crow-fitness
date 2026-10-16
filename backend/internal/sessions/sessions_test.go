@@ -53,7 +53,7 @@ func (f *fakeStore) SaveSet(_ context.Context, owner int64, sessionID, id string
 		value := string(*input.RIR)
 		rir = &value
 	}
-	return SavedSet{ID: id, Position: input.Position, Weight: input.Weight, Reps: input.Reps, RIR: rir}, f.err
+	return SavedSet{Technique: input.Technique, ID: id, Position: input.Position, Weight: input.Weight, Reps: input.Reps, RIR: rir}, f.err
 }
 func (f *fakeStore) DeleteSet(ctx context.Context, owner int64, sessionID, id string) error {
 	return f.End(ctx, owner, sessionID)

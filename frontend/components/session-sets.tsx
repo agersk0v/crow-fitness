@@ -17,12 +17,24 @@ import { CardMouseSensor, CardTouchSensor } from "@/lib/template-drag-sensors";
 import { SortableExercise } from "@/components/sortable-exercise";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import type { SavedSet, Session } from "@/lib/sessions";
+import {
+  techniqueLabel,
+  type Technique,
+  type SavedSet,
+  type Session,
+} from "@/lib/sessions";
 
-type Values = { weight: string; reps: string; rir: string };
+type Values = {
+  weight: string;
+  reps: string;
+  rir: string;
+  technique: Technique;
+};
 type EditDraft = Values & { id: string; attempted: boolean };
 function validate(values: Values) {
   const fields: Record<string, string> = {};
+  if (!["good", "decent", "bad"].includes(values.technique))
+    fields.technique = "Choose Good, Decent, or Bad technique.";
   if (!/^(0|[1-9][0-9]*)(\.[0-9]{1,2})?$/.test(values.weight.trim()))
     fields.weight = "Enter nonnegative kilograms with at most two decimals.";
   if (
@@ -74,6 +86,7 @@ export function SessionSets({
     weight: previousWeight ?? "",
     reps: "",
     rir: "",
+    technique: "decent",
   }));
   const initialized = useRef(previousWeight !== undefined);
   const addID = useRef<string | null>(null);
@@ -125,7 +138,12 @@ export function SessionSets({
   function resetAdd() {
     addID.current = null;
     setAttempted(false);
-    setEntry((current) => ({ ...current, reps: "", rir: "" }));
+    setEntry((current) => ({
+      ...current,
+      reps: "",
+      rir: "",
+      technique: "decent",
+    }));
     setAddFields({});
     setError("");
   }
@@ -160,6 +178,7 @@ export function SessionSets({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           exercise_position: position,
+          technique: values.technique,
           weight: values.weight.trim(),
           reps: Number(values.reps),
           rir: values.rir.trim() === "" ? null : Number(values.rir),
@@ -310,7 +329,8 @@ export function SessionSets({
             <p>{staleCount}</p>
             <p className="mt-2">
               Reload saved sets updates this exercise and clears its unsaved
-              reps and RIR. Your weight and drafts for other exercises are kept.
+              reps, RIR, and technique selection (reset to Decent). Your weight
+              and drafts for other exercises are kept.
             </p>
             {error && <p className="mt-2">{error}</p>}
           </AlertDescription>
@@ -323,67 +343,68 @@ export function SessionSets({
           </Button>
         </Alert>
       )}
-      <form
-        className="space-y-3"
-        aria-label="Add a set"
-        noValidate
-        onSubmit={(event) => {
-          event.preventDefault();
-          void save(false);
-        }}
-      >
-        <SetInputs
-          id={`${formID}-add`}
-          values={entry}
-          fields={addFields}
-          disabled={
-            busy ||
-            disabled ||
-            !!draft ||
-            !!pendingDelete ||
-            !!pendingOrder ||
-            (atLimit && !attempted)
-          }
-          onChange={(key, value) => {
-            if (key === "weight") initialized.current = true;
-            const next = { ...entry, [key]: value };
-            setEntry(next);
-            setAddFields((current) => {
-              const remaining = { ...current };
-              delete remaining[key];
-              return !attempted && !next.reps.trim() && !next.rir.trim()
-                ? {}
-                : remaining;
-            });
-            if (!attempted && !staleCount) setError("");
+      {atLimit && !attempted ? (
+        <p role="status" className="text-sm font-medium text-highlight">
+          Exercise complete ({sets.length}/{plannedCount} sets saved).
+        </p>
+      ) : (
+        <form
+          className="space-y-3"
+          aria-label="Add a set"
+          noValidate
+          onSubmit={(event) => {
+            event.preventDefault();
+            void save(false);
           }}
-        />
-        <div className="flex flex-wrap gap-3">
-          <Button
-            type="submit"
+        >
+          <SetInputs
+            id={`${formID}-add`}
+            values={entry}
+            fields={addFields}
             disabled={
               busy ||
               disabled ||
               !!draft ||
               !!pendingDelete ||
               !!pendingOrder ||
-              !!staleCount ||
               (atLimit && !attempted)
             }
-          >
-            Add set
-          </Button>
-        </div>
-        {attempted && !busy && (
-          <p className="text-xs text-muted-foreground">
-            Retry Add set to confirm the save.
-          </p>
-        )}
-      </form>
-      {atLimit && (
-        <p className="text-sm text-muted-foreground">
-          All planned sets saved ({sets.length}/{plannedCount}).
-        </p>
+            onChange={(key, value) => {
+              if (key === "weight") initialized.current = true;
+              const next = { ...entry, [key]: value };
+              setEntry(next);
+              setAddFields((current) => {
+                const remaining = { ...current };
+                delete remaining[key];
+                return !attempted && !next.reps.trim() && !next.rir.trim()
+                  ? {}
+                  : remaining;
+              });
+              if (!attempted && !staleCount) setError("");
+            }}
+          />
+          <div className="flex flex-wrap gap-3">
+            <Button
+              type="submit"
+              disabled={
+                busy ||
+                disabled ||
+                !!draft ||
+                !!pendingDelete ||
+                !!pendingOrder ||
+                !!staleCount ||
+                (atLimit && !attempted)
+              }
+            >
+              Add set
+            </Button>
+          </div>
+          {attempted && !busy && (
+            <p className="text-xs text-muted-foreground">
+              Retry Add set to confirm the save.
+            </p>
+          )}
+        </form>
       )}
       <h3 className="font-medium">Saved sets</h3>
       {sets.length === 0 ? (
@@ -459,6 +480,7 @@ export function SessionSets({
                               weight: set.weight,
                               reps: String(set.reps),
                               rir: set.rir ?? "",
+                              technique: set.technique,
                               attempted: false,
                             });
                           }}
@@ -482,7 +504,7 @@ export function SessionSets({
                         </Button>
                       </div>
                     </div>
-                    <dl className="mt-3 grid grid-cols-3 gap-3 text-sm">
+                    <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
                       <div>
                         <dt className="text-muted-foreground">Weight (kg)</dt>
                         <dd className="mt-1 tabular-nums">{set.weight}</dd>
@@ -494,6 +516,12 @@ export function SessionSets({
                       <div>
                         <dt className="text-muted-foreground">RIR</dt>
                         <dd className="mt-1 tabular-nums">{set.rir ?? "—"}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground">Technique</dt>
+                        <dd className="mt-1">
+                          {techniqueLabel(set.technique)}
+                        </dd>
                       </div>
                     </dl>
                   </SortableExercise>
@@ -642,6 +670,34 @@ function SetInputs({
           )}
         </div>
       ))}
+      <div className="col-span-3">
+        <label htmlFor={`${id}-technique`} className="mb-2 block text-sm">
+          Technique
+        </label>
+        <select
+          id={`${id}-technique`}
+          value={values.technique}
+          disabled={disabled}
+          onChange={(event) => onChange("technique", event.target.value)}
+          aria-invalid={!!fields.technique}
+          aria-describedby={
+            fields.technique ? `${id}-technique-error` : undefined
+          }
+          className="min-h-12 w-full rounded-lg border border-input bg-background px-3 text-base focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          <option value="good">Good</option>
+          <option value="decent">Decent</option>
+          <option value="bad">Bad</option>
+        </select>
+        {fields.technique && (
+          <p
+            id={`${id}-technique-error`}
+            className="mt-1 text-sm text-destructive"
+          >
+            {fields.technique}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

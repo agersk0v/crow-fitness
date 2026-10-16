@@ -1,4 +1,4 @@
-import type { SavedSet } from "@/lib/sessions";
+import { techniqueLabel, type SavedSet } from "@/lib/sessions";
 
 export function RecordedSetsTable({
   sets,
@@ -8,7 +8,7 @@ export function RecordedSetsTable({
   caption: string;
 }) {
   return (
-    <table className="w-full table-fixed text-left text-sm tabular-nums">
+    <table className="w-full table-fixed break-words text-left text-xs tabular-nums sm:text-sm">
       <caption className="sr-only">{caption}</caption>
       <thead>
         <tr className="border-b border-border text-muted-foreground">
@@ -20,6 +20,9 @@ export function RecordedSetsTable({
           </th>
           <th scope="col" className="py-3 font-medium">
             RIR
+          </th>
+          <th scope="col" className="py-3 font-medium">
+            Technique
           </th>
         </tr>
       </thead>
@@ -35,6 +38,29 @@ export function RecordedSetsTable({
             </td>
             <td className="py-3">
               {set.rir ?? <span aria-label="Not recorded">—</span>}
+            </td>
+            <td className="py-3">
+              <span
+                className={
+                  set.change?.technique === "improved"
+                    ? "text-green-700 dark:text-green-400"
+                    : set.change?.technique === "regressed"
+                      ? "text-red-700 dark:text-red-400"
+                      : undefined
+                }
+                aria-label={
+                  set.change?.technique && set.change.technique !== "unchanged"
+                    ? `Technique ${set.change.technique} from ${techniqueLabel(set.change.previous_technique)} to ${techniqueLabel(set.technique)}`
+                    : undefined
+                }
+              >
+                {techniqueLabel(set.technique)}
+                {set.change?.technique === "improved"
+                  ? " ↑"
+                  : set.change?.technique === "regressed"
+                    ? " ↓"
+                    : ""}
+              </span>
             </td>
           </tr>
         ))}
