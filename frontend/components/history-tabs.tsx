@@ -21,10 +21,11 @@ export function HistoryTabs({ selected }: { selected: "sessions" | "sets" }) {
   const criteria = historyCriteria(params);
   const validation = historyFilterError(params);
   const filters = historyQuery(criteria);
+  filters.delete(selected === "sessions" ? "exercise" : "template");
   if (criteria.from || criteria.to)
     filters.set("tz", Intl.DateTimeFormat().resolvedOptions().timeZone);
   const apiQuery = filters.toString();
-  const filtered = Object.values(criteria).some((value) => value.trim() !== "");
+  const filtered = [...filters.values()].some((value) => value.trim() !== "");
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   function select(tab: "sessions" | "sets") {
     const next = new URLSearchParams(query);

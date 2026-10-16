@@ -138,8 +138,8 @@ export function CompletedSets({
               </ol>
             </section>
           ))}
-          <div className="mt-5 border-t border-border pt-4">
-            <p className="break-words text-sm text-muted-foreground">
+          <div className="mt-5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2 border-t border-border pt-4">
+            <p className="min-w-0 break-words text-base font-medium text-muted-foreground">
               <Link
                 href={`/history/${workout.id}`}
                 className="underline focus-visible:outline-2 focus-visible:outline-ring"
@@ -148,7 +148,7 @@ export function CompletedSets({
               </Link>
             </p>
             <time
-              className="mt-2 block text-sm text-muted-foreground"
+              className="text-sm text-muted-foreground"
               dateTime={workout.completed_at}
             >
               {new Date(workout.completed_at).toLocaleString()}

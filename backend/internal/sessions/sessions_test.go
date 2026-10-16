@@ -150,3 +150,8 @@ func (f *fakeStore) HistoryExercises(_ context.Context, owner int64) ([]HistoryE
 	f.owner = owner
 	return []HistoryExercise{}, f.err
 }
+
+func (f *fakeStore) HistoryTemplates(_ context.Context, owner int64) ([]HistoryExercise, error) {
+	f.owner = owner
+	return []HistoryExercise{}, f.err
+}

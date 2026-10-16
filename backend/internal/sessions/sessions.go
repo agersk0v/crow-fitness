@@ -42,6 +42,7 @@ type Store interface {
 	Previous(context.Context, int64, string) ([]PreviousPerformance, error)
 	CompletedSessions(context.Context, int64, HistoryFilter) ([]CompletedSession, error)
 	HistoryExercises(context.Context, int64) ([]HistoryExercise, error)
+	HistoryTemplates(context.Context, int64) ([]HistoryExercise, error)
 	GetCompleted(context.Context, int64, string) (Session, error)
 	ExerciseHistory(context.Context, int64, string) (ExerciseHistory, error)
 }

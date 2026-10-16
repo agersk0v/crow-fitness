@@ -134,6 +134,16 @@ func Register(mux *http.ServeMux, store Store) {
 		}
 		write(w, 200, map[string]any{"items": items})
 	})
+	mux.HandleFunc("GET /api/history/templates", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+		items, err := store.HistoryTemplates(ctx, exercises.LocalOwnerID)
+		if err != nil {
+			operationError(w, err)
+			return
+		}
+		write(w, 200, map[string]any{"items": items})
+	})
 	mux.HandleFunc("GET /api/history/sessions/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
 		if !validID(id) {

@@ -90,10 +90,12 @@ export function CompletedSessionDetail({
           </time>
         </>
       )}
-      <p className="my-6 text-muted-foreground">
-        This is your saved workout. Template targets are separate from the sets
-        you actually recorded.
-      </p>
+      {!inline && (
+        <p className="my-6 text-muted-foreground">
+          This is your saved workout. Template targets are separate from the
+          sets you actually recorded.
+        </p>
+      )}
       <CompletedSessionExercises session={session} inline={inline} />
     </>
   );

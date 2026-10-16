@@ -53,7 +53,7 @@ The UI makes one independent request for the session and shares results across r
 
 Go exposes `GET /api/history/sessions` and `/api/history/sessions/{id}`. The list includes all completed workouts for the local owner, including empty workouts, ordered by completion time then session ID descending. Detail reuses the read-only repeatable-read snapshot reader with an explicit completed-state filter. Active detail stays active-only. Detail returns captured configuration and nondeleted saved sets from the same snapshot and never joins mutable library names.
 
-Next.js serves `/history` with Sessions/Sets tabs controlled by the URL's `tab` selector. Sets is first/default under #57; missing/unknown selectors fall back to it, while `tab=sessions` selects Sessions. Roving keyboard focus uses arrows/Home/End, and only the selected tab's data component is mounted. Cards expand a single-open inline accordion (#54), with separate target and actual-set sections; `/history/[id]` remains available for direct links. Legacy `/sets` redirects to `/history?tab=sets`. Existing set data/entry and all mutation/state rules remain intact. No schema migration, extra dependency, or service is needed.
+Next.js serves `/history` with Sessions/Sets tabs controlled by the URL's `tab` selector. Sets is first/default under #57; missing/unknown selectors fall back to it, while `tab=sessions` selects Sessions. Roving keyboard focus uses arrows/Home/End, and only the selected tab's data component is mounted. Cards show ordered exercise lists with independent accordions and compact targets (revised #57); `/history/[id]` remains available for direct links. Legacy `/sets` redirects to `/history?tab=sets`. Existing set data/entry and all mutation/state rules remain intact. No schema migration, extra dependency, or service is needed.
 
 ## Current validation coverage
 
@@ -150,7 +150,7 @@ Migration 008 adds `description text NOT NULL DEFAULT ''` to exercises/templates
 
 ## Inline workout history (#54)
 
-The session list controls one expanded workout ID. Native buttons expose expanded state and panel relationships; collapsed panels are hidden from view and keyboard navigation. Details mount only on first expansion and remain mounted while collapsed, reusing the existing abortable detail reader and retry behavior. A shared snapshot-exercise component serves inline and direct-link views with appropriate heading levels. Sets reorders existing grouped content above supporting workout metadata. Backend queries, filters, persistence, dependencies, and schema are unchanged.
+The initial session-level accordion was superseded by the revised #57 design below. Snapshot reads remain abortable with per-workout retry. A shared snapshot-exercise component serves inline and direct-link views with appropriate heading levels. Sets keeps recorded content above supporting workout metadata.
 
 ## Template overview cards (#55, revised)
 
@@ -169,3 +169,8 @@ Insertion popups capture an occurrence key as their anchor and splice the applie
 History page selection, keyboard tab order, URL serialization, and filter clearing use Sets as the default and explicitly serialize Sessions. The shared completed-snapshot renderer removes exercise-history links from both inline and direct detail views. The dedicated exercise-history client component is removed. Go queries, completed snapshots, grouping, and previous-performance references are unchanged.
 
 The owner confirmed that `/exercises/[id]/history` is removed completely and returns 404, with no compatibility redirect. Exercise-specific browsing uses the existing Sets exercise filter.
+
+
+### Revised history views (#57)
+
+Sessions loads the existing read-only snapshot endpoint for each listed workout to show ordered exercise accordions and recorded-set counts. Exercise expansion is local and independent. The template filter uses `template` in the URL and parameterized owner-scoped SQL against the original `workout_sessions.template_id`; `GET /api/history/templates` supplies distinct completed-history identities with their latest captured names. No schema change is needed. Browser URLs retain both identity filters, while API queries send only template for Sessions or exercise for Sets. Shared search/local-date handling remains unchanged.
