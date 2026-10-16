@@ -25,6 +25,7 @@ import {
   type Session,
 } from "@/lib/sessions";
 
+import { ChevronDown } from "lucide-react";
 import type { TemplateExercise } from "@/lib/templates";
 
 type Values = {
@@ -73,7 +74,9 @@ export function SessionSets({
   plannedCount,
   exercise,
   onSelected,
+  children,
 }: {
+  children: ReactNode;
   exercise: TemplateExercise;
   onSelected: (session: Session, position: number) => void;
   sessionID: string;
@@ -458,34 +461,44 @@ export function SessionSets({
     }
   }
   return (
-    <div className="mt-5 space-y-4">
+    <div className="space-y-4">
+      <h2
+        aria-label={exercise.name}
+        className="min-w-0 break-words text-xl font-semibold"
+      >
+        {(exercise.choices?.length ?? 0) > 1 ? (
+          <span className="group relative block">
+            <select
+              id={`${formID}-choice`}
+              aria-label="Exercise choice"
+              value={exercise.exercise_id}
+              disabled={disabled || switchingBlocked || sets.length > 0}
+              className="min-h-11 w-full min-w-0 cursor-pointer appearance-none rounded-md border-0 bg-transparent py-1 pr-7 text-xl font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
+              onChange={(e) => {
+                const target = e.target.value;
+                if (target === exercise.exercise_id) return;
+                if (hasDraft) setSwitchTo(target);
+                else void selectExercise(target);
+              }}
+            >
+              {exercise.choices!.map((c) => (
+                <option key={c.exercise_id} value={c.exercise_id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              aria-hidden="true"
+              className="pointer-events-none absolute right-0 top-1/2 size-4 -translate-y-1/2 text-muted-foreground opacity-50 group-hover:opacity-100"
+            />
+          </span>
+        ) : (
+          exercise.name
+        )}
+      </h2>
+      {children}
       {(exercise.choices?.length ?? 0) > 1 && (
         <div className="space-y-2">
-          <label
-            htmlFor={`${formID}-choice`}
-            className="block text-sm font-medium"
-          >
-            Exercise choice
-          </label>
-          <select
-            id={`${formID}-choice`}
-            value={exercise.exercise_id}
-            disabled={disabled || switchingBlocked || sets.length > 0}
-            className="min-h-12 w-full cursor-pointer rounded-lg border border-input bg-background px-3"
-            onChange={(e) => {
-              const target = e.target.value;
-              if (target === exercise.exercise_id) return;
-              if (hasDraft) setSwitchTo(target);
-              else void selectExercise(target);
-            }}
-          >
-            {exercise.choices!.map((c, i) => (
-              <option key={c.exercise_id} value={c.exercise_id}>
-                {c.name}
-                {i === 0 ? " (default)" : ""}
-              </option>
-            ))}
-          </select>
           {sets.length > 0 && (
             <p className="text-sm text-muted-foreground">
               Delete all saved sets in this slot to change exercise.
