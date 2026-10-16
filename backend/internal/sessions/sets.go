@@ -15,10 +15,11 @@ type SetInput struct {
 	Reps     int64  `json:"reps"`
 }
 type SavedSet struct {
-	ID       string `json:"id"`
-	Position int64  `json:"exercise_position"`
-	Weight   string `json:"weight"`
-	Reps     int64  `json:"reps"`
+	Change   *SetChange `json:"change,omitempty"`
+	ID       string     `json:"id"`
+	Position int64      `json:"exercise_position"`
+	Weight   string     `json:"weight"`
+	Reps     int64      `json:"reps"`
 }
 type CompletedSet struct {
 	SavedSet
@@ -159,10 +160,10 @@ func readSets(ctx context.Context, tx pgx.Tx, owner int64, id string) ([]SavedSe
 	return items, rows.Err()
 }
 func (p Postgres) CompletedSets(ctx context.Context, owner int64, filter HistoryFilter) ([]CompletedSet, error) {
-	rows, err := p.Pool.Query(ctx, `SELECT ss.id::text,ss.exercise_position,ss.weight::text,ss.reps,s.id::text,se.name,s.completed_at,s.name,se.exercise_id::text
- FROM session_sets ss JOIN workout_sessions s ON s.owner_id=ss.owner_id AND s.id=ss.session_id
+	rows, err := p.Pool.Query(ctx, completedSetComparisons+`SELECT ss.id::text,ss.exercise_position,ss.weight::text,ss.reps,s.id::text,se.name,s.completed_at,s.name,se.exercise_id::text,ss.weight_change,ss.reps_change
+ FROM compared_sets ss JOIN workout_sessions s ON s.owner_id=ss.owner_id AND s.id=ss.session_id
  JOIN session_exercises se ON se.session_id=ss.session_id AND se.owner_id=ss.owner_id AND se.position=ss.exercise_position
- WHERE ss.owner_id=$1 AND s.completed_at IS NOT NULL AND NOT ss.deleted
+ WHERE ss.owner_id=$1
  AND ($2::text='' OR strpos(lower(se.name),lower($2))>0 OR strpos(lower(s.name),lower($2))>0)
  AND ($3::text='' OR se.exercise_id::text=$3)
  AND ($4::timestamptz IS NULL OR s.completed_at >= $4)
@@ -175,9 +176,11 @@ func (p Postgres) CompletedSets(ctx context.Context, owner int64, filter History
 	items := []CompletedSet{}
 	for rows.Next() {
 		var item CompletedSet
-		if err = rows.Scan(&item.ID, &item.Position, &item.Weight, &item.Reps, &item.SessionID, &item.ExerciseName, &item.CompletedAt, &item.SessionName, &item.ExerciseID); err != nil {
+		var weight, reps *string
+		if err = rows.Scan(&item.ID, &item.Position, &item.Weight, &item.Reps, &item.SessionID, &item.ExerciseName, &item.CompletedAt, &item.SessionName, &item.ExerciseID, &weight, &reps); err != nil {
 			return nil, err
 		}
+		item.Change = setChange(weight, reps)
 		items = append(items, item)
 	}
 	return items, rows.Err()

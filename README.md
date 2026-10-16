@@ -299,3 +299,5 @@ Start workout is the larger primary action at the top right of each active templ
 Template list/editor buttons and links use pointer cursors. Each exercise card has Add exercise below at its lower right, opening the selection/target popup and inserting after that occurrence. Empty templates show Add first exercise so creation and removing every occurrence remain recoverable.
 
 The owner confirmed that `/exercises/[id]/history` is removed completely and returns 404, with no compatibility redirect. Exercise-specific browsing uses the existing Sets exercise filter.
+
+Both history tabs show green/red signed weight and rep changes against the matching set from the latest earlier completed workout containing the exercise. Equal values or missing previous sets show no indicator. Comparisons use the full history across templates, independent of current filters; repeated exercises match by occurrence order.

@@ -184,7 +184,11 @@ func getSnapshot(ctx context.Context, tx pgx.Tx, owner int64, id string, complet
 		return item, err
 	}
 	rows.Close()
-	item.Sets, err = readSets(ctx, tx, owner, item.ID)
+	if completed {
+		item.Sets, err = readCompletedSets(ctx, tx, owner, item.ID)
+	} else {
+		item.Sets, err = readSets(ctx, tx, owner, item.ID)
+	}
 	return item, err
 }
 func (p Postgres) End(ctx context.Context, owner int64, id string) error {
