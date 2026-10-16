@@ -27,6 +27,8 @@ export function SessionDetail({ id }: { id: string }) {
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   const [confirming, setConfirming] = useState(false);
+  const [missingSets, setMissingSets] = useState<MissingSets[]>([]);
+  const [confirmMissing, setConfirmMissing] = useState(false);
   const [busy, setBusy] = useState<"cancel" | "complete" | null>(null);
   const [actionError, setActionError] = useState("");
   const onBlocked = useCallback((position: number, isBlocked: boolean) => {
@@ -66,11 +68,33 @@ export function SessionDetail({ id }: { id: string }) {
     if (confirming) modal.current?.showModal();
     else modal.current?.close();
   }, [confirming]);
-  async function end(action: "cancel" | "complete") {
+  async function end(action: "cancel" | "complete", allowIncomplete = false) {
     if (busy || (action === "complete" && blockers.current.size)) return;
     setBusy(action);
     setActionError("");
     try {
+      if (action === "complete" && !allowIncomplete) {
+        const current = await fetch(`/api/sessions/${id}`, {
+          cache: "no-store",
+        });
+        if (!current.ok) throw new Error("Could not check session.");
+        const saved: Session = await current.json();
+        const missing = saved.exercises
+          .map((entry) => ({
+            name: entry.name,
+            position: entry.position,
+            planned: entry.set_count,
+            saved: saved.sets.filter(
+              (set) => set.exercise_position === entry.position,
+            ).length,
+          }))
+          .filter((entry) => entry.saved < entry.planned);
+        if (missing.length) {
+          setMissingSets(missing);
+          setConfirmMissing(true);
+          return;
+        }
+      }
       const response = await fetch(`/api/sessions/${id}/${action}`, {
         method: "POST",
       });
@@ -82,6 +106,7 @@ export function SessionDetail({ id }: { id: string }) {
         return;
       }
       setConfirming(false);
+      setConfirmMissing(false);
       toast.success(
         action === "cancel" ? "Session cancelled." : "Session completed.",
       );
@@ -172,6 +197,7 @@ export function SessionDetail({ id }: { id: string }) {
               key={`${id}-${entry.position}`}
               sessionID={id}
               position={entry.position}
+              plannedCount={entry.set_count}
               initial={session.sets.filter(
                 (set) => set.exercise_position === entry.position,
               )}
@@ -216,7 +242,19 @@ export function SessionDetail({ id }: { id: string }) {
           Continue later
         </Link>
       </div>
-      {!confirming && actionError && (
+      {confirmMissing && (
+        <IncompleteSessionDialog
+          missing={missingSets}
+          busy={!!busy}
+          error={actionError}
+          onCancel={() => {
+            setConfirmMissing(false);
+            setActionError("");
+          }}
+          onConfirm={() => void end("complete", true)}
+        />
+      )}
+      {!confirming && !confirmMissing && actionError && (
         <Alert variant="destructive">
           <AlertTitle>Could not end session</AlertTitle>
           <AlertDescription>{actionError}</AlertDescription>
@@ -264,5 +302,87 @@ export function SessionDetail({ id }: { id: string }) {
         </div>
       </dialog>
     </>
+  );
+}
+
+type MissingSets = {
+  name: string;
+  position: number;
+  planned: number;
+  saved: number;
+};
+function IncompleteSessionDialog({
+  missing,
+  busy,
+  error,
+  onCancel,
+  onConfirm,
+}: {
+  missing: MissingSets[];
+  busy: boolean;
+  error: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const title = useId();
+  useEffect(() => {
+    const opener =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const dialog = ref.current;
+    dialog?.showModal();
+    return () => {
+      dialog?.close();
+      opener?.focus();
+    };
+  }, []);
+  return (
+    <dialog
+      ref={ref}
+      aria-labelledby={title}
+      onCancel={(event) => {
+        event.preventDefault();
+        if (!busy) onCancel();
+      }}
+      className="m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-2xl border border-border bg-card p-5 text-foreground shadow-xl backdrop:bg-black/60"
+    >
+      <h2 id={title} className="text-xl font-semibold">
+        Complete with missing sets?
+      </h2>
+      <p className="mt-3 text-sm text-muted-foreground">
+        These planned sets have not been saved. You can return to your workout
+        or complete it anyway.
+      </p>
+      <ul className="my-4 space-y-3">
+        {missing.map((entry) => (
+          <li key={entry.position}>
+            <p className="break-words font-medium">
+              {entry.name} (exercise {entry.position})
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {entry.saved + 1 === entry.planned
+                ? `Set ${entry.planned}`
+                : `Sets ${entry.saved + 1}–${entry.planned}`}{" "}
+              missing ({entry.saved}/{entry.planned} saved).
+            </p>
+          </li>
+        ))}
+      </ul>
+      {error && (
+        <p role="alert" className="mb-4 text-sm text-destructive">
+          {error}
+        </p>
+      )}
+      <div className="flex flex-wrap gap-3">
+        <Button autoFocus variant="outline" disabled={busy} onClick={onCancel}>
+          Return to session
+        </Button>
+        <Button disabled={busy} onClick={onConfirm}>
+          {busy ? "Completing…" : "Complete anyway"}
+        </Button>
+      </div>
+    </dialog>
   );
 }

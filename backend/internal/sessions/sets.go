@@ -112,6 +112,7 @@ func (p Postgres) SaveSet(ctx context.Context, owner int64, sessionID, id string
 	var existingPosition int64
 	var deleted bool
 	err = tx.QueryRow(ctx, "SELECT exercise_position,deleted FROM session_sets WHERE owner_id=$1 AND session_id=$2 AND id=$3", owner, sessionID, id).Scan(&existingPosition, &deleted)
+	isNew := errors.Is(err, pgx.ErrNoRows)
 	if err == nil {
 		if deleted {
 			return SavedSet{}, ErrDeleted
@@ -128,6 +129,15 @@ func (p Postgres) SaveSet(ctx context.Context, owner int64, sessionID, id string
 	}
 	if !exists {
 		return SavedSet{}, ValidationError{"exercise_position": "This exercise is not in the active workout."}
+	}
+	if isNew {
+		var room bool
+		if err = tx.QueryRow(ctx, `SELECT (SELECT count(*) FROM session_sets WHERE owner_id=$1 AND session_id=$2 AND exercise_position=$3 AND NOT deleted)<set_count FROM session_exercises WHERE owner_id=$1 AND session_id=$2 AND position=$3`, owner, sessionID, input.Position).Scan(&room); err != nil {
+			return SavedSet{}, err
+		}
+		if !room {
+			return SavedSet{}, ValidationError{"set_count": "All planned sets for this exercise are saved. Refresh to see the latest sets."}
+		}
 	}
 	var item SavedSet
 	var rir any

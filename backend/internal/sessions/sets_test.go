@@ -158,6 +158,50 @@ func TestPostgresSets(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Two new requests compete for the final planned slot under the session lock.
+	capFirst := "55555555-5555-4555-8555-555555555555"
+	capSecond := "66666666-6666-4666-8666-666666666666"
+	capThird := "77777777-7777-4777-8777-777777777777"
+	capReplacement := "88888888-8888-4888-8888-888888888888"
+	if _, err = store.SaveSet(ctx, 71, session.ID, capFirst, input); err != nil {
+		t.Fatal(err)
+	}
+	capResults := make(chan error, 2)
+	for _, id := range []string{capSecond, capThird} {
+		go func(id string) { _, err := store.SaveSet(ctx, 71, session.ID, id, input); capResults <- err }(id)
+	}
+	capAccepted, capRejected := 0, 0
+	for i := 0; i < 2; i++ {
+		err := <-capResults
+		if err == nil {
+			capAccepted++
+		} else if _, ok := err.(ValidationError); ok {
+			capRejected++
+		} else {
+			t.Fatal(err)
+		}
+	}
+	if capAccepted != 1 || capRejected != 1 {
+		t.Fatal("planned cap race", capAccepted, capRejected)
+	}
+	if _, err = store.SaveSet(ctx, 71, session.ID, capFirst, input); err != nil {
+		t.Fatal("retry at cap", err)
+	}
+	if _, err = store.SaveSet(ctx, 71, session.ID, capReplacement, input); err == nil {
+		t.Fatal("extra set capAccepted")
+	}
+	if err = store.DeleteSet(ctx, 71, session.ID, capFirst); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.SaveSet(ctx, 71, session.ID, capReplacement, input); err != nil {
+		t.Fatal("deleted slot unavailable", err)
+	}
+	for _, id := range []string{capSecond, capThird, capReplacement} {
+		if err = store.DeleteSet(ctx, 71, session.ID, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	if _, err = store.SaveSet(ctx, 72, session.ID, setID, input); !errors.Is(err, ErrNotFound) {
 		t.Fatal("foreign session write", err)
 	}

@@ -47,6 +47,7 @@ export function SessionSets({
   disabled,
   onBlocked,
   previousWeight,
+  plannedCount,
 }: {
   sessionID: string;
   position: number;
@@ -54,6 +55,7 @@ export function SessionSets({
   disabled: boolean;
   onBlocked: (position: number, blocked: boolean) => void;
   previousWeight?: string;
+  plannedCount: number;
 }) {
   const formID = useId();
   const sensors = useSensors(
@@ -67,6 +69,7 @@ export function SessionSets({
   );
   const [pendingOrder, setPendingOrder] = useState<SavedSet[] | null>(null);
   const [sets, setSets] = useState(initial);
+  const atLimit = sets.length >= plannedCount;
   const [entry, setEntry] = useState<Values>(() => ({
     weight: previousWeight ?? "",
     reps: "",
@@ -129,7 +132,8 @@ export function SessionSets({
       disabled ||
       pendingDelete ||
       pendingOrder ||
-      (!editing && draft)
+      (!editing && draft) ||
+      (!editing && atLimit && !attempted)
     )
       return;
     const values = editing ? draft : entry;
@@ -264,7 +268,12 @@ export function SessionSets({
           values={entry}
           fields={addFields}
           disabled={
-            busy || disabled || !!draft || !!pendingDelete || !!pendingOrder
+            busy ||
+            disabled ||
+            !!draft ||
+            !!pendingDelete ||
+            !!pendingOrder ||
+            (atLimit && !attempted)
           }
           onChange={(key, value) => {
             if (key === "weight") initialized.current = true;
@@ -284,7 +293,12 @@ export function SessionSets({
           <Button
             type="submit"
             disabled={
-              busy || disabled || !!draft || !!pendingDelete || !!pendingOrder
+              busy ||
+              disabled ||
+              !!draft ||
+              !!pendingDelete ||
+              !!pendingOrder ||
+              (atLimit && !attempted)
             }
           >
             Add set
@@ -296,6 +310,11 @@ export function SessionSets({
           </p>
         )}
       </form>
+      {atLimit && (
+        <p className="text-sm text-muted-foreground">
+          All planned sets saved ({sets.length}/{plannedCount}).
+        </p>
+      )}
       <h3 className="font-medium">Saved sets</h3>
       {sets.length === 0 ? (
         <p className="text-sm text-muted-foreground">No sets saved yet.</p>
