@@ -15,7 +15,7 @@ export function CompletedSessionExercises({
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
   if (inline)
     return (
-      <ol className="divide-y divide-border">
+      <ol className="space-y-3">
         {session.exercises.map((entry) => {
           const sets = session.sets.filter(
             (set) => set.exercise_position === entry.position,
@@ -24,14 +24,17 @@ export function CompletedSessionExercises({
           const trigger = `${prefix}-${entry.position}-trigger`;
           const panel = `${prefix}-${entry.position}-panel`;
           return (
-            <li key={entry.position}>
+            <li
+              key={entry.position}
+              className="rounded-xl border border-border"
+            >
               <h3>
                 <button
                   type="button"
                   id={trigger}
                   aria-expanded={open}
                   aria-controls={panel}
-                  className="flex min-h-12 w-full items-center gap-3 rounded-lg py-3 text-left hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-ring"
+                  className="flex min-h-12 w-full items-center gap-3 rounded-xl px-4 py-4 text-left hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-ring"
                   onClick={() =>
                     setExpanded((previous) => {
                       const next = new Set(previous);
@@ -42,7 +45,7 @@ export function CompletedSessionExercises({
                   }
                 >
                   <span className="min-w-0 flex-1 break-words font-medium">
-                    {entry.position}. {entry.name}
+                    {entry.name}
                   </span>
                   <span className="shrink-0 text-sm text-muted-foreground">
                     {sets.length} {sets.length === 1 ? "set" : "sets"}
@@ -58,19 +61,39 @@ export function CompletedSessionExercises({
                 role="region"
                 aria-labelledby={trigger}
                 hidden={!open}
-                className="space-y-3 pb-4"
+                className="space-y-4 px-4 pb-4"
               >
                 {sets.length ? (
-                  <ol className="space-y-2">
-                    {sets.map((set, index) => (
-                      <li
-                        key={set.id}
-                        className="rounded-lg bg-primary/5 px-3 py-2 font-medium tabular-nums"
-                      >
-                        Set {index + 1}: {set.weight} kg × {set.reps} reps
-                      </li>
-                    ))}
-                  </ol>
+                  <table className="w-full table-fixed text-left text-sm tabular-nums">
+                    <caption className="sr-only">
+                      Recorded sets for {entry.name}, occurrence{" "}
+                      {entry.position}
+                    </caption>
+                    <thead>
+                      <tr className="border-b border-border text-muted-foreground">
+                        <th scope="col" className="py-3 pr-3 font-medium">
+                          Weight (kg)
+                        </th>
+                        <th scope="col" className="py-3 pr-3 font-medium">
+                          Reps
+                        </th>
+                        <th scope="col" className="py-3 font-medium">
+                          RIR
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {sets.map((set) => (
+                        <tr key={set.id}>
+                          <td className="py-3 pr-3">{set.weight}</td>
+                          <td className="py-3 pr-3">{set.reps}</td>
+                          <td className="py-3">
+                            <span aria-label="Not recorded">—</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 ) : (
                   <p className="text-sm text-muted-foreground">
                     No sets recorded for this exercise.
