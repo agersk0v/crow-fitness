@@ -9,11 +9,13 @@ export function SortableExercise({
   label,
   disabled,
   children,
+  kind = "exercise",
 }: {
   id: string;
   label: string;
   disabled: boolean;
   children: ReactNode;
+  kind?: "exercise" | "set";
 }) {
   const reducedMotion = useReducedMotion();
   const {
@@ -40,7 +42,7 @@ export function SortableExercise({
       tabIndex={disabled ? -1 : 0}
       aria-disabled={disabled}
       aria-describedby={attributes["aria-describedby"]}
-      aria-roledescription="sortable exercise"
+      aria-roledescription={`sortable ${kind}`}
       aria-label={`Reorder ${label}`}
       data-dragging={isDragging || undefined}
       style={{

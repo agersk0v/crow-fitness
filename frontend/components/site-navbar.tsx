@@ -64,7 +64,9 @@ export function SiteNavbar() {
     <Navbar
       selected={selected}
       pointerControls={
-        pathname.startsWith("/templates") || pathname.startsWith("/history")
+        pathname.startsWith("/templates") ||
+        pathname.startsWith("/history") ||
+        pathname.startsWith("/sessions")
       }
       historySearch={pathname === "/history" ? searchParams.toString() : ""}
     />

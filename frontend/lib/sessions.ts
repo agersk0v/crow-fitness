@@ -11,6 +11,7 @@ export type Session = {
 };
 
 export type SavedSet = {
+  rir?: string | null;
   change?: { weight: string; reps: string };
   id: string;
   exercise_position: number;

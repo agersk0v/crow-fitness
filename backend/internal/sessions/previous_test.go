@@ -17,24 +17,27 @@ import (
 )
 
 func TestPreviousHTTP(t *testing.T) {
-	for _, tc := range []struct {
-		id     string
-		err    error
-		status int
-	}{{"7", nil, 200}, {"0", nil, 400}, {"7", ErrNotFound, 404}, {"7", errors.New("private history details"), 500}} {
-		store := &fakeStore{err: tc.err}
-		mux := http.NewServeMux()
-		Register(mux, store)
-		response := httptest.NewRecorder()
-		mux.ServeHTTP(response, httptest.NewRequest("GET", "/api/sessions/"+tc.id+"/previous", nil))
-		if response.Code != tc.status || response.Header().Get("Cache-Control") != "no-store" {
-			t.Fatal(response.Code, response.Body.String())
-		}
-		if tc.status == 200 && (response.Body.String() != "{\"items\":[]}\n" || store.owner != exercises.LocalOwnerID || store.id != "7") {
-			t.Fatal("incorrect scope/empty representation", response.Body.String())
+	for _, endpoint := range []string{"previous", "bests"} {
+		for _, tc := range []struct {
+			id     string
+			err    error
+			status int
+		}{{"7", nil, 200}, {"0", nil, 400}, {"7", ErrNotFound, 404}, {"7", errors.New("private history details"), 500}} {
+			store := &fakeStore{err: tc.err}
+			mux := http.NewServeMux()
+			Register(mux, store)
+			response := httptest.NewRecorder()
+			mux.ServeHTTP(response, httptest.NewRequest("GET", "/api/sessions/"+tc.id+"/"+endpoint, nil))
+			if response.Code != tc.status || response.Header().Get("Cache-Control") != "no-store" {
+				t.Fatal(response.Code, response.Body.String())
+			}
+			if tc.status == 200 && (response.Body.String() != "{\"items\":[]}\n" || store.owner != exercises.LocalOwnerID || store.id != "7") {
+				t.Fatal("incorrect scope/empty representation", response.Body.String())
+			}
 		}
 	}
 }
+
 func TestPostgresPrevious(t *testing.T) {
 	url := os.Getenv("TEST_DATABASE_URL")
 	if url == "" {
@@ -85,8 +88,12 @@ func TestPostgresPrevious(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	save(first.ID, setID, 1, "1.50")
+	save(first.ID, setID, 1, "30.75")
+	if _, err = pool.Exec(ctx, "UPDATE session_sets SET reps=9 WHERE session_id=$1 AND id=$2", first.ID, setID); err != nil {
+		t.Fatal(err)
+	}
 	save(first.ID, "22222222-2222-4222-8222-222222222222", 2, "20.25")
+	save(first.ID, "44444444-4444-4444-8444-444444444444", 3, "2.50")
 	if err = store.Complete(ctx, 81, first.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -181,6 +188,32 @@ func TestPostgresPrevious(t *testing.T) {
 	if _, err = store.Previous(ctx, 81, second.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatal("completed session accepted as active")
 	}
+	bests, err := store.PersonalBests(ctx, 81, current.ID)
+	if err != nil || len(bests) != 2 {
+		t.Fatal("personal bests", bests, err)
+	}
+	byExercise := map[string]PersonalBest{}
+	for _, best := range bests {
+		byExercise[best.ExerciseID] = best
+	}
+	if best := byExercise[press]; best.Occurrences[0].Sets[0].ID != setID || best.Occurrences[0].Sets[0].Weight != "30.75" || best.Occurrences[0].Sets[0].Reps != 9 || len(best.Occurrences) != 2 {
+		t.Fatal("heaviest set or reps tie breaker", best)
+	}
+	if best := byExercise[squat]; best.Occurrences[0].Sets[0].Weight != "20.25" {
+		t.Fatal("best across templates", best)
+	}
+	if _, ok := byExercise[unseen]; ok {
+		t.Fatal("matched personal best by name")
+	}
+	for _, tc := range []struct {
+		owner int64
+		id    string
+	}{{82, current.ID}, {81, second.ID}, {81, cancelled.ID}} {
+		if _, err := store.PersonalBests(ctx, tc.owner, tc.id); !errors.Is(err, ErrNotFound) {
+			t.Fatal("invalid personal best scope", tc, err)
+		}
+	}
+
 	after, err := store.Get(ctx, 81, current.ID)
 	if err != nil || !reflect.DeepEqual(before, after) {
 		t.Fatal("reference read changed current sets", after, err)
@@ -198,4 +231,9 @@ func TestPostgresPrevious(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(previous, reloaded) {
 		t.Fatal("reference reconnect changed results", reloaded, err)
 	}
+	reloadedBests, err := (Postgres{Pool: fresh}).PersonalBests(ctx, 81, current.ID)
+	if err != nil || !reflect.DeepEqual(bests, reloadedBests) {
+		t.Fatal("personal best reconnect changed", reloadedBests, err)
+	}
+
 }

@@ -75,7 +75,8 @@ async function forward(
         endpoint === "history/templates" ||
         completedSession ||
         session ||
-        previous)) ||
+        previous ||
+        /^sessions\/[1-9][0-9]*\/bests$/.test(endpoint))) ||
     (request.method === "POST" &&
       (["exercises", "templates", "sessions"].includes(endpoint) ||
         reset ||
@@ -83,6 +84,8 @@ async function forward(
         sessionAction)) ||
     (["PUT", "DELETE"].includes(request.method) && resource) ||
     (request.method === "PUT" && template) ||
+    (request.method === "PUT" &&
+      /^sessions\/[1-9][0-9]*\/sets\/order$/.test(endpoint)) ||
     (["PUT", "DELETE"].includes(request.method) && sessionSet);
   if (!allowed)
     return Response.json(

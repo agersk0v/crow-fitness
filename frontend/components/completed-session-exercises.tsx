@@ -147,7 +147,8 @@ export function CompletedSessionExercises({
                         key={set.id}
                         className="rounded-lg border border-border p-3"
                       >
-                        Set {index + 1}: {set.weight} kg × {set.reps} reps
+                        Set {index + 1}: {set.weight} kg × {set.reps} reps · RIR{" "}
+                        {set.rir ?? "—"}
                       </li>
                     ))}
                   </ol>

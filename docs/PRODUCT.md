@@ -66,9 +66,9 @@ Home links to a simple Sets page: only completed-workout sets, newest workouts f
 
 The owner confirmed the selection rule: use the latest completed workout containing at least one nondeleted saved set for the same exercise identity, across any template. Active/cancelled sessions and completed workouts with no eligible sets for that exercise are excluded. Completion time and session identity break recency ties. Renaming an exercise does not disconnect its history.
 
-Each active exercise occurrence has a read-only Previous performance section with the source completion date and exact weight/reps. Repeated source occurrences are shown separately in their original occurrence/set order; repeated current occurrences may share the same reference. An exercise without eligible history shows No previous performance yet. Previous results are visually separate from current sets and template targets.
+Each active exercise occurrence has Previous session and Personal best reference tabs with exact table values (revised #60). Repeated source occurrences are shown separately in their original occurrence/set order; repeated current occurrences may share the same reference. An exercise without eligible history shows a concise empty state. Previous results are visually separate from current sets and template targets.
 
-References load independently of current-session data. Failed loads show retry while set controls and drafts remain usable. Retry does not reload/reset current input; refresh and Continue session load references alongside saved current sets. Reading or completing never copies previous results into current records. Prefilling, copying, and progression recommendations remain separate work.
+References load independently of current-session data. Failed loads show retry while set controls and drafts remain usable. Retry does not reload/reset current input; refresh and Continue session load references alongside saved current sets. Reading or completing never copies previous results into current records. The one-time previous-first-weight default is approved in #60; copying/progression recommendations remain separate work.
 
 ## Approved exercise set history (#36)
 
@@ -120,7 +120,7 @@ The approved #31 lifecycle above is implemented. Start Workout opens a saved sna
 
 ### 3. Save sets in the active session
 
-The approved #33 behavior above is implemented. Add/Save records weight/reps in the active session; Edit/Save replaces values and Delete removes the set. Read-only references follow #35; suggested/prefilled values remain future work.
+The approved #33 behavior above is implemented. Add/Save records weight/reps in the active session; Edit/Save replaces values and Delete removes the set. Read-only references follow #35; the one-time first-weight default follows #60 below.
 
 ### 4. Complete a workout
 
@@ -132,15 +132,15 @@ Workout history follows the approved #37 behavior above. Completed sessions and 
 
 ## Decisions requiring review
 
-The following logging/history defaults remain recommendations, not approved requirements. One active session is approved in #31. #33 approves retaining completed results, discarding cancelled workouts, and the defaults stated above. The template working-set count is already approved; D2 now concerns extra performed sets.
+The following logging/history defaults remain recommendations, not approved requirements. One active session is approved in #31. #33 approves retaining completed results, discarding cancelled workouts, and the defaults stated above. The template working-set count and the revised #60 cap on new recorded sets are approved.
 
 | ID | Decision | Proposed default |
 | --- | --- | --- |
 | D1 | Initial weight/reps | Prefill from previous completed performance as unrecorded suggestions; unmatched rows stay blank |
-| D2 | Planned sets | Positive working-set counts per template exercise are approved in #23; extra performed sets in sessions remain proposed |
+| D2 | Planned sets | Positive working-set counts are approved in #23; revised #60 caps new recorded sets at the captured count, with explicit confirmation for incomplete completion |
 | D8 | Future exercise progress scope | Include active/completed sets with labels remains proposed; the current Sets page includes completed sets only |
 
-A partial previous workout supplies suggestions only for matching rows. If an exercise occurs more than once in that workout, preserve the source occurrence/order when displaying references; confirm how to map those sets into suggestions before implementing prefilling.
+A partial previous workout supplies suggestions only for matching rows. If an exercise occurs more than once in that workout, preserve the source occurrence/order when displaying references; use the approved first source occurrence’s first set as the single initial weight under #60; no per-set suggestion mapping is introduced.
 
 Resolve the remaining decisions before implementing affected session flows. Active-session cancellation is approved in #31. Corrections to future completed workouts need separate requirements. Continue later retains the active session without introducing a separate pause state.
 
@@ -212,6 +212,18 @@ The owner approved replacing the session-level accordion with always-visible wor
 
 Sessions uses a template identity filter instead of the exercise filter. Historical template options use the most recent captured workout name, including archived/renamed templates with completed history. Sets keeps the exercise filter. URL parameters retain both identity selections when switching tabs, but only the current tab’s identity affects results. Search/date criteria remain shared; Apply is explicit and Clear clears criteria. Sets workout metadata uses a slightly larger name beside its local date, wrapping on narrow screens. Enabled buttons, links, and exercise accordion headers use pointer cursors on both tabs.
 
-Sessions exercise rows have padded, separated triggers without visible occurrence-number prefixes. Both expanded Sessions exercises and Sets-tab exercise groups use the same plain table with Weight (kg), Reps, and RIR columns. Recorded RIR is not stored yet, so its cells show “—” (Not recorded); template target RIR remains separate.
+Sessions exercise rows have padded, separated triggers without visible occurrence-number prefixes. Both expanded Sessions exercises and Sets-tab exercise groups use the same plain table with Weight (kg), Reps, and RIR columns. Absent recorded RIR shows “—” (Not recorded); template target RIR remains separate.
 
-Both history tabs show small signed weight/rep differences beside recorded values: green for an increase, red for a decrease, and no indicator for equal values or a missing baseline. Each set compares with the same numbered surviving set in the latest earlier completed workout containing that exercise, across templates. Repeated exercises match by occurrence order within each workout; a missing occurrence/set or an empty previous workout has no baseline. Earlier is ordered by completion timestamp, then session ID for ties. Active/cancelled workouts and deleted sets are excluded. Filters do not change the baseline. Signed text and accessible labels communicate direction independently of color; RIR remains unrecorded.
+Both history tabs show small signed weight/rep differences beside recorded values: green for an increase, red for a decrease, and no indicator for equal values or a missing baseline. Each set compares with the same numbered surviving set in the latest earlier completed workout containing that exercise, across templates. Repeated exercises match by occurrence order within each workout; a missing occurrence/set or an empty previous workout has no baseline. Earlier is ordered by completion timestamp, then session ID for ties. Active/cancelled workouts and deleted sets are excluded. Filters do not change the baseline. Signed text and accessible labels communicate direction independently of color; RIR remains separate from weight/rep comparisons.
+
+## Active-session references and entry (#60)
+
+Exercise cards omit visible number prefixes. Previous session is the initial tab; Personal best shows all sets for that exercise from the completed workout containing its heaviest nondeleted set, using reps to break equal-weight ties. Reference tables show Weight (kg), Reps, and optional recorded RIR (“—” when absent), without explanatory paragraphs or source-date boxes. Repeated previous occurrences remain separate; repeated current occurrences may share the reference. Existing template targets stay separate.
+
+Weight and Reps inputs are always visible above current saved sets. Weight initializes once from the first set of the first previous occurrence; no history leaves it blank. User edits, successful additions, tab switches, reference retries and delayed loads never replace that weight thereafter. Each successful Add set clears reps and retains the current weight exactly; failed submissions retain both. A retained/default weight alone does not block completion, while entered reps, validation errors, edits, pending requests and uncertain changes do. The owner removed Discard set: manually clear unfinished reps/RIR, and resolve uncertain new saves by retrying the same Add request. Existing saved-set editing/deletion and session continue/complete/cancel semantics remain intact. Unsaved input persistence across refresh/navigation is not added.
+
+The owner extended #60 with optional recorded RIR for Add/Edit. Accept nonnegative decimals including zero; blank is null and clears an existing value on Save. After adding, reset reps/RIR and retain weight. Errors retain all inputs. RIR is actual per-set data, independent from target RIR and personal-best source selection. Active/completed/reference/history views show saved values, with “—” for null. Saved rows use Set N at top left and Edit/Delete on the right, then three value columns; remove item borders in favor of dividers.
+
+The revised #60 personal-best rule selects the workout containing the heaviest set (reps break weight ties), then displays all surviving sets for that exercise from the chosen workout, with repeated occurrences separated. No volume-based scoring is introduced. Saved active-session sets can be reordered by mouse/touch/keyboard with the template editor’s noninteractive-background drag behavior. Save each exact permutation immediately and preserve it through reload, continuation, completion, references and numbered-set comparisons. Reordering never changes recorded values or moves sets between exercises. Edits open in a popup with Save/Cancel/Escape, retaining failed changes for retry. Set N is larger. Remove the Discard set button; failed or uncertain writes must be resolved through retry, and pending saves/orders/edits still block completion.
+
+The owner capped new sets at the active snapshot’s working-set count per exercise occurrence. Add is disabled when the saved count reaches that cap; existing sets remain editable/reorderable/deletable, and deletion frees a slot. Go enforces the cap under the session row lock while permitting idempotent retries and edits at the cap. Existing excess legacy sets are preserved. Complete session first refreshes persisted session data; if planned sets are missing, a confirmation lists each exercise occurrence and its missing set numbers/range. Return/Escape keeps the workout active; Complete anyway retains its current sets and completes normally. Failed checks never silently complete the session.

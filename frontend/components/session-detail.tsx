@@ -1,12 +1,13 @@
 "use client";
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import {
-  PreviousPerformanceView,
+  ExerciseReferences,
+  usePersonalBests,
   usePreviousPerformance,
 } from "@/components/previous-performance";
 import { SessionSets } from "@/components/session-sets";
@@ -15,6 +16,7 @@ import type { Session } from "@/lib/sessions";
 export function SessionDetail({ id }: { id: string }) {
   const router = useRouter();
   const previous = usePreviousPerformance(id);
+  const bests = usePersonalBests(id);
   const modal = useRef<HTMLDialogElement>(null);
   const dialogID = useId();
   const blockers = useRef(new Set<number>());
@@ -25,8 +27,15 @@ export function SessionDetail({ id }: { id: string }) {
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   const [confirming, setConfirming] = useState(false);
+  const [missingSets, setMissingSets] = useState<MissingSets[]>([]);
+  const [confirmMissing, setConfirmMissing] = useState(false);
   const [busy, setBusy] = useState<"cancel" | "complete" | null>(null);
   const [actionError, setActionError] = useState("");
+  const onBlocked = useCallback((position: number, isBlocked: boolean) => {
+    if (isBlocked) blockers.current.add(position);
+    else blockers.current.delete(position);
+    setBlocked(blockers.current.size > 0);
+  }, []);
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
@@ -59,11 +68,33 @@ export function SessionDetail({ id }: { id: string }) {
     if (confirming) modal.current?.showModal();
     else modal.current?.close();
   }, [confirming]);
-  async function end(action: "cancel" | "complete") {
+  async function end(action: "cancel" | "complete", allowIncomplete = false) {
     if (busy || (action === "complete" && blockers.current.size)) return;
     setBusy(action);
     setActionError("");
     try {
+      if (action === "complete" && !allowIncomplete) {
+        const current = await fetch(`/api/sessions/${id}`, {
+          cache: "no-store",
+        });
+        if (!current.ok) throw new Error("Could not check session.");
+        const saved: Session = await current.json();
+        const missing = saved.exercises
+          .map((entry) => ({
+            name: entry.name,
+            position: entry.position,
+            planned: entry.set_count,
+            saved: saved.sets.filter(
+              (set) => set.exercise_position === entry.position,
+            ).length,
+          }))
+          .filter((entry) => entry.saved < entry.planned);
+        if (missing.length) {
+          setMissingSets(missing);
+          setConfirmMissing(true);
+          return;
+        }
+      }
       const response = await fetch(`/api/sessions/${id}/${action}`, {
         method: "POST",
       });
@@ -75,6 +106,7 @@ export function SessionDetail({ id }: { id: string }) {
         return;
       }
       setConfirming(false);
+      setConfirmMissing(false);
       toast.success(
         action === "cancel" ? "Session cancelled." : "Session completed.",
       );
@@ -129,24 +161,13 @@ export function SessionDetail({ id }: { id: string }) {
         configuration you started with. Saved sets stay in this active session
         until you complete the workout. Cancellation discards them.
       </p>
-      {previous.error && (
-        <Alert variant="destructive">
-          <AlertTitle>Could not load previous performance</AlertTitle>
-          <AlertDescription>{previous.error}</AlertDescription>
-          <Button className="col-start-2 mt-3" onClick={previous.retry}>
-            Retry previous performance
-          </Button>
-        </Alert>
-      )}
       <ol className="space-y-4">
         {session.exercises.map((entry) => (
           <li
             key={entry.position}
             className="rounded-2xl border border-border bg-card p-5"
           >
-            <h2 className="break-words text-xl font-semibold">
-              {entry.position}. {entry.name}
-            </h2>
+            <h2 className="break-words text-xl font-semibold">{entry.name}</h2>
             <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
               <dt>Working sets</dt>
               <dd>{entry.set_count}</dd>
@@ -161,34 +182,39 @@ export function SessionDetail({ id }: { id: string }) {
               <dt>Target RIR</dt>
               <dd>{entry.target_rir ?? "Not specified"}</dd>
             </dl>
-            <PreviousPerformanceView
-              label={`${entry.position}. ${entry.name}`}
-              reference={previous.items.find(
+            <ExerciseReferences
+              label={entry.name}
+              previous={previous.items.find(
                 (item) => item.exercise_id === entry.exercise_id,
               )}
-              loading={previous.loading}
-              failed={!!previous.error}
+              best={bests.items.find(
+                (item) => item.exercise_id === entry.exercise_id,
+              )}
+              previousState={previous}
+              bestState={bests}
             />
             <SessionSets
               key={`${id}-${entry.position}`}
               sessionID={id}
               position={entry.position}
+              plannedCount={entry.set_count}
               initial={session.sets.filter(
                 (set) => set.exercise_position === entry.position,
               )}
               disabled={!!busy}
-              onBlocked={(position, isBlocked) => {
-                if (isBlocked) blockers.current.add(position);
-                else blockers.current.delete(position);
-                setBlocked(blockers.current.size > 0);
-              }}
+              previousWeight={
+                previous.items.find(
+                  (item) => item.exercise_id === entry.exercise_id,
+                )?.occurrences[0]?.sets[0]?.weight
+              }
+              onBlocked={onBlocked}
             />
           </li>
         ))}
       </ol>
       {blocked && (
         <p role="status" className="mt-5 text-sm text-muted-foreground">
-          Save or discard open drafts and resolve failed changes before
+          Save edits, clear unfinished inputs, and resolve failed changes before
           completing.
         </p>
       )}
@@ -216,7 +242,19 @@ export function SessionDetail({ id }: { id: string }) {
           Continue later
         </Link>
       </div>
-      {!confirming && actionError && (
+      {confirmMissing && (
+        <IncompleteSessionDialog
+          missing={missingSets}
+          busy={!!busy}
+          error={actionError}
+          onCancel={() => {
+            setConfirmMissing(false);
+            setActionError("");
+          }}
+          onConfirm={() => void end("complete", true)}
+        />
+      )}
+      {!confirming && !confirmMissing && actionError && (
         <Alert variant="destructive">
           <AlertTitle>Could not end session</AlertTitle>
           <AlertDescription>{actionError}</AlertDescription>
@@ -264,5 +302,87 @@ export function SessionDetail({ id }: { id: string }) {
         </div>
       </dialog>
     </>
+  );
+}
+
+type MissingSets = {
+  name: string;
+  position: number;
+  planned: number;
+  saved: number;
+};
+function IncompleteSessionDialog({
+  missing,
+  busy,
+  error,
+  onCancel,
+  onConfirm,
+}: {
+  missing: MissingSets[];
+  busy: boolean;
+  error: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const title = useId();
+  useEffect(() => {
+    const opener =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const dialog = ref.current;
+    dialog?.showModal();
+    return () => {
+      dialog?.close();
+      opener?.focus();
+    };
+  }, []);
+  return (
+    <dialog
+      ref={ref}
+      aria-labelledby={title}
+      onCancel={(event) => {
+        event.preventDefault();
+        if (!busy) onCancel();
+      }}
+      className="m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-2xl border border-border bg-card p-5 text-foreground shadow-xl backdrop:bg-black/60"
+    >
+      <h2 id={title} className="text-xl font-semibold">
+        Complete with missing sets?
+      </h2>
+      <p className="mt-3 text-sm text-muted-foreground">
+        These planned sets have not been saved. You can return to your workout
+        or complete it anyway.
+      </p>
+      <ul className="my-4 space-y-3">
+        {missing.map((entry) => (
+          <li key={entry.position}>
+            <p className="break-words font-medium">
+              {entry.name} (exercise {entry.position})
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {entry.saved + 1 === entry.planned
+                ? `Set ${entry.planned}`
+                : `Sets ${entry.saved + 1}–${entry.planned}`}{" "}
+              missing ({entry.saved}/{entry.planned} saved).
+            </p>
+          </li>
+        ))}
+      </ul>
+      {error && (
+        <p role="alert" className="mb-4 text-sm text-destructive">
+          {error}
+        </p>
+      )}
+      <div className="flex flex-wrap gap-3">
+        <Button autoFocus variant="outline" disabled={busy} onClick={onCancel}>
+          Return to session
+        </Button>
+        <Button disabled={busy} onClick={onConfirm}>
+          {busy ? "Completing…" : "Complete anyway"}
+        </Button>
+      </div>
+    </dialog>
   );
 }
