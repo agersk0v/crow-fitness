@@ -288,6 +288,6 @@ Migration 008 adds nonnull text columns with empty defaults, preserving existing
 
 ## Inline template editing (#55)
 
-Click a template header to expand its editor on the list page. Start workout and Delete stay independently available on active cards. Copy workout appears only inside an expanded editor and copies the last saved configuration, with a notice about unsaved changes. Saving updates the card name/description in place; a copy is added to Active without replacing the original draft.
+Click a template header to expand its editor on the list page. Start workout and Delete sit beside the template name and stay independently available on active cards. Accordion headers show a pointer cursor on hover. Copy workout appears only inside an expanded editor and copies the last saved configuration, with a notice about unsaved changes. Saving updates the card name/description in place; a copy is added to Active without replacing the original draft.
 
 Collapsing retains drafts and removes editor controls from keyboard navigation until reopened. Cancel confirms discarding edits and resets the inline editor to its last saved configuration. Leaving the list, switching Active/Archived, or starting a workout protects unsaved edits across all mounted editors, including collapsed ones. Delete still archives, explicitly warns about discarding that template’s draft, and preserves active/completed history. Archived accordions are read-only until Restore moves the template back to Active. Direct template URLs retain their existing editor and navigation behavior.

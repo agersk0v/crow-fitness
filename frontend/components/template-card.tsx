@@ -80,56 +80,59 @@ export function TemplateCard({
   }
   return (
     <li className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card">
-      <h3>
-        <button
-          type="button"
-          id={`${title}-trigger`}
-          aria-expanded={open}
-          aria-controls={`${title}-panel`}
-          className="flex w-full items-center justify-between gap-4 p-5 text-left hover:bg-primary/5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
-          onClick={() => {
-            setOpen(!open);
-            setVisited(true);
-          }}
-        >
-          <span className="min-w-0">
-            <span className="block break-words font-medium text-highlight">
-              {template.name}
-              {template.archived ? " (Archived)" : ""}
-            </span>
-            {template.description && (
-              <span className="mt-2 block whitespace-pre-wrap break-words text-sm font-normal text-muted-foreground">
-                {template.description}
-              </span>
-            )}
-          </span>
-          <ChevronDown
-            aria-hidden="true"
-            className={`size-5 shrink-0 ${open ? "rotate-180" : ""}`}
-          />
-        </button>
-      </h3>
-      {!template.archived && (
-        <div className="flex flex-wrap items-start gap-3 px-5 pb-4">
-          <StartSession
-            templateID={template.id}
-            compact
-            beforeStart={canLeave}
-            disabled={starting || editor.busy || busy}
-            onBusyChange={onStartingChange}
-          />
-          <Button
-            disabled={starting || editor.busy || busy}
-            variant="outline"
+      <div className="flex items-start gap-2 p-3 sm:p-5">
+        <h3 className="min-w-0 flex-1">
+          <button
+            type="button"
+            id={`${title}-trigger`}
+            aria-expanded={open}
+            aria-controls={`${title}-panel`}
+            className="flex min-h-8 w-full cursor-pointer items-center justify-between gap-2 rounded-md text-left hover:bg-primary/5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
             onClick={() => {
-              setError("");
-              setConfirming(true);
+              setOpen(!open);
+              setVisited(true);
             }}
-            aria-label={`Delete ${template.name}`}
           >
-            Delete
-          </Button>
-        </div>
+            <span className="min-w-0">
+              <span className="block break-words font-medium text-highlight">
+                {template.name}
+                {template.archived ? " (Archived)" : ""}
+              </span>
+            </span>
+            <ChevronDown
+              aria-hidden="true"
+              className={`size-4 shrink-0 sm:size-5 ${open ? "rotate-180" : ""}`}
+            />
+          </button>
+        </h3>
+        {!template.archived && (
+          <div className="flex shrink-0 items-start gap-2">
+            <StartSession
+              templateID={template.id}
+              compact
+              beforeStart={canLeave}
+              disabled={starting || editor.busy || busy}
+              onBusyChange={onStartingChange}
+            />
+            <Button
+              disabled={starting || editor.busy || busy}
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setError("");
+                setConfirming(true);
+              }}
+              aria-label={`Delete ${template.name}`}
+            >
+              Delete
+            </Button>
+          </div>
+        )}
+      </div>
+      {template.description && (
+        <p className="px-3 pb-3 whitespace-pre-wrap break-words text-sm text-muted-foreground sm:px-5 sm:pb-5">
+          {template.description}
+        </p>
       )}
       <div
         id={`${title}-panel`}

@@ -58,9 +58,15 @@ export function StartSession({
   }
   return (
     <div
-      className={compact ? "relative z-10 min-w-0 space-y-3" : "my-5 space-y-3"}
+      className={
+        compact ? "relative z-10 w-28 min-w-0 space-y-3" : "my-5 space-y-3"
+      }
     >
-      <Button disabled={busy || disabled} onClick={() => void start()}>
+      <Button
+        size={compact ? "sm" : "default"}
+        disabled={busy || disabled}
+        onClick={() => void start()}
+      >
         {busy ? "Starting…" : "Start workout"}
       </Button>
       {active && (
