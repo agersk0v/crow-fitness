@@ -48,7 +48,12 @@ func (f *fakeStore) Complete(ctx context.Context, owner int64, id string) error 
 func (f *fakeStore) SaveSet(_ context.Context, owner int64, sessionID, id string, input SetInput) (SavedSet, error) {
 	f.owner = owner
 	f.calls++
-	return SavedSet{ID: id, Position: input.Position, Weight: input.Weight, Reps: input.Reps}, f.err
+	var rir *string
+	if input.RIR != nil {
+		value := string(*input.RIR)
+		rir = &value
+	}
+	return SavedSet{ID: id, Position: input.Position, Weight: input.Weight, Reps: input.Reps, RIR: rir}, f.err
 }
 func (f *fakeStore) DeleteSet(ctx context.Context, owner int64, sessionID, id string) error {
 	return f.End(ctx, owner, sessionID)

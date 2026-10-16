@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import type { SavedSet } from "@/lib/sessions";
 
-type Values = { weight: string; reps: string };
+type Values = { weight: string; reps: string; rir: string };
 type EditDraft = Values & { id: string; attempted: boolean };
 function validate(values: Values) {
   const fields: Record<string, string> = {};
@@ -16,6 +16,12 @@ function validate(values: Values) {
     Number(values.reps) <= 0
   )
     fields.reps = "Enter a positive whole-number rep count.";
+  if (
+    values.rir.trim() !== "" &&
+    (!/^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(values.rir.trim()) ||
+      !Number.isFinite(Number(values.rir)))
+  )
+    fields.rir = "Enter a nonnegative RIR, or leave it blank.";
   return fields;
 }
 
@@ -39,6 +45,7 @@ export function SessionSets({
   const [entry, setEntry] = useState<Values>(() => ({
     weight: previousWeight ?? "",
     reps: "",
+    rir: "",
   }));
   const initialized = useRef(previousWeight !== undefined);
   const addID = useRef<string | null>(null);
@@ -69,7 +76,8 @@ export function SessionSets({
         attempted ||
         !!pendingDelete ||
         Object.keys(addFields).length > 0 ||
-        entry.reps.trim() !== "",
+        entry.reps.trim() !== "" ||
+        entry.rir.trim() !== "",
     );
   }, [
     position,
@@ -79,12 +87,13 @@ export function SessionSets({
     attempted,
     pendingDelete,
     entry.reps,
+    entry.rir,
     addFields,
   ]);
   function resetAdd() {
     addID.current = null;
     setAttempted(false);
-    setEntry((current) => ({ ...current, reps: "" }));
+    setEntry((current) => ({ ...current, reps: "", rir: "" }));
     setAddFields({});
     setError("");
   }
@@ -114,6 +123,7 @@ export function SessionSets({
           exercise_position: position,
           weight: values.weight.trim(),
           reps: Number(values.reps),
+          rir: values.rir.trim() === "" ? null : Number(values.rir),
         }),
       });
       const body = await response.json();
@@ -200,6 +210,7 @@ export function SessionSets({
             Add set
           </Button>
           {(entry.reps !== "" ||
+            entry.rir !== "" ||
             attempted ||
             Object.keys(addFields).length > 0) && (
             <Button
@@ -227,42 +238,68 @@ export function SessionSets({
       {sets.length === 0 ? (
         <p className="text-sm text-muted-foreground">No sets saved yet.</p>
       ) : (
-        <ol className="space-y-2">
+        <ol className="divide-y divide-border" aria-label="Saved sets">
           {sets.map((set, index) => (
             <li
               key={set.id}
-              className="flex flex-wrap items-center gap-3 rounded-lg border border-border p-3"
+              aria-label={`Set ${index + 1}`}
+              className="space-y-3 py-4"
             >
-              <span className="mr-auto text-sm">
-                Set {index + 1}: {set.weight} kg × {set.reps} reps
-              </span>
-              <Button
-                variant="outline"
-                disabled={
-                  disabled || busy || !!draft || !!pendingDelete || attempted
-                }
-                onClick={() => {
-                  setError("");
-                  setEditFields({});
-                  setDraft({
-                    id: set.id,
-                    weight: set.weight,
-                    reps: String(set.reps),
-                    attempted: false,
-                  });
-                }}
-              >
-                Edit set {index + 1}
-              </Button>
-              <Button
-                variant="outline"
-                disabled={
-                  disabled || busy || !!draft || !!pendingDelete || attempted
-                }
-                onClick={() => void remove(set.id)}
-              >
-                Delete set {index + 1}
-              </Button>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-medium">Set {index + 1}</span>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    disabled={
+                      disabled ||
+                      busy ||
+                      !!draft ||
+                      !!pendingDelete ||
+                      attempted
+                    }
+                    onClick={() => {
+                      setError("");
+                      setEditFields({});
+                      setDraft({
+                        id: set.id,
+                        weight: set.weight,
+                        reps: String(set.reps),
+                        rir: set.rir ?? "",
+                        attempted: false,
+                      });
+                    }}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={
+                      disabled ||
+                      busy ||
+                      !!draft ||
+                      !!pendingDelete ||
+                      attempted
+                    }
+                    onClick={() => void remove(set.id)}
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </div>
+              <dl className="grid grid-cols-3 gap-3 text-sm">
+                <div>
+                  <dt className="text-muted-foreground">Weight (kg)</dt>
+                  <dd className="mt-1 tabular-nums">{set.weight}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Reps</dt>
+                  <dd className="mt-1 tabular-nums">{set.reps}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">RIR</dt>
+                  <dd className="mt-1 tabular-nums">{set.rir ?? "—"}</dd>
+                </div>
+              </dl>
             </li>
           ))}
         </ol>
@@ -351,16 +388,23 @@ function SetInputs({
   onChange: (key: keyof Values, value: string) => void;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-3">
-      {(["weight", "reps"] as const).map((key) => (
+    <div className="grid grid-cols-3 gap-3">
+      {(["weight", "reps", "rir"] as const).map((key) => (
         <div key={key}>
-          <label htmlFor={`${id}-${key}`} className="mb-2 block text-sm">
-            {key === "weight" ? "Weight (kg)" : "Reps"}
+          <label
+            htmlFor={`${id}-${key}`}
+            className="mb-2 block min-h-10 text-sm sm:min-h-0"
+          >
+            {key === "weight"
+              ? "Weight (kg)"
+              : key === "reps"
+                ? "Reps"
+                : "RIR (optional)"}
           </label>
           <input
             id={`${id}-${key}`}
             type="text"
-            inputMode={key === "weight" ? "decimal" : "numeric"}
+            inputMode={key === "reps" ? "numeric" : "decimal"}
             value={values[key]}
             disabled={disabled}
             onChange={(event) => onChange(key, event.target.value)}

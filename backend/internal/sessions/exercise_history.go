@@ -43,7 +43,7 @@ func (p Postgres) ExerciseHistory(ctx context.Context, owner int64, id string) (
 	if err != nil {
 		return item, err
 	}
-	rows, err := tx.Query(ctx, `SELECT s.id::text,s.name,s.completed_at,e.position,e.name,ss.id::text,ss.weight::text,ss.reps
+	rows, err := tx.Query(ctx, `SELECT s.id::text,s.name,s.completed_at,e.position,e.name,ss.id::text,ss.weight::text,ss.reps,ss.rir::text
  FROM workout_sessions s JOIN session_exercises e ON e.owner_id=s.owner_id AND e.session_id=s.id
  JOIN session_sets ss ON ss.owner_id=e.owner_id AND ss.session_id=e.session_id AND ss.exercise_position=e.position
  WHERE s.owner_id=$1 AND s.completed_at IS NOT NULL AND e.exercise_id=$2 AND NOT ss.deleted
@@ -56,7 +56,7 @@ func (p Postgres) ExerciseHistory(ctx context.Context, owner int64, id string) (
 		var sessionID, workoutName, exerciseName string
 		var completed time.Time
 		var set SavedSet
-		if err = rows.Scan(&sessionID, &workoutName, &completed, &set.Position, &exerciseName, &set.ID, &set.Weight, &set.Reps); err != nil {
+		if err = rows.Scan(&sessionID, &workoutName, &completed, &set.Position, &exerciseName, &set.ID, &set.Weight, &set.Reps, &set.RIR); err != nil {
 			return item, err
 		}
 		if len(item.Workouts) == 0 || item.Workouts[len(item.Workouts)-1].SessionID != sessionID {

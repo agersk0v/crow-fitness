@@ -34,7 +34,7 @@ export function RecordedSetsTable({
               {set.reps} <SetDelta value={set.change?.reps} label="Reps" />
             </td>
             <td className="py-3">
-              <span aria-label="Not recorded">—</span>
+              {set.rir ?? <span aria-label="Not recorded">—</span>}
             </td>
           </tr>
         ))}

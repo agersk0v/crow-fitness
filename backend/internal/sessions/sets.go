@@ -4,17 +4,21 @@ import (
 	"context"
 	"errors"
 	"regexp"
+	"strings"
 	"time"
 
+	"github.com/agersk0v/crow-fitness/backend/internal/templates"
 	"github.com/jackc/pgx/v5"
 )
 
 type SetInput struct {
-	Position int64  `json:"exercise_position"`
-	Weight   string `json:"weight"`
-	Reps     int64  `json:"reps"`
+	RIR      *templates.Decimal `json:"rir"`
+	Position int64              `json:"exercise_position"`
+	Weight   string             `json:"weight"`
+	Reps     int64              `json:"reps"`
 }
 type SavedSet struct {
+	RIR      *string    `json:"rir"`
 	Change   *SetChange `json:"change,omitempty"`
 	ID       string     `json:"id"`
 	Position int64      `json:"exercise_position"`
@@ -37,6 +41,7 @@ var ErrCompleted = errors.New("session is completed")
 var ErrDeleted = errors.New("set has been deleted")
 var ErrOccurrence = errors.New("set belongs to another exercise occurrence")
 var weightPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)(\.[0-9]{1,2})?$`)
+var rirPattern = regexp.MustCompile(`^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?$`)
 var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 func ValidateSet(input SetInput) ValidationError {
@@ -49,6 +54,14 @@ func ValidateSet(input SetInput) ValidationError {
 	}
 	if input.Reps <= 0 {
 		fields["reps"] = "Enter a positive whole-number rep count."
+	}
+	if input.RIR != nil {
+		value := string(*input.RIR)
+		mantissa := strings.Split(strings.ToLower(value), "e")[0]
+		negative := strings.HasPrefix(value, "-") && strings.Trim(mantissa, "-0.") != ""
+		if !rirPattern.MatchString(value) || negative {
+			fields["rir"] = "Enter a nonnegative RIR, or leave it blank."
+		}
 	}
 	return fields
 }
@@ -117,10 +130,14 @@ func (p Postgres) SaveSet(ctx context.Context, owner int64, sessionID, id string
 		return SavedSet{}, ValidationError{"exercise_position": "This exercise is not in the active workout."}
 	}
 	var item SavedSet
-	err = tx.QueryRow(ctx, `INSERT INTO session_sets(session_id,owner_id,id,exercise_position,weight,reps)
- VALUES($1,$2,$3,$4,$5::text::numeric,$6)
- ON CONFLICT(session_id,id) DO UPDATE SET weight=EXCLUDED.weight,reps=EXCLUDED.reps
- RETURNING id::text,exercise_position,weight::text,reps`, sessionID, owner, id, input.Position, input.Weight, input.Reps).Scan(&item.ID, &item.Position, &item.Weight, &item.Reps)
+	var rir any
+	if input.RIR != nil {
+		rir = string(*input.RIR)
+	}
+	err = tx.QueryRow(ctx, `INSERT INTO session_sets(session_id,owner_id,id,exercise_position,weight,reps,rir)
+ VALUES($1,$2,$3,$4,$5::text::numeric,$6,$7::text::numeric)
+ ON CONFLICT(session_id,id) DO UPDATE SET weight=EXCLUDED.weight,reps=EXCLUDED.reps,rir=EXCLUDED.rir
+ RETURNING id::text,exercise_position,weight::text,reps,rir::text`, sessionID, owner, id, input.Position, input.Weight, input.Reps, rir).Scan(&item.ID, &item.Position, &item.Weight, &item.Reps, &item.RIR)
 	if err != nil {
 		return item, err
 	}
@@ -144,7 +161,7 @@ func (p Postgres) DeleteSet(ctx context.Context, owner int64, sessionID, id stri
 	return tx.Commit(ctx)
 }
 func readSets(ctx context.Context, tx pgx.Tx, owner int64, id string) ([]SavedSet, error) {
-	rows, err := tx.Query(ctx, "SELECT id::text,exercise_position,weight::text,reps FROM session_sets WHERE owner_id=$1 AND session_id=$2 AND NOT deleted ORDER BY exercise_position,saved_at,id", owner, id)
+	rows, err := tx.Query(ctx, "SELECT id::text,exercise_position,weight::text,reps,rir::text FROM session_sets WHERE owner_id=$1 AND session_id=$2 AND NOT deleted ORDER BY exercise_position,saved_at,id", owner, id)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +169,7 @@ func readSets(ctx context.Context, tx pgx.Tx, owner int64, id string) ([]SavedSe
 	items := []SavedSet{}
 	for rows.Next() {
 		var item SavedSet
-		if err = rows.Scan(&item.ID, &item.Position, &item.Weight, &item.Reps); err != nil {
+		if err = rows.Scan(&item.ID, &item.Position, &item.Weight, &item.Reps, &item.RIR); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
@@ -160,7 +177,7 @@ func readSets(ctx context.Context, tx pgx.Tx, owner int64, id string) ([]SavedSe
 	return items, rows.Err()
 }
 func (p Postgres) CompletedSets(ctx context.Context, owner int64, filter HistoryFilter) ([]CompletedSet, error) {
-	rows, err := p.Pool.Query(ctx, completedSetComparisons+`SELECT ss.id::text,ss.exercise_position,ss.weight::text,ss.reps,s.id::text,se.name,s.completed_at,s.name,se.exercise_id::text,ss.weight_change,ss.reps_change
+	rows, err := p.Pool.Query(ctx, completedSetComparisons+`SELECT ss.id::text,ss.exercise_position,ss.weight::text,ss.reps,s.id::text,se.name,s.completed_at,s.name,se.exercise_id::text,ss.weight_change,ss.reps_change,ss.rir::text
  FROM compared_sets ss JOIN workout_sessions s ON s.owner_id=ss.owner_id AND s.id=ss.session_id
  JOIN session_exercises se ON se.session_id=ss.session_id AND se.owner_id=ss.owner_id AND se.position=ss.exercise_position
  WHERE ss.owner_id=$1
@@ -177,7 +194,7 @@ func (p Postgres) CompletedSets(ctx context.Context, owner int64, filter History
 	for rows.Next() {
 		var item CompletedSet
 		var weight, reps *string
-		if err = rows.Scan(&item.ID, &item.Position, &item.Weight, &item.Reps, &item.SessionID, &item.ExerciseName, &item.CompletedAt, &item.SessionName, &item.ExerciseID, &weight, &reps); err != nil {
+		if err = rows.Scan(&item.ID, &item.Position, &item.Weight, &item.Reps, &item.SessionID, &item.ExerciseName, &item.CompletedAt, &item.SessionName, &item.ExerciseID, &weight, &reps, &item.RIR); err != nil {
 			return nil, err
 		}
 		item.Change = setChange(weight, reps)

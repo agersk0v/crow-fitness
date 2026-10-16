@@ -32,12 +32,25 @@ func TestSetValidationAndHTTP(t *testing.T) {
 			t.Fatal(tc, fields)
 		}
 	}
+	for _, value := range []string{"0", "1.5", "-1", "NaN", "abc"} {
+		rir := templates.Decimal(value)
+		fields := ValidateSet(SetInput{Position: 1, Weight: "0", Reps: 1, RIR: &rir})
+		if (len(fields) == 0) != (value == "0" || value == "1.5") {
+			t.Fatal("RIR validation", value, fields)
+		}
+	}
+
 	for _, tc := range []struct {
 		method, path, body string
 		err                error
 		status             int
 	}{
 		{"PUT", "/api/sessions/7/sets/" + setID, `{"exercise_position":1,"weight":"0","reps":8}`, nil, 200},
+		{"PUT", "/api/sessions/7/sets/" + setID, `{"exercise_position":1,"weight":"0","reps":8,"rir":0}`, nil, 200},
+		{"PUT", "/api/sessions/7/sets/" + setID, `{"exercise_position":1,"weight":"0","reps":8,"rir":1.5}`, nil, 200},
+		{"PUT", "/api/sessions/7/sets/" + setID, `{"exercise_position":1,"weight":"0","reps":8,"rir":null}`, nil, 200},
+		{"PUT", "/api/sessions/7/sets/" + setID, `{"exercise_position":1,"weight":"0","reps":8,"rir":-1}`, ValidationError{"rir": "Enter a nonnegative RIR, or leave it blank."}, 400},
+		{"PUT", "/api/sessions/7/sets/" + setID, `{"exercise_position":1,"weight":"0","reps":8,"rir":"2"}`, nil, 400},
 		{"PUT", "/api/sessions/7/sets/" + setID, `{"exercise_position":1,"weight":"10","reps":8.5}`, nil, 400},
 		{"PUT", "/api/sessions/7/sets/" + setID, `{"exercise_position":1,"weight":10,"reps":8}`, nil, 400},
 		{"PUT", "/api/sessions/7/sets/" + setID, `{"exercise_position":1,"weight":"10","reps":8,"owner_id":2}`, nil, 400},
@@ -105,10 +118,14 @@ func TestPostgresSets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	input := SetInput{Position: 1, Weight: "12.50", Reps: 8}
+	zeroRIR := templates.Decimal("0")
+	input := SetInput{Position: 1, Weight: "12.50", Reps: 8, RIR: &zeroRIR}
 	saved, err := store.SaveSet(ctx, 71, session.ID, setID, input)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if saved.RIR == nil || *saved.RIR != "0" {
+		t.Fatal("zero recorded RIR", saved)
 	}
 	replay, err := store.SaveSet(ctx, 71, session.ID, setID, input)
 	if err != nil || !reflect.DeepEqual(saved, replay) {
@@ -126,13 +143,25 @@ func TestPostgresSets(t *testing.T) {
 	if _, err = store.SaveSet(ctx, 71, session.ID, "22222222-2222-4222-8222-222222222222", wrong); err == nil {
 		t.Fatal("foreign occurrence accepted")
 	}
+	decimalRIR := templates.Decimal("1.5")
+	input.RIR = &decimalRIR
+	withRIR, err := store.SaveSet(ctx, 71, session.ID, setID, input)
+	if err != nil || withRIR.RIR == nil || *withRIR.RIR != "1.5" {
+		t.Fatal("decimal RIR", withRIR, err)
+	}
+	input.RIR = nil
+	cleared, err := store.SaveSet(ctx, 71, session.ID, setID, input)
+	if err != nil || cleared.RIR != nil {
+		t.Fatal("clear RIR", cleared, err)
+	}
+
 	input.Weight = "0"
 	input.Reps = 10
 	if _, err = store.SaveSet(ctx, 71, session.ID, setID, input); err != nil {
 		t.Fatal(err)
 	}
 	secondID := "22222222-2222-4222-8222-222222222222"
-	if _, err = store.SaveSet(ctx, 71, session.ID, secondID, SetInput{Position: 2, Weight: "20.25", Reps: 5}); err != nil {
+	if _, err = store.SaveSet(ctx, 71, session.ID, secondID, SetInput{Position: 2, Weight: "20.25", Reps: 5, RIR: &decimalRIR}); err != nil {
 		t.Fatal(err)
 	}
 	deleteID := "33333333-3333-4333-8333-333333333333"
@@ -149,7 +178,7 @@ func TestPostgresSets(t *testing.T) {
 		t.Fatal("late retry resurrected deleted set", err)
 	}
 	active, err := store.Get(ctx, 71, session.ID)
-	if err != nil || len(active.Sets) != 2 || active.Sets[0].Weight != "0" || active.Sets[1].Position != 2 {
+	if err != nil || len(active.Sets) != 2 || active.Sets[0].Weight != "0" || active.Sets[1].Position != 2 || active.Sets[0].RIR != nil || active.Sets[1].RIR == nil || *active.Sets[1].RIR != "1.5" {
 		t.Fatal("active readback", active, err)
 	}
 	listed, err := store.CompletedSets(ctx, 71, HistoryFilter{})
@@ -168,6 +197,11 @@ func TestPostgresSets(t *testing.T) {
 	if err = store.Complete(ctx, 71, session.ID); err != nil {
 		t.Fatal(err)
 	}
+	snapshot, err := store.GetCompleted(ctx, 71, session.ID)
+	if err != nil || snapshot.Sets[1].RIR == nil || *snapshot.Sets[1].RIR != "1.5" {
+		t.Fatal("completed RIR", snapshot, err)
+	}
+
 	var completed time.Time
 	if err = pool.QueryRow(ctx, "SELECT completed_at FROM workout_sessions WHERE owner_id=71 AND id=$1", session.ID).Scan(&completed); err != nil {
 		t.Fatal(err)

@@ -26,7 +26,7 @@ func (p Postgres) PersonalBests(ctx context.Context, owner int64, sessionID stri
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.Query(ctx, `SELECT DISTINCT ON(e.exercise_id) e.exercise_id::text,ss.id::text,e.position,ss.weight::text,ss.reps
+	rows, err := tx.Query(ctx, `SELECT DISTINCT ON(e.exercise_id) e.exercise_id::text,ss.id::text,e.position,ss.weight::text,ss.reps,ss.rir::text
  FROM workout_sessions s JOIN session_exercises e ON e.owner_id=s.owner_id AND e.session_id=s.id
  JOIN session_sets ss ON ss.owner_id=e.owner_id AND ss.session_id=e.session_id AND ss.exercise_position=e.position
  WHERE s.owner_id=$1 AND s.completed_at IS NOT NULL AND NOT ss.deleted
@@ -39,7 +39,7 @@ func (p Postgres) PersonalBests(ctx context.Context, owner int64, sessionID stri
 	items := []PersonalBest{}
 	for rows.Next() {
 		var item PersonalBest
-		if err = rows.Scan(&item.ExerciseID, &item.Set.ID, &item.Set.Position, &item.Set.Weight, &item.Set.Reps); err != nil {
+		if err = rows.Scan(&item.ExerciseID, &item.Set.ID, &item.Set.Position, &item.Set.Weight, &item.Set.Reps, &item.Set.RIR); err != nil {
 			return nil, err
 		}
 		items = append(items, item)

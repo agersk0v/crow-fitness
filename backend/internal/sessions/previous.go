@@ -46,7 +46,7 @@ func (p Postgres) Previous(ctx context.Context, owner int64, sessionID string) (
  AND EXISTS(SELECT 1 FROM session_sets ss WHERE ss.owner_id=$1 AND ss.session_id=s.id AND ss.exercise_position=e.position AND NOT ss.deleted)
  ORDER BY e.exercise_id,s.completed_at DESC,s.id DESC
  )
- SELECT l.exercise_id::text,l.session_id::text,l.completed_at,e.position,e.name,ss.id::text,ss.weight::text,ss.reps
+ SELECT l.exercise_id::text,l.session_id::text,l.completed_at,e.position,e.name,ss.id::text,ss.weight::text,ss.reps,ss.rir::text
  FROM latest l JOIN session_exercises e ON e.session_id=l.session_id AND e.owner_id=$1 AND e.exercise_id=l.exercise_id
  JOIN session_sets ss ON ss.session_id=e.session_id AND ss.owner_id=e.owner_id AND ss.exercise_position=e.position AND NOT ss.deleted
  ORDER BY l.exercise_id,e.position,ss.saved_at,ss.id`, owner, sessionID)
@@ -59,7 +59,7 @@ func (p Postgres) Previous(ctx context.Context, owner int64, sessionID string) (
 		var exerciseID, sourceID, name string
 		var date time.Time
 		var set SavedSet
-		if err = rows.Scan(&exerciseID, &sourceID, &date, &set.Position, &name, &set.ID, &set.Weight, &set.Reps); err != nil {
+		if err = rows.Scan(&exerciseID, &sourceID, &date, &set.Position, &name, &set.ID, &set.Weight, &set.Reps, &set.RIR); err != nil {
 			return nil, err
 		}
 		if len(items) == 0 || items[len(items)-1].ExerciseID != exerciseID {
