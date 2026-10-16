@@ -136,7 +136,29 @@ func TestPostgresResetReplacementRollbackAndWrites(t *testing.T) {
         AND NOT EXISTS(SELECT 1 FROM session_exercises e WHERE e.owner_id=1 AND NOT EXISTS(SELECT 1 FROM session_exercise_choices c WHERE c.session_id=e.session_id AND c.position=e.position AND c.exercise_id=e.exercise_id AND c.name=e.name AND c.set_count=e.set_count))`).Scan(&choicesValid); err != nil || !choicesValid {
 			t.Fatal("dummy choices or actual selections incorrect", choicesValid, err)
 		}
+		for _, routine := range routines {
+			for position, names := range variations[routine.name] {
+				var actual []string
+				rows, err := pool.Query(ctx, `SELECT e.name FROM template_exercise_alternatives a JOIN templates t ON t.id=a.template_id JOIN exercises e ON e.id=a.exercise_id WHERE a.owner_id=1 AND t.name=$1 AND a.position=$2 ORDER BY a.choice_position`, routine.name, position)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for rows.Next() {
+					var name string
+					if err = rows.Scan(&name); err != nil {
+						t.Fatal(err)
+					}
+					actual = append(actual, name)
+				}
+				err = rows.Err()
+				rows.Close()
+				if err != nil || !reflect.DeepEqual(actual, names) {
+					t.Fatal("missing seeded variations", routine.name, position, actual, err)
+				}
+			}
+		}
 		var invalid int
+
 		if err = pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM exercises WHERE owner_id=1 AND (cardinality(muscle_groups)=0 OR description=''))+(SELECT count(*) FROM templates WHERE owner_id=1 AND description='')+(SELECT count(*) FROM template_exercises WHERE owner_id=1 AND (rep_min IS NOT NULL OR rep_max IS NOT NULL OR target_rir IS NOT NULL))+(SELECT count(*) FROM workout_sessions WHERE owner_id=1 AND completed_at>$1)`, now).Scan(&invalid); err != nil || invalid != 0 {
 			t.Fatal("invalid tags, targets or dates", invalid, err)
 		}
