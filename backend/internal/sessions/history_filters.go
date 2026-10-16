@@ -12,6 +12,7 @@ import (
 type HistoryFilter struct {
 	Query    string
 	Exercise string
+	Template string
 	From     *time.Time
 	Until    *time.Time
 }
@@ -26,9 +27,9 @@ func ParseHistoryQuery(raw string) (HistoryFilter, error) {
 
 // Calendar boundaries use the caller's IANA timezone, including DST changes.
 func ParseHistoryFilter(values url.Values) (HistoryFilter, error) {
-	f := HistoryFilter{Query: strings.TrimSpace(values.Get("q")), Exercise: values.Get("exercise")}
+	f := HistoryFilter{Query: strings.TrimSpace(values.Get("q")), Exercise: values.Get("exercise"), Template: values.Get("template")}
 	for key, entries := range values {
-		if key != "q" && key != "exercise" && key != "from" && key != "to" && key != "tz" {
+		if key != "q" && key != "exercise" && key != "template" && key != "from" && key != "to" && key != "tz" {
 			return f, errors.New("Unknown history filter.")
 		}
 		if len(entries) != 1 {
@@ -37,6 +38,9 @@ func ParseHistoryFilter(values url.Values) (HistoryFilter, error) {
 	}
 	if f.Exercise != "" && !validID(f.Exercise) {
 		return f, errors.New("Choose a valid exercise ID.")
+	}
+	if f.Template != "" && !validID(f.Template) {
+		return f, errors.New("Choose a valid template ID.")
 	}
 	zone := values.Get("tz")
 	if zone == "" {
@@ -80,6 +84,28 @@ func (p Postgres) HistoryExercises(ctx context.Context, owner int64) ([]HistoryE
  WHERE s.owner_id=$1 AND s.completed_at IS NOT NULL
  ORDER BY e.exercise_id,s.completed_at DESC,s.id DESC,e.position
  ) options ORDER BY lower(name),exercise_id`, owner)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []HistoryExercise{}
+	for rows.Next() {
+		var item HistoryExercise
+		if err = rows.Scan(&item.ID, &item.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+// Use the latest captured name so renamed or archived templates retain their history.
+func (p Postgres) HistoryTemplates(ctx context.Context, owner int64) ([]HistoryExercise, error) {
+	rows, err := p.Pool.Query(ctx, `SELECT template_id::text,name FROM (
+ SELECT DISTINCT ON(template_id) template_id,name FROM workout_sessions
+ WHERE owner_id=$1 AND completed_at IS NOT NULL
+ ORDER BY template_id,completed_at DESC,id DESC
+ ) options ORDER BY lower(name),template_id`, owner)
 	if err != nil {
 		return nil, err
 	}

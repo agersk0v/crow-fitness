@@ -1,4 +1,4 @@
-export const historyKeys = ["q", "exercise", "from", "to"] as const;
+export const historyKeys = ["q", "exercise", "template", "from", "to"] as const;
 export function historyCriteria(params: URLSearchParams) {
   return Object.fromEntries(
     historyKeys.map((key) => [key, params.get(key) ?? ""]),
@@ -11,13 +11,19 @@ export function historyFilterError(params: URLSearchParams): string {
     if (params.getAll(key).length !== 1)
       return "Use each history parameter once.";
   }
-  const { exercise, from, to } = historyCriteria(params);
+  const { exercise, template, from, to } = historyCriteria(params);
   if (
     exercise &&
     (!/^[1-9][0-9]*$/.test(exercise) ||
       BigInt(exercise) > BigInt("9223372036854775807"))
   )
     return "Choose a valid exercise ID.";
+  if (
+    template &&
+    (!/^[1-9][0-9]*$/.test(template) ||
+      BigInt(template) > BigInt("9223372036854775807"))
+  )
+    return "Choose a valid template ID.";
   for (const date of [from, to]) {
     if (
       date &&
@@ -33,7 +39,7 @@ export function historyFilterError(params: URLSearchParams): string {
 }
 export function historyQuery(criteria: Record<string, string>, tab?: string) {
   const params = new URLSearchParams();
-  if (tab === "sets") params.set("tab", "sets");
+  if (tab === "sessions") params.set("tab", "sessions");
   for (const key of historyKeys) {
     const value = key === "q" ? criteria[key]?.trim() : criteria[key];
     if (value) params.set(key, value);

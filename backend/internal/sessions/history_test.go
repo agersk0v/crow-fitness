@@ -23,6 +23,7 @@ func TestHistoryHTTP(t *testing.T) {
 		err    error
 		status int
 	}{
+		{"/api/history/templates", nil, 200}, {"/api/history/templates", errors.New("private template details"), 500},
 		{"/api/history/sessions", nil, 200}, {"/api/history/sessions/7", nil, 200},
 		{"/api/history/sessions/0", nil, 400}, {"/api/history/sessions/7", ErrNotFound, 404},
 		{"/api/history/sessions", errors.New("private history details"), 500},
@@ -174,6 +175,29 @@ func TestPostgresHistory(t *testing.T) {
 	afterList, err := store.CompletedSessions(ctx, 91, HistoryFilter{})
 	if err != nil || !reflect.DeepEqual(list, afterList) {
 		t.Fatal("active/cancelled records listed or captured names changed", afterList, err)
+	}
+
+	// Template identity survives renaming/archiving and includes empty workouts.
+	for _, tc := range []struct {
+		id    string
+		count int
+	}{{template.ID, 2}, {"9223372036854775807", 0}} {
+		matches, err := store.CompletedSessions(ctx, 91, HistoryFilter{Template: tc.id})
+		if err != nil || len(matches) != tc.count {
+			t.Fatal("template history filter", matches, err)
+		}
+		foreign, err := store.CompletedSessions(ctx, 92, HistoryFilter{Template: tc.id})
+		if err != nil || len(foreign) != 0 {
+			t.Fatal("foreign template history", foreign, err)
+		}
+	}
+	templateOptions, err := store.HistoryTemplates(ctx, 91)
+	if err != nil || len(templateOptions) != 1 || templateOptions[0].ID != template.ID || templateOptions[0].Name != "Same routine" {
+		t.Fatal("archived captured template options", templateOptions, err)
+	}
+	foreignTemplates, err := store.HistoryTemplates(ctx, 92)
+	if err != nil || len(foreignTemplates) != 0 {
+		t.Fatal("foreign template options", foreignTemplates, err)
 	}
 
 	// Filters use copied names and exercise identity, including removed identities.

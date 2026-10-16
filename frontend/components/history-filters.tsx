@@ -16,6 +16,8 @@ export function HistoryFilters({
   selected: "sessions" | "sets";
 }) {
   const router = useRouter();
+  const kind = selected === "sessions" ? "template" : "exercise";
+  const label = selected === "sessions" ? "Template" : "Exercise";
   const [draft, setDraft] = useState(() =>
     historyCriteria(new URLSearchParams(query)),
   );
@@ -30,7 +32,7 @@ export function HistoryFilters({
     setFailed(false);
     async function load() {
       try {
-        const response = await fetch("/api/history/exercises", {
+        const response = await fetch(`/api/history/${kind}s`, {
           cache: "no-store",
           signal: controller.signal,
         });
@@ -45,7 +47,7 @@ export function HistoryFilters({
     }
     void load();
     return () => controller.abort();
-  }, [retry]);
+  }, [retry, kind]);
   function apply(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const params = historyQuery(draft, selected);
@@ -79,21 +81,21 @@ export function HistoryFilters({
           />
         </label>
         <div className="text-sm font-medium">
-          <label htmlFor="history-exercise-filter">Exercise</label>
+          <label htmlFor="history-identity-filter">{label}</label>
           <select
-            id="history-exercise-filter"
-            value={draft.exercise}
+            id="history-identity-filter"
+            value={draft[kind]}
             onChange={(event) =>
-              setDraft({ ...draft, exercise: event.target.value })
+              setDraft({ ...draft, [kind]: event.target.value })
             }
             className={inputClass}
             disabled={loading || failed}
           >
-            <option value="">All exercises</option>
-            {draft.exercise &&
-              !options.some((option) => option.id === draft.exercise) && (
-                <option value={draft.exercise}>
-                  Exercise #{draft.exercise}
+            <option value="">All {kind}s</option>
+            {draft[kind] &&
+              !options.some((option) => option.id === draft[kind]) && (
+                <option value={draft[kind]}>
+                  {label} #{draft[kind]}
                 </option>
               )}
             {options.map((option) => (
@@ -130,18 +132,18 @@ export function HistoryFilters({
       </p>
       {loading && (
         <p role="status" className="text-sm text-muted-foreground">
-          Loading exercise filters…
+          Loading {kind} filters…
         </p>
       )}
       {failed && (
         <div className="space-y-2">
-          <p role="alert">Could not load exercise filters.</p>
+          <p role="alert">Could not load {kind} filters.</p>
           <Button
             type="button"
             variant="outline"
             onClick={() => setRetry(retry + 1)}
           >
-            Retry exercise filters
+            Retry {kind} filters
           </Button>
         </div>
       )}
@@ -156,10 +158,10 @@ export function HistoryFilters({
           type="button"
           variant="outline"
           onClick={() => {
-            setDraft({ q: "", exercise: "", from: "", to: "" });
+            setDraft({ q: "", exercise: "", template: "", from: "", to: "" });
             setError("");
             router.push(
-              selected === "sets" ? "/history?tab=sets" : "/history",
+              selected === "sessions" ? "/history?tab=sessions" : "/history",
               { scroll: false },
             );
           }}

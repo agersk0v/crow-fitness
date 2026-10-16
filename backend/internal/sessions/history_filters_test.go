@@ -9,7 +9,7 @@ import (
 )
 
 func TestHistoryFilterValidationAndCalendarDays(t *testing.T) {
-	for _, query := range []string{"exercise=0", "exercise=9223372036854775808", "exercise=x", "from=2030-02-30", "from=0000-01-01", "to=2030-1-1", "from=2030-02-02&to=2030-02-01", "tz=Missing/Zone", "tz=Local", "q=a&q=b", "unknown=value", "from=%ZZ", "q=a;b"} {
+	for _, query := range []string{"template=0", "template=x", "template=9223372036854775808", "template=1&template=2", "exercise=0", "exercise=9223372036854775808", "exercise=x", "from=2030-02-30", "from=0000-01-01", "to=2030-1-1", "from=2030-02-02&to=2030-02-01", "tz=Missing/Zone", "tz=Local", "q=a&q=b", "unknown=value", "from=%ZZ", "q=a;b"} {
 		if _, err := ParseHistoryQuery(query); err == nil {
 			t.Fatal("invalid filter accepted", query)
 		}

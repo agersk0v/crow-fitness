@@ -42,6 +42,7 @@ type Store interface {
 	Previous(context.Context, int64, string) ([]PreviousPerformance, error)
 	CompletedSessions(context.Context, int64, HistoryFilter) ([]CompletedSession, error)
 	HistoryExercises(context.Context, int64) ([]HistoryExercise, error)
+	HistoryTemplates(context.Context, int64) ([]HistoryExercise, error)
 	GetCompleted(context.Context, int64, string) (Session, error)
 	ExerciseHistory(context.Context, int64, string) (ExerciseHistory, error)
 }
@@ -183,7 +184,11 @@ func getSnapshot(ctx context.Context, tx pgx.Tx, owner int64, id string, complet
 		return item, err
 	}
 	rows.Close()
-	item.Sets, err = readSets(ctx, tx, owner, item.ID)
+	if completed {
+		item.Sets, err = readCompletedSets(ctx, tx, owner, item.ID)
+	} else {
+		item.Sets, err = readSets(ctx, tx, owner, item.ID)
+	}
 	return item, err
 }
 func (p Postgres) End(ctx context.Context, owner int64, id string) error {

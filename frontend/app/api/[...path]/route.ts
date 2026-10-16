@@ -72,6 +72,7 @@ async function forward(
         endpoint === "sessions/active" ||
         endpoint === "history/sessions" ||
         endpoint === "history/exercises" ||
+        endpoint === "history/templates" ||
         completedSession ||
         session ||
         previous)) ||

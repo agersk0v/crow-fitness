@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { RecordedSetsTable } from "@/components/recorded-sets-table";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import type { CompletedSet } from "@/lib/sessions";
@@ -126,20 +127,14 @@ export function CompletedSets({
               <h2 className="break-words text-xl font-semibold text-highlight">
                 Occurrence {occurrence.position}: {occurrence.name}
               </h2>
-              <ol className="space-y-2">
-                {occurrence.sets.map((set, index) => (
-                  <li
-                    key={set.id}
-                    className="rounded-lg border border-border bg-primary/5 p-3 font-medium tabular-nums"
-                  >
-                    Set {index + 1}: {set.weight} kg × {set.reps} reps
-                  </li>
-                ))}
-              </ol>
+              <RecordedSetsTable
+                sets={occurrence.sets}
+                caption={`Recorded sets for ${occurrence.name}, occurrence ${occurrence.position} in ${workout.name}`}
+              />
             </section>
           ))}
-          <div className="mt-5 border-t border-border pt-4">
-            <p className="break-words text-sm text-muted-foreground">
+          <div className="mt-5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2 border-t border-border pt-4">
+            <p className="min-w-0 break-words text-base font-medium text-muted-foreground">
               <Link
                 href={`/history/${workout.id}`}
                 className="underline focus-visible:outline-2 focus-visible:outline-ring"
@@ -148,7 +143,7 @@ export function CompletedSets({
               </Link>
             </p>
             <time
-              className="mt-2 block text-sm text-muted-foreground"
+              className="text-sm text-muted-foreground"
               dateTime={workout.completed_at}
             >
               {new Date(workout.completed_at).toLocaleString()}

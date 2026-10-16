@@ -12,7 +12,7 @@ import {
   historyQuery,
 } from "@/lib/history-filters";
 
-const tabs = ["sessions", "sets"] as const;
+const tabs = ["sets", "sessions"] as const;
 export function HistoryTabs({ selected }: { selected: "sessions" | "sets" }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -21,14 +21,15 @@ export function HistoryTabs({ selected }: { selected: "sessions" | "sets" }) {
   const criteria = historyCriteria(params);
   const validation = historyFilterError(params);
   const filters = historyQuery(criteria);
+  filters.delete(selected === "sessions" ? "exercise" : "template");
   if (criteria.from || criteria.to)
     filters.set("tz", Intl.DateTimeFormat().resolvedOptions().timeZone);
   const apiQuery = filters.toString();
-  const filtered = Object.values(criteria).some((value) => value.trim() !== "");
+  const filtered = [...filters.values()].some((value) => value.trim() !== "");
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   function select(tab: "sessions" | "sets") {
     const next = new URLSearchParams(query);
-    if (tab === "sets") next.set("tab", "sets");
+    if (tab === "sessions") next.set("tab", "sessions");
     else next.delete("tab");
     router.push(`/history${next.size ? `?${next}` : ""}`, { scroll: false });
   }
@@ -89,6 +90,17 @@ export function HistoryTabs({ selected }: { selected: "sessions" | "sets" }) {
       )}
       <div
         role="tabpanel"
+        id="history-sets-panel"
+        aria-labelledby="history-sets-tab"
+        hidden={selected !== "sets"}
+        tabIndex={0}
+      >
+        {selected === "sets" && !validation && (
+          <CompletedSets key={apiQuery} query={apiQuery} filtered={filtered} />
+        )}
+      </div>
+      <div
+        role="tabpanel"
         id="history-sessions-panel"
         aria-labelledby="history-sessions-tab"
         hidden={selected !== "sessions"}
@@ -100,17 +112,6 @@ export function HistoryTabs({ selected }: { selected: "sessions" | "sets" }) {
             query={apiQuery}
             filtered={filtered}
           />
-        )}
-      </div>
-      <div
-        role="tabpanel"
-        id="history-sets-panel"
-        aria-labelledby="history-sets-tab"
-        hidden={selected !== "sets"}
-        tabIndex={0}
-      >
-        {selected === "sets" && !validation && (
-          <CompletedSets key={apiQuery} query={apiQuery} filtered={filtered} />
         )}
       </div>
     </div>
