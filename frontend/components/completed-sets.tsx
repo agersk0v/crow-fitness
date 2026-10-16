@@ -136,7 +136,7 @@ export function CompletedSets({
           <div className="mt-5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2 border-t border-border pt-4">
             <p className="min-w-0 break-words text-base font-medium text-muted-foreground">
               <Link
-                href={`/history/${workout.id}`}
+                href={`/history?tab=sessions&session=${workout.id}`}
                 className="underline focus-visible:outline-2 focus-visible:outline-ring"
               >
                 {workout.name}

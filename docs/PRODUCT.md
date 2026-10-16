@@ -74,7 +74,7 @@ References load independently of current-session data. Failed loads show retry w
 
 Exercise-library cards now open Workout history filtered to the exercise in the Sets tab (#57), showing completed, nondeleted sets across all templates. Group by workout, newest first, using captured names and local completion dates; repeated occurrences remain separate with exact weight/reps. Active/cancelled workouts and workouts without eligible sets stay excluded.
 
-The dedicated exercise-history UI and links from completed workouts are removed. Stable identities, snapshots, previous-performance references, and existing backend read endpoints are preserved. Progress charts remain separate work.
+The dedicated exercise-history UI and links from completed workouts are removed. Stable identities, snapshots, previous-performance references, and retained completed-session/reference endpoints are preserved. The unused exercise-history API is removed under #62. Progress charts remain separate work.
 
 ## Approved workout history (#37)
 
@@ -227,3 +227,9 @@ The owner extended #60 with optional recorded RIR for Add/Edit. Accept nonnegati
 The revised #60 personal-best rule selects the workout containing the heaviest set (reps break weight ties), then displays all surviving sets for that exercise from the chosen workout, with repeated occurrences separated. No volume-based scoring is introduced. Saved active-session sets can be reordered by mouse/touch/keyboard with the template editor’s noninteractive-background drag behavior. Save each exact permutation immediately and preserve it through reload, continuation, completion, references and numbered-set comparisons. Reordering never changes recorded values or moves sets between exercises. Edits open in a popup with Save/Cancel/Escape, retaining failed changes for retry. Set N is larger. Remove the Discard set button; failed or uncertain writes must be resolved through retry, and pending saves/orders/edits still block completion.
 
 The owner capped new sets at the active snapshot’s working-set count per exercise occurrence. Add is disabled when the saved count reaches that cap; existing sets remain editable/reorderable/deletable, and deletion frees a slot. Go enforces the cap under the session row lock while permitting idempotent retries and edits at the cap. Existing excess legacy sets are preserved. Complete session first refreshes persisted session data; if planned sets are missing, a confirmation lists each exercise occurrence and its missing set numbers/range. Return/Escape keeps the workout active; Complete anyway retains its current sets and completes normally. Failed checks never silently complete the session.
+
+## Workout selection and exercise-history API removal (#62)
+
+Sets workout-name links open Sessions at `/history?tab=sessions&session=<completed-session-id>`, clearing unrelated criteria. The exact owned completed workout is selected, independently of template/name duplicates, and shows its complete saved exercise list and existing accordions. Sessions displays the active workout selector and Clear workout filter; clearing only that selector stays on Sessions. Apply preserves it, refresh/Back/Forward restore it, and ordinary filter criteria combine with it. Sets ignores the retained session selection. Invalid/repeated selectors show validation; inaccessible/active/cancelled/missing IDs produce no matching completed workouts.
+
+Remove the unused exercise-history API, query/models, store/fake methods, dedicated tests and smoke requests. Requests return 404 without compatibility handling. Existing exercise-library links still open filtered Sets, and completed snapshot/reference/history readers remain. No recorded data or schema changes.

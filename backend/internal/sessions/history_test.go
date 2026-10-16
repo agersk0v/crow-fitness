@@ -177,6 +177,24 @@ func TestPostgresHistory(t *testing.T) {
 		t.Fatal("active/cancelled records listed or captured names changed", afterList, err)
 	}
 
+	// Session selection distinguishes repeated workouts from the same template/name.
+	for _, tc := range []struct {
+		id    string
+		count int
+	}{{first.ID, 1}, {empty.ID, 1}, {active.ID, 0}, {cancelled.ID, 0}, {"9223372036854775807", 0}} {
+		matches, err := store.CompletedSessions(ctx, 91, HistoryFilter{Session: tc.id})
+		if err != nil || len(matches) != tc.count || (tc.count == 1 && matches[0].ID != tc.id) {
+			t.Fatal("exact session filter", tc, matches, err)
+		}
+		foreign, err := store.CompletedSessions(ctx, 92, HistoryFilter{Session: tc.id})
+		if err != nil || len(foreign) != 0 {
+			t.Fatal("foreign session selection", foreign, err)
+		}
+	}
+	if matches, err := store.CompletedSessions(ctx, 91, HistoryFilter{Session: first.ID, Query: "unknown"}); err != nil || len(matches) != 0 {
+		t.Fatal("combined session filter", matches, err)
+	}
+
 	// Template identity survives renaming/archiving and includes empty workouts.
 	for _, tc := range []struct {
 		id    string

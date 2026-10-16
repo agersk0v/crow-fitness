@@ -22,6 +22,7 @@ export function HistoryTabs({ selected }: { selected: "sessions" | "sets" }) {
   const validation = historyFilterError(params);
   const filters = historyQuery(criteria);
   filters.delete(selected === "sessions" ? "exercise" : "template");
+  if (selected === "sets") filters.delete("session");
   if (criteria.from || criteria.to)
     filters.set("tz", Intl.DateTimeFormat().resolvedOptions().timeZone);
   const apiQuery = filters.toString();

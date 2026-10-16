@@ -1,4 +1,11 @@
-export const historyKeys = ["q", "exercise", "template", "from", "to"] as const;
+export const historyKeys = [
+  "q",
+  "exercise",
+  "template",
+  "session",
+  "from",
+  "to",
+] as const;
 export function historyCriteria(params: URLSearchParams) {
   return Object.fromEntries(
     historyKeys.map((key) => [key, params.get(key) ?? ""]),
@@ -11,7 +18,7 @@ export function historyFilterError(params: URLSearchParams): string {
     if (params.getAll(key).length !== 1)
       return "Use each history parameter once.";
   }
-  const { exercise, template, from, to } = historyCriteria(params);
+  const { exercise, template, session, from, to } = historyCriteria(params);
   if (
     exercise &&
     (!/^[1-9][0-9]*$/.test(exercise) ||
@@ -24,6 +31,12 @@ export function historyFilterError(params: URLSearchParams): string {
       BigInt(template) > BigInt("9223372036854775807"))
   )
     return "Choose a valid template ID.";
+  if (
+    session &&
+    (!/^[1-9][0-9]*$/.test(session) ||
+      BigInt(session) > BigInt("9223372036854775807"))
+  )
+    return "Choose a valid session ID.";
   for (const date of [from, to]) {
     if (
       date &&

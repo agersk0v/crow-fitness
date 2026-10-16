@@ -76,12 +76,6 @@ func (f *fakeStore) GetCompleted(ctx context.Context, owner int64, id string) (S
 	return f.Get(ctx, owner, id)
 }
 
-func (f *fakeStore) ExerciseHistory(_ context.Context, owner int64, id string) (ExerciseHistory, error) {
-	f.owner = owner
-	f.id = id
-	return ExerciseHistory{ID: id, Name: "Press", Workouts: []ExerciseWorkout{}}, f.err
-}
-
 func TestHTTP(t *testing.T) {
 	for _, tc := range []struct {
 		name, method, path, body, content string

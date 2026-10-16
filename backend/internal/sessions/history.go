@@ -19,7 +19,8 @@ func (p Postgres) CompletedSessions(ctx context.Context, owner int64, filter His
  AND ($4::timestamptz IS NULL OR s.completed_at >= $4)
  AND ($5::timestamptz IS NULL OR s.completed_at < $5)
  AND ($6::text='' OR s.template_id::text=$6)
- ORDER BY s.completed_at DESC,s.id DESC`, owner, filter.Query, filter.Exercise, filter.From, filter.Until, filter.Template)
+ AND ($7::text='' OR s.id::text=$7)
+ ORDER BY s.completed_at DESC,s.id DESC`, owner, filter.Query, filter.Exercise, filter.From, filter.Until, filter.Template, filter.Session)
 	if err != nil {
 		return nil, err
 	}

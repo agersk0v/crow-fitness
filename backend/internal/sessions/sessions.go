@@ -46,7 +46,6 @@ type Store interface {
 	HistoryExercises(context.Context, int64) ([]HistoryExercise, error)
 	HistoryTemplates(context.Context, int64) ([]HistoryExercise, error)
 	GetCompleted(context.Context, int64, string) (Session, error)
-	ExerciseHistory(context.Context, int64, string) (ExerciseHistory, error)
 }
 type Postgres struct{ Pool *pgxpool.Pool }
 
