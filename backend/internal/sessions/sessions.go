@@ -40,6 +40,7 @@ type Store interface {
 	DeleteSet(context.Context, int64, string, string) error
 	CompletedSets(context.Context, int64, HistoryFilter) ([]CompletedSet, error)
 	Previous(context.Context, int64, string) ([]PreviousPerformance, error)
+	PersonalBests(context.Context, int64, string) ([]PersonalBest, error)
 	CompletedSessions(context.Context, int64, HistoryFilter) ([]CompletedSession, error)
 	HistoryExercises(context.Context, int64) ([]HistoryExercise, error)
 	HistoryTemplates(context.Context, int64) ([]HistoryExercise, error)

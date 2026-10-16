@@ -75,7 +75,8 @@ async function forward(
         endpoint === "history/templates" ||
         completedSession ||
         session ||
-        previous)) ||
+        previous ||
+        /^sessions\/[1-9][0-9]*\/bests$/.test(endpoint))) ||
     (request.method === "POST" &&
       (["exercises", "templates", "sessions"].includes(endpoint) ||
         reset ||

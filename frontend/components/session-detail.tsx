@@ -1,12 +1,13 @@
 "use client";
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import {
-  PreviousPerformanceView,
+  ExerciseReferences,
+  usePersonalBests,
   usePreviousPerformance,
 } from "@/components/previous-performance";
 import { SessionSets } from "@/components/session-sets";
@@ -15,6 +16,7 @@ import type { Session } from "@/lib/sessions";
 export function SessionDetail({ id }: { id: string }) {
   const router = useRouter();
   const previous = usePreviousPerformance(id);
+  const bests = usePersonalBests(id);
   const modal = useRef<HTMLDialogElement>(null);
   const dialogID = useId();
   const blockers = useRef(new Set<number>());
@@ -27,6 +29,11 @@ export function SessionDetail({ id }: { id: string }) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState<"cancel" | "complete" | null>(null);
   const [actionError, setActionError] = useState("");
+  const onBlocked = useCallback((position: number, isBlocked: boolean) => {
+    if (isBlocked) blockers.current.add(position);
+    else blockers.current.delete(position);
+    setBlocked(blockers.current.size > 0);
+  }, []);
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
@@ -129,24 +136,13 @@ export function SessionDetail({ id }: { id: string }) {
         configuration you started with. Saved sets stay in this active session
         until you complete the workout. Cancellation discards them.
       </p>
-      {previous.error && (
-        <Alert variant="destructive">
-          <AlertTitle>Could not load previous performance</AlertTitle>
-          <AlertDescription>{previous.error}</AlertDescription>
-          <Button className="col-start-2 mt-3" onClick={previous.retry}>
-            Retry previous performance
-          </Button>
-        </Alert>
-      )}
       <ol className="space-y-4">
         {session.exercises.map((entry) => (
           <li
             key={entry.position}
             className="rounded-2xl border border-border bg-card p-5"
           >
-            <h2 className="break-words text-xl font-semibold">
-              {entry.position}. {entry.name}
-            </h2>
+            <h2 className="break-words text-xl font-semibold">{entry.name}</h2>
             <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
               <dt>Working sets</dt>
               <dd>{entry.set_count}</dd>
@@ -161,13 +157,16 @@ export function SessionDetail({ id }: { id: string }) {
               <dt>Target RIR</dt>
               <dd>{entry.target_rir ?? "Not specified"}</dd>
             </dl>
-            <PreviousPerformanceView
-              label={`${entry.position}. ${entry.name}`}
-              reference={previous.items.find(
+            <ExerciseReferences
+              label={entry.name}
+              previous={previous.items.find(
                 (item) => item.exercise_id === entry.exercise_id,
               )}
-              loading={previous.loading}
-              failed={!!previous.error}
+              best={bests.items.find(
+                (item) => item.exercise_id === entry.exercise_id,
+              )}
+              previousState={previous}
+              bestState={bests}
             />
             <SessionSets
               key={`${id}-${entry.position}`}
@@ -177,11 +176,12 @@ export function SessionDetail({ id }: { id: string }) {
                 (set) => set.exercise_position === entry.position,
               )}
               disabled={!!busy}
-              onBlocked={(position, isBlocked) => {
-                if (isBlocked) blockers.current.add(position);
-                else blockers.current.delete(position);
-                setBlocked(blockers.current.size > 0);
-              }}
+              previousWeight={
+                previous.items.find(
+                  (item) => item.exercise_id === entry.exercise_id,
+                )?.occurrences[0]?.sets[0]?.weight
+              }
+              onBlocked={onBlocked}
             />
           </li>
         ))}

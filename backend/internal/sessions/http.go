@@ -179,6 +179,25 @@ func Register(mux *http.ServeMux, store Store) {
 		write(w, 200, map[string]any{"items": items})
 	})
 
+	mux.HandleFunc("GET /api/sessions/{id}/bests", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		if !validID(id) {
+			problem(w, 400, "validation_error", "Invalid session ID.")
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+		items, err := store.PersonalBests(ctx, exercises.LocalOwnerID, id)
+		if err != nil {
+			operationError(w, err)
+			return
+		}
+		if items == nil {
+			items = []PersonalBest{}
+		}
+		write(w, 200, map[string]any{"items": items})
+	})
+
 	mux.HandleFunc("GET /api/exercises/{id}/history", func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
 		if !validID(id) {

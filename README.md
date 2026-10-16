@@ -4,7 +4,7 @@ A simple workout tracker for one person, with no authentication or accounts.
 
 ## Current status
 
-The Next.js frontend, Go API, and PostgreSQL support creating, searching, tagging, renaming, and safely deleting personal exercises at `/exercises`. Names are trimmed and validated in Go. Saved exercises survive refresh and stack restart. Go selects one internal local owner; the app has no login or authentication. You can also create, edit, duplicate, archive, and restore persistent workout templates at `/templates`. Start a workout from an active template, continue the saved session from home, save weight/reps, or cancel it. Completing preserves its sets in Workout history at `/history`. Active exercises show previous completed performance without prefilling; exercise-specific completed-set history is available from the exercise library. Progress charts remain planned.
+The Next.js frontend, Go API, and PostgreSQL support creating, searching, tagging, renaming, and safely deleting personal exercises at `/exercises`. Names are trimmed and validated in Go. Saved exercises survive refresh and stack restart. Go selects one internal local owner; the app has no login or authentication. You can also create, edit, duplicate, archive, and restore persistent workout templates at `/templates`. Start a workout from an active template, continue the saved session from home, save weight/reps, or cancel it. Completing preserves its sets in Workout history at `/history`. Active exercises offer previous-session/personal-best tables and a one-time previous-weight default; exercise-specific completed-set history is available from the exercise library. Progress charts remain planned.
 
 See [product requirements](docs/PRODUCT.md), [architecture](docs/ARCHITECTURE.md), and [agent instructions](AGENTS.md).
 
@@ -126,7 +126,7 @@ Motion for React provides brief 180 ms entrance animations for the home/exercise
 
 ## Planned features
 
-- Optional previous-performance prefilling (requires separate decisions).
+- Further previous-performance suggestions beyond the approved first-weight default.
 - Exercise progress charts.
 
 The product document lists decisions to confirm before implementing these flows. This setup is intended for your own computer; it has no authentication and is not configured for public hosting.
@@ -203,17 +203,19 @@ Session resources contain string `id` and `template_id`, copied `name`, UTC `sta
 
 Focused PostgreSQL tests cover snapshots, null/zero/decimal targets, owner isolation, concurrent starts, atomic failed starts, migration reruns/reconnection, clearing rows, and stale end requests. The stack smoke also checks session forwarding and persistence through database/full-stack restarts.
 
-On a session page, **Add set** opens blank weight/reps fields; **Save set** persists them to the active workout. Saved rows offer Edit/Save/Cancel and Delete. They appear in **Workout history → Sets** only after completion. The Sets tab groups recorded sets by workout and exercise occurrence, with exact kilograms/reps and browser-local completion dates.
+On a session page, Weight/Reps inputs are always visible; **Add set** persists their values to the active workout. Weight initializes once from the previous session’s first set (or stays blank without history). Successful additions clear reps and keep the entered weight; failures keep both values. Saved rows offer Edit/Save/Cancel and Delete. They appear in **Workout history → Sets** only after completion. The Sets tab groups recorded sets by workout and exercise occurrence, with exact kilograms/reps and browser-local completion dates.
 
-Completion is disabled while a set draft, write, or unresolved error exists. Save or explicitly discard a new draft, cancel an unsubmitted edit, or retry a failed edit/delete before completing. A new set whose save response was lost can be retried with the same UUID or discarded with a server deletion. A failed edit must be resolved by retrying Save before cancelling the edit, because the server may already have saved it. Cancel session still discards the entire active workout after confirmation. Refresh restores successful saves; unsaved drafts have no offline persistence guarantee.
+Completion is disabled while reps are entered, an edit/write is open, or a failed change is unresolved. A default/retained weight alone does not block completion. Save or explicitly discard a new draft, cancel an unsubmitted edit, or retry a failed edit/delete before completing. A new set whose save response was lost can be retried with the same UUID or discarded with a server deletion. A failed edit must be resolved by retrying Save before cancelling the edit, because the server may already have saved it. Cancel session still discards the entire active workout after confirmation. Refresh restores successful saves; unsaved drafts have no offline persistence guarantee.
 
 ## Previous performance in an active session
 
-Each exercise shows its latest completed workout with saved sets, across any template. Exercise identity connects history through renames. Empty workouts, deleted sets, and active/cancelled sessions are excluded. Repeated source occurrences retain their captured names and are labeled separately in source occurrence/set order; repeated current occurrences may share the same reference. Exact weight/reps and a local-time completion date are displayed read-only. No eligible history shows **No previous performance yet**.
+Each exercise card has **Previous session** (default) and **Personal best** tabs showing plain Weight (kg) / Reps / RIR tables. Exercise cards have no number prefixes. Previous session uses the latest completed workout containing nondeleted sets for the exercise, across templates, preserving separate repeated occurrences. Personal best is the heaviest completed set, with higher reps breaking equal-weight ties; both values come from that same set. Active/cancelled workouts and deleted sets are excluded. RIR shows **—** because it is not recorded; template target RIR stays separate.
 
-Reference requests run independently from current-set entry. **Retry previous performance** reloads only the references, preserving current drafts and controls. Refresh/Continue session reload references and saved current sets. Previous results never prefill, create, or complete any current set.
+Reference requests load and retry independently of current-set entry. A delayed previous result may initialize weight only if it has not already been initialized or manually edited. Reference retries/tab switches never reset inputs; the weight default does not advance through historical sets. Only an explicit successful Add set records a new set. Refresh/Continue session restores saved sets and initializes fresh input controls; unsaved input drafts are not persisted.
 
 - `GET /api/sessions/{id}/previous`: uncached `200` with `{"items":[...]}` for the owner's active session. A reference contains string `exercise_id`, string source `session_id`, UTC `completed_at`, and `occurrences` with source `position`, captured `name`, and `sets` using the existing saved-set shape. Exercises without history are omitted; no history returns `{"items":[]}`. Missing/completed/cancelled/foreign sessions return `404`; invalid IDs return `400`. Persistence/forwarding failures use the existing generic `500`/`502` conventions. Completion time/session ID and occurrence/saved timestamp/UUID provide stable tie-breaking.
+
+- `GET /api/sessions/{id}/bests`: uncached `200` with `{"items":[{"exercise_id":"12","set":{"id":"…","exercise_position":1,"weight":"50.00","reps":8}}]}` for eligible exercises in the owner’s active session. No result omits that exercise. Weight then reps determine the best actual set; exact ties use completion time/session ID descending, occurrence position, saved timestamp and UUID. Missing/completed/cancelled/foreign sessions return `404`; invalid IDs return `400`; failures use generic `500`/`502`.
 
 ## Workout history
 

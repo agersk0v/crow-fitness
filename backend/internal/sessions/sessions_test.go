@@ -155,3 +155,8 @@ func (f *fakeStore) HistoryTemplates(_ context.Context, owner int64) ([]HistoryE
 	f.owner = owner
 	return []HistoryExercise{}, f.err
 }
+
+func (f *fakeStore) PersonalBests(_ context.Context, owner int64, id string) ([]PersonalBest, error) {
+	f.owner, f.id = owner, id
+	return []PersonalBest{}, f.err
+}
