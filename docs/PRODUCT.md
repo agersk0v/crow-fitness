@@ -74,7 +74,7 @@ Saved rows use a larger Set N at top left and short Edit/Delete buttons at right
 
 Drag saved sets with the same background/touch/keyboard behavior as template cards. Reordering stays within an occurrence and saves immediately, preserving exact values. Failure retains the desired order with Retry set order and blocks further changes/completion until resolved or refreshed. All views and comparisons use persisted set order.
 
-New sets cannot exceed the occurrence's **captured planned count**. At the cap, Add is disabled; saved sets remain editable, reorderable, and deletable. Deletion frees a slot. Retries and edits at the cap remain valid; legacy excess sets are preserved.
+New sets cannot exceed the occurrence's **captured planned count**. At the cap, the Add inputs/button are replaced by “Exercise complete”; saved sets remain editable, reorderable, and deletable. Deleting a saved set frees a slot and restores the Add form with its retained weight and normal entry defaults. Uncertain additions keep their retry controls until resolved. Retries and edits at the cap remain valid; legacy excess sets are preserved.
 
 If another tab fills the planned count, a rejected addition shows the set-count message and Reload saved sets instead of an impossible Add retry. Inputs stay until that explicit action succeeds. Reload updates only this exercise’s saved sets, clears its rejected addition and unsaved reps/RIR, resets technique to Decent, and keeps weight and other exercise drafts. Failed reloads retain inputs for retry. Uncertain saves still retry their original UUID.
 

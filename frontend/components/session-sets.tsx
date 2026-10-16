@@ -343,67 +343,68 @@ export function SessionSets({
           </Button>
         </Alert>
       )}
-      <form
-        className="space-y-3"
-        aria-label="Add a set"
-        noValidate
-        onSubmit={(event) => {
-          event.preventDefault();
-          void save(false);
-        }}
-      >
-        <SetInputs
-          id={`${formID}-add`}
-          values={entry}
-          fields={addFields}
-          disabled={
-            busy ||
-            disabled ||
-            !!draft ||
-            !!pendingDelete ||
-            !!pendingOrder ||
-            (atLimit && !attempted)
-          }
-          onChange={(key, value) => {
-            if (key === "weight") initialized.current = true;
-            const next = { ...entry, [key]: value };
-            setEntry(next);
-            setAddFields((current) => {
-              const remaining = { ...current };
-              delete remaining[key];
-              return !attempted && !next.reps.trim() && !next.rir.trim()
-                ? {}
-                : remaining;
-            });
-            if (!attempted && !staleCount) setError("");
+      {atLimit && !attempted ? (
+        <p role="status" className="text-sm font-medium text-highlight">
+          Exercise complete ({sets.length}/{plannedCount} sets saved).
+        </p>
+      ) : (
+        <form
+          className="space-y-3"
+          aria-label="Add a set"
+          noValidate
+          onSubmit={(event) => {
+            event.preventDefault();
+            void save(false);
           }}
-        />
-        <div className="flex flex-wrap gap-3">
-          <Button
-            type="submit"
+        >
+          <SetInputs
+            id={`${formID}-add`}
+            values={entry}
+            fields={addFields}
             disabled={
               busy ||
               disabled ||
               !!draft ||
               !!pendingDelete ||
               !!pendingOrder ||
-              !!staleCount ||
               (atLimit && !attempted)
             }
-          >
-            Add set
-          </Button>
-        </div>
-        {attempted && !busy && (
-          <p className="text-xs text-muted-foreground">
-            Retry Add set to confirm the save.
-          </p>
-        )}
-      </form>
-      {atLimit && (
-        <p className="text-sm text-muted-foreground">
-          All planned sets saved ({sets.length}/{plannedCount}).
-        </p>
+            onChange={(key, value) => {
+              if (key === "weight") initialized.current = true;
+              const next = { ...entry, [key]: value };
+              setEntry(next);
+              setAddFields((current) => {
+                const remaining = { ...current };
+                delete remaining[key];
+                return !attempted && !next.reps.trim() && !next.rir.trim()
+                  ? {}
+                  : remaining;
+              });
+              if (!attempted && !staleCount) setError("");
+            }}
+          />
+          <div className="flex flex-wrap gap-3">
+            <Button
+              type="submit"
+              disabled={
+                busy ||
+                disabled ||
+                !!draft ||
+                !!pendingDelete ||
+                !!pendingOrder ||
+                !!staleCount ||
+                (atLimit && !attempted)
+              }
+            >
+              Add set
+            </Button>
+          </div>
+          {attempted && !busy && (
+            <p className="text-xs text-muted-foreground">
+              Retry Add set to confirm the save.
+            </p>
+          )}
+        </form>
       )}
       <h3 className="font-medium">Saved sets</h3>
       {sets.length === 0 ? (
