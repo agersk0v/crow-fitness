@@ -81,7 +81,7 @@ func (p Postgres) Reset(ctx context.Context, now time.Time) (Result, error) {
 	defer tx.Rollback(ctx)
 	// EXCLUSIVE blocks writes and row-locking readers while ordinary MVCC reads
 	// can see the prior committed dataset. All replacement records commit together.
-	if _, err = tx.Exec(ctx, `LOCK TABLE owners,exercises,templates,template_exercises,workout_sessions,session_exercises,session_sets IN EXCLUSIVE MODE`); err != nil {
+	if _, err = tx.Exec(ctx, `LOCK TABLE owners,exercises,templates,template_exercises,workout_sessions,session_exercises,session_sets,template_exercise_alternatives,session_exercise_choices IN EXCLUSIVE MODE`); err != nil {
 		return Result{}, err
 	}
 	owner := exercises.LocalOwnerID
@@ -118,6 +118,9 @@ func (p Postgres) Reset(ctx context.Context, now time.Time) (Result, error) {
 			}
 		}
 	}
+	if _, err = tx.Exec(ctx, `INSERT INTO template_exercise_alternatives(template_id,owner_id,position,choice_position,exercise_id,set_count) VALUES($1,$2,1,1,$3,3)`, templateIDs[0], owner, ids["Smith bench press"]); err != nil {
+		return Result{}, err
+	}
 	result.Exercises = len(ids)
 	utc := now.UTC()
 	anchor := time.Date(utc.Year(), utc.Month(), utc.Day(), 12, 0, 0, 0, time.UTC).AddDate(0, 0, -84)
@@ -153,6 +156,11 @@ func seedSession(ctx context.Context, tx pgx.Tx, owner int64, id string, r routi
 	batch := &pgx.Batch{}
 	count := 0
 	for position, m := range r.movements {
+		// Alternate the Upper 1 first slot in historical workouts. Keep the
+		// active example on Dips, with its original three saved sets.
+		if r.name == "Upper 1" && position == 0 && !active && week%2 == 1 {
+			m = routines[2].movements[0]
+		}
 		batch.Queue("INSERT INTO session_exercises(session_id,owner_id,position,exercise_id,name,set_count) VALUES($1,$2,$3,$4,$5,$6)", id, owner, position+1, ids[m.name], m.name, m.sets)
 		if active && position > 0 {
 			continue
@@ -170,6 +178,14 @@ func seedSession(ctx context.Context, tx pgx.Tx, owner int64, id string, r routi
 	}
 	results := tx.SendBatch(ctx, batch)
 	if err := results.Close(); err != nil {
+		return 0, err
+	}
+	// Capture every allowed choice, including the default even when the seed
+	// performed an alternative. Recorded sets refer only to the selected identity.
+	_, err := tx.Exec(ctx, `INSERT INTO session_exercise_choices(session_id,owner_id,position,choice_position,exercise_id,name,set_count,rep_min,rep_max,target_rir)
+ SELECT $1,te.owner_id,te.position,0,te.exercise_id,e.name,te.set_count,te.rep_min,te.rep_max,te.target_rir FROM template_exercises te JOIN exercises e ON e.owner_id=te.owner_id AND e.id=te.exercise_id JOIN workout_sessions s ON s.template_id=te.template_id AND s.owner_id=te.owner_id WHERE s.id=$1 AND s.owner_id=$2
+ UNION ALL SELECT $1,a.owner_id,a.position,a.choice_position,a.exercise_id,e.name,a.set_count,a.rep_min,a.rep_max,a.target_rir FROM template_exercise_alternatives a JOIN exercises e ON e.owner_id=a.owner_id AND e.id=a.exercise_id JOIN workout_sessions s ON s.template_id=a.template_id AND s.owner_id=a.owner_id WHERE s.id=$1 AND s.owner_id=$2`, id, owner)
+	if err != nil {
 		return 0, err
 	}
 	return count, nil

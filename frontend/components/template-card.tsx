@@ -97,6 +97,19 @@ export function TemplateCard({ template }: { template: TemplateSummary }) {
                     <> · RIR {exercise.target_rir}</>
                   )}
                 </span>
+                {!!exercise.alternatives?.length && (
+                  <div className="mt-1 space-y-1 text-muted-foreground">
+                    <p>Default: {exercise.name}</p>
+                    {exercise.alternatives.map((c) => (
+                      <p key={c.exercise_id}>
+                        Or {c.name} · {c.set_count} sets
+                        {c.rep_min !== null &&
+                          ` · ${c.rep_min}–${c.rep_max} reps`}
+                        {c.target_rir !== null && ` · RIR ${c.target_rir}`}
+                      </p>
+                    ))}
+                  </div>
+                )}
               </li>
             ))}
           </ol>

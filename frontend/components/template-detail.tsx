@@ -193,6 +193,19 @@ export function TemplateDetail({ id }: { id: string }) {
                     : `${entry.rep_min}–${entry.rep_max}`}{" "}
                   · RIR: {entry.target_rir ?? "Not specified"}
                 </p>
+                {!!entry.alternatives?.length && (
+                  <div className="mt-3 space-y-2 text-sm text-muted-foreground">
+                    <p>Default: {entry.name}</p>
+                    {entry.alternatives.map((c) => (
+                      <p key={c.exercise_id}>
+                        Or {c.name} · {c.set_count} sets
+                        {c.rep_min !== null &&
+                          ` · ${c.rep_min}–${c.rep_max} reps`}
+                        {c.target_rir !== null && ` · RIR ${c.target_rir}`}
+                      </p>
+                    ))}
+                  </div>
+                )}
               </li>
             ))}
           </ol>

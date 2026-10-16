@@ -15,13 +15,36 @@ import type { Session } from "@/lib/sessions";
 
 export function SessionDetail({ id }: { id: string }) {
   const router = useRouter();
-  const previous = usePreviousPerformance(id);
-  const bests = usePersonalBests(id);
   const modal = useRef<HTMLDialogElement>(null);
   const dialogID = useId();
   const blockers = useRef(new Set<number>());
   const [blocked, setBlocked] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
+  const selectionKey =
+    session?.exercises
+      .map((e) => `${e.position}:${e.selection_revision ?? 0}`)
+      .join(",") ?? "";
+  const previous = usePreviousPerformance(id, selectionKey);
+  const bests = usePersonalBests(id, selectionKey);
+  const onSelected = useCallback((saved: Session, position: number) => {
+    setSession(
+      (current) =>
+        current && {
+          ...current,
+          exercises: current.exercises.map((e) =>
+            e.position === position
+              ? saved.exercises.find((next) => next.position === position)!
+              : e,
+          ),
+          sets: [
+            ...current.sets.filter((s) => s.exercise_position !== position),
+            ...saved.sets.filter((s) => s.exercise_position === position),
+          ],
+        },
+    );
+    blockers.current.delete(position);
+    setBlocked(blockers.current.size > 0);
+  }, []);
   const [loading, setLoading] = useState(true);
   const [missing, setMissing] = useState(false);
   const [error, setError] = useState("");
@@ -194,7 +217,9 @@ export function SessionDetail({ id }: { id: string }) {
               bestState={bests}
             />
             <SessionSets
-              key={`${id}-${entry.position}`}
+              key={`${id}-${entry.position}-${entry.selection_revision ?? 0}`}
+              exercise={entry}
+              onSelected={onSelected}
               sessionID={id}
               position={entry.position}
               plannedCount={entry.set_count}

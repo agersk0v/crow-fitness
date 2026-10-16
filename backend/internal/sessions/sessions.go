@@ -31,6 +31,7 @@ type ActiveConflict struct{ Session Session }
 func (e ActiveConflict) Error() string { return "Continue the active session before starting another." }
 
 type Store interface {
+	SelectExercise(context.Context, int64, string, SelectionInput) (Session, error)
 	Start(context.Context, int64, string) (Session, error)
 	Active(context.Context, int64) (*Session, error)
 	Get(context.Context, int64, string) (Session, error)
@@ -99,6 +100,9 @@ func (p Postgres) Start(ctx context.Context, owner int64, templateID string) (Se
 	if copied.RowsAffected() == 0 {
 		return Session{}, ErrEmpty
 	}
+	if err = captureChoices(ctx, tx, owner, id, templateID); err != nil {
+		return Session{}, err
+	}
 	item, err := get(ctx, tx, owner, id)
 	if err != nil {
 		return Session{}, err
@@ -162,7 +166,7 @@ func getSnapshot(ctx context.Context, tx pgx.Tx, owner int64, id string, complet
 	if err != nil {
 		return item, err
 	}
-	rows, err := tx.Query(ctx, `SELECT exercise_id::text,name,position,set_count,rep_min,rep_max,target_rir::text
+	rows, err := tx.Query(ctx, `SELECT exercise_id::text,name,position,set_count,rep_min,rep_max,target_rir::text,selection_revision
  FROM session_exercises WHERE owner_id=$1 AND session_id=$2 ORDER BY position`, owner, item.ID)
 	if err != nil {
 		return item, err
@@ -172,7 +176,7 @@ func getSnapshot(ctx context.Context, tx pgx.Tx, owner int64, id string, complet
 	for rows.Next() {
 		var entry templates.Entry
 		var rir *string
-		if err = rows.Scan(&entry.ExerciseID, &entry.Name, &entry.Position, &entry.SetCount, &entry.RepMin, &entry.RepMax, &rir); err != nil {
+		if err = rows.Scan(&entry.ExerciseID, &entry.Name, &entry.Position, &entry.SetCount, &entry.RepMin, &entry.RepMax, &rir, &entry.SelectionRevision); err != nil {
 			return item, err
 		}
 		if rir != nil {
@@ -185,6 +189,9 @@ func getSnapshot(ctx context.Context, tx pgx.Tx, owner int64, id string, complet
 		return item, err
 	}
 	rows.Close()
+	if err = readChoices(ctx, tx, owner, item.ID, item.Exercises); err != nil {
+		return item, err
+	}
 	if completed {
 		item.Sets, err = readCompletedSets(ctx, tx, owner, item.ID)
 	} else {

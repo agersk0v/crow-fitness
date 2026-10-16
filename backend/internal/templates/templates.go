@@ -33,21 +33,33 @@ func (d *Decimal) UnmarshalJSON(data []byte) error {
 }
 func (d Decimal) MarshalJSON() ([]byte, error) { return []byte(d), nil }
 
-type Entry struct {
+type Choice struct {
 	ExerciseID string   `json:"exercise_id"`
 	Name       string   `json:"name,omitempty"`
-	Position   int      `json:"position"`
 	SetCount   int64    `json:"set_count"`
 	RepMin     *int64   `json:"rep_min"`
 	RepMax     *int64   `json:"rep_max"`
 	TargetRIR  *Decimal `json:"target_rir"`
 }
+type Entry struct {
+	Choices           []Choice `json:"choices,omitempty"`
+	SelectionRevision int64    `json:"selection_revision"`
+	Alternatives      []Choice `json:"alternatives,omitempty"`
+	ExerciseID        string   `json:"exercise_id"`
+	Name              string   `json:"name,omitempty"`
+	Position          int      `json:"position"`
+	SetCount          int64    `json:"set_count"`
+	RepMin            *int64   `json:"rep_min"`
+	RepMax            *int64   `json:"rep_max"`
+	TargetRIR         *Decimal `json:"target_rir"`
+}
 type InputEntry struct {
-	ExerciseID string   `json:"exercise_id"`
-	SetCount   int64    `json:"set_count"`
-	RepMin     *int64   `json:"rep_min"`
-	RepMax     *int64   `json:"rep_max"`
-	TargetRIR  *Decimal `json:"target_rir"`
+	Alternatives []Choice `json:"alternatives,omitempty"`
+	ExerciseID   string   `json:"exercise_id"`
+	SetCount     int64    `json:"set_count"`
+	RepMin       *int64   `json:"rep_min"`
+	RepMax       *int64   `json:"rep_max"`
+	TargetRIR    *Decimal `json:"target_rir"`
 }
 type Input struct {
 	Description string       `json:"description"`
@@ -94,27 +106,39 @@ func Validate(input *Input) ValidationError {
 	}
 	for i, entry := range input.Exercises {
 		key := fmt.Sprintf("exercises.%d.", i)
-		if !validID(entry.ExerciseID) {
-			fields[key+"exercise_id"] = "Choose a saved exercise."
-		}
-		if entry.SetCount <= 0 {
-			fields[key+"set_count"] = "Enter a positive whole-number working-set count."
-		}
-		if (entry.RepMin == nil) != (entry.RepMax == nil) {
-			fields[key+"rep_range"] = "Enter both rep bounds, or leave both blank."
-		} else if entry.RepMin != nil && (*entry.RepMin <= 0 || *entry.RepMax < *entry.RepMin) {
-			fields[key+"rep_range"] = "Use positive whole numbers with minimum no greater than maximum."
-		}
-		if entry.TargetRIR != nil {
-			value := string(*entry.TargetRIR)
-			mantissa := strings.Split(strings.ToLower(value), "e")[0]
-			negative := strings.HasPrefix(value, "-") && strings.Trim(mantissa, "-0.") != ""
-			if !numberPattern.MatchString(value) || negative {
-				fields[key+"target_rir"] = "Enter a nonnegative target RIR, or leave it blank."
+		validateChoice(fields, key, Choice{ExerciseID: entry.ExerciseID, SetCount: entry.SetCount, RepMin: entry.RepMin, RepMax: entry.RepMax, TargetRIR: entry.TargetRIR})
+		seen := map[string]bool{entry.ExerciseID: true}
+		for j, choice := range entry.Alternatives {
+			prefix := fmt.Sprintf("%salternatives.%d.", key, j)
+			validateChoice(fields, prefix, choice)
+			if seen[choice.ExerciseID] {
+				fields[prefix+"exercise_id"] = "Choose each exercise only once within this slot."
 			}
+			seen[choice.ExerciseID] = true
 		}
 	}
 	return fields
+}
+func validateChoice(fields ValidationError, key string, choice Choice) {
+	if !validID(choice.ExerciseID) {
+		fields[key+"exercise_id"] = "Choose a saved exercise."
+	}
+	if choice.SetCount <= 0 {
+		fields[key+"set_count"] = "Enter a positive whole-number working-set count."
+	}
+	if (choice.RepMin == nil) != (choice.RepMax == nil) {
+		fields[key+"rep_range"] = "Enter both rep bounds, or leave both blank."
+	} else if choice.RepMin != nil && (*choice.RepMin <= 0 || *choice.RepMax < *choice.RepMin) {
+		fields[key+"rep_range"] = "Use positive whole numbers with minimum no greater than maximum."
+	}
+	if choice.TargetRIR != nil {
+		value := string(*choice.TargetRIR)
+		mantissa := strings.Split(strings.ToLower(value), "e")[0]
+		negative := strings.HasPrefix(value, "-") && strings.Trim(mantissa, "-0.") != ""
+		if !numberPattern.MatchString(value) || negative {
+			fields[key+"target_rir"] = "Enter a nonnegative target RIR, or leave it blank."
+		}
+	}
 }
 func validID(id string) bool {
 	n, err := strconv.ParseInt(id, 10, 64)
@@ -214,6 +238,33 @@ func get(ctx context.Context, db queryer, owner int64, id string) (Template, err
 			entry.TargetRIR = &v
 		}
 		item.Exercises = append(item.Exercises, entry)
+	}
+	if err = rows.Err(); err != nil {
+		return item, err
+	}
+	rows.Close()
+	rows, err = db.Query(ctx, `SELECT a.position,e.id::text,e.name,a.set_count,a.rep_min,a.rep_max,a.target_rir::text FROM template_exercise_alternatives a JOIN exercises e ON e.owner_id=a.owner_id AND e.id=a.exercise_id WHERE a.template_id=$1 AND a.owner_id=$2 ORDER BY a.position,a.choice_position`, id, owner)
+	if err != nil {
+		return item, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var position int
+		var c Choice
+		var rir *string
+		if err = rows.Scan(&position, &c.ExerciseID, &c.Name, &c.SetCount, &c.RepMin, &c.RepMax, &rir); err != nil {
+			return item, err
+		}
+		if rir != nil {
+			v := Decimal(*rir)
+			c.TargetRIR = &v
+		}
+		for i := range item.Exercises {
+			if item.Exercises[i].Position == position {
+				item.Exercises[i].Alternatives = append(item.Exercises[i].Alternatives, c)
+				break
+			}
+		}
 	}
 	return item, rows.Err()
 }

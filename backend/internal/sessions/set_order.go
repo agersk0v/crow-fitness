@@ -5,8 +5,9 @@ import (
 )
 
 type SetOrderInput struct {
-	Position int64    `json:"exercise_position"`
-	IDs      []string `json:"set_ids"`
+	SelectionRevision *int64   `json:"selection_revision"`
+	Position          int64    `json:"exercise_position"`
+	IDs               []string `json:"set_ids"`
 }
 
 func (p Postgres) ReorderSets(ctx context.Context, owner int64, sessionID string, input SetOrderInput) ([]SavedSet, error) {
@@ -19,6 +20,9 @@ func (p Postgres) ReorderSets(ctx context.Context, owner int64, sessionID string
 	}
 	defer tx.Rollback(ctx)
 	if err = lockSession(ctx, tx, owner, sessionID); err != nil {
+		return nil, err
+	}
+	if err = checkSelection(ctx, tx, owner, sessionID, input.Position, input.SelectionRevision); err != nil {
 		return nil, err
 	}
 	var exists bool

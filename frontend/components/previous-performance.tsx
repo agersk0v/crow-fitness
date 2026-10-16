@@ -16,8 +16,12 @@ type PersonalBest = PreviousPerformance;
 function useSessionReference<T>(
   sessionID: string,
   endpoint: "previous" | "bests",
+  selectionKey: string,
 ) {
-  const [items, setItems] = useState<T[]>([]);
+  const [data, setData] = useState<{ key: string; items: T[] }>({
+    key: "",
+    items: [],
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -33,7 +37,8 @@ function useSessionReference<T>(
         );
         if (!response.ok) throw new Error();
         const body = await response.json();
-        if (!controller.signal.aborted) setItems(body.items);
+        if (!controller.signal.aborted)
+          setData({ key: selectionKey, items: body.items });
       } catch {
         if (!controller.signal.aborted) setError(true);
       } finally {
@@ -42,20 +47,24 @@ function useSessionReference<T>(
     }
     void load();
     return () => controller.abort();
-  }, [sessionID, endpoint, attempt]);
+  }, [sessionID, endpoint, attempt, selectionKey]);
   return {
-    items,
-    loading,
+    items: data.key === selectionKey ? data.items : [],
+    loading: loading || (data.key !== selectionKey && !error),
     error,
     retry: () => setAttempt((value) => value + 1),
   };
 }
 
-export function usePreviousPerformance(sessionID: string) {
-  return useSessionReference<PreviousPerformance>(sessionID, "previous");
+export function usePreviousPerformance(sessionID: string, selectionKey = "") {
+  return useSessionReference<PreviousPerformance>(
+    sessionID,
+    "previous",
+    selectionKey,
+  );
 }
-export function usePersonalBests(sessionID: string) {
-  return useSessionReference<PersonalBest>(sessionID, "bests");
+export function usePersonalBests(sessionID: string, selectionKey = "") {
+  return useSessionReference<PersonalBest>(sessionID, "bests", selectionKey);
 }
 
 export function ExerciseReferences({

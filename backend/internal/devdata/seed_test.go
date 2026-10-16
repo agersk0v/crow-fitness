@@ -129,6 +129,13 @@ func TestPostgresResetReplacementRollbackAndWrites(t *testing.T) {
 		if err != nil || exercisesCount != 26 || templateCount != 4 || completed != 48 || active != 1 || completedSets != 1032 || activeSets != 3 {
 			t.Fatal("stored seed counts", exercisesCount, templateCount, completed, active, completedSets, activeSets, err)
 		}
+		var choicesValid bool
+		if err = pool.QueryRow(ctx, `SELECT
+        (SELECT count(*)=1 FROM template_exercise_alternatives a JOIN templates t ON t.id=a.template_id JOIN exercises e ON e.id=a.exercise_id WHERE a.owner_id=1 AND t.name='Upper 1' AND a.position=1 AND e.name='Smith bench press')
+        AND (SELECT count(*)=13 AND count(*) FILTER(WHERE e.name='Dips')=7 AND count(*) FILTER(WHERE e.name='Smith bench press')=6 FROM session_exercises e JOIN workout_sessions s ON s.id=e.session_id WHERE e.owner_id=1 AND s.name='Upper 1' AND e.position=1)
+        AND NOT EXISTS(SELECT 1 FROM session_exercises e WHERE e.owner_id=1 AND NOT EXISTS(SELECT 1 FROM session_exercise_choices c WHERE c.session_id=e.session_id AND c.position=e.position AND c.exercise_id=e.exercise_id AND c.name=e.name AND c.set_count=e.set_count))`).Scan(&choicesValid); err != nil || !choicesValid {
+			t.Fatal("dummy choices or actual selections incorrect", choicesValid, err)
+		}
 		var invalid int
 		if err = pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM exercises WHERE owner_id=1 AND (cardinality(muscle_groups)=0 OR description=''))+(SELECT count(*) FROM templates WHERE owner_id=1 AND description='')+(SELECT count(*) FROM template_exercises WHERE owner_id=1 AND (rep_min IS NOT NULL OR rep_max IS NOT NULL OR target_rir IS NOT NULL))+(SELECT count(*) FROM workout_sessions WHERE owner_id=1 AND completed_at>$1)`, now).Scan(&invalid); err != nil || invalid != 0 {
 			t.Fatal("invalid tags, targets or dates", invalid, err)

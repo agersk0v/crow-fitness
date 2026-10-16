@@ -3,13 +3,16 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import type { Exercise } from "@/lib/exercises";
 
-export type TemplateExerciseDraft = {
-  key: string;
+export type ChoiceDraft = {
   exercise_id: string;
   set_count: string;
   rep_min: string;
   rep_max: string;
   target_rir: string;
+};
+export type TemplateExerciseDraft = ChoiceDraft & {
+  key: string;
+  alternatives: ChoiceDraft[];
 };
 const inputClass =
   "min-h-12 w-full rounded-lg border border-input bg-background px-3 text-base focus-visible:outline-2 focus-visible:outline-ring";
@@ -48,13 +51,6 @@ export function TemplateExerciseDialog({
   useEffect(() => {
     onDirtyChange(dirty);
   }, [dirty, onDirtyChange]);
-  function error(field: string) {
-    return fields[field] ? (
-      <p id={`${id}-${field}-error`} className="text-sm text-destructive">
-        {fields[field]}
-      </p>
-    ) : null;
-  }
   return (
     <dialog
       ref={dialog}
@@ -86,82 +82,110 @@ export function TemplateExerciseDialog({
           onApply(draft);
         }}
       >
-        {choosing && (
-          <div>
-            <label
-              htmlFor={`${id}-exercise`}
-              className="mb-2 block text-sm font-medium"
-            >
-              Exercise
-            </label>
-            <select
-              autoFocus
-              id={`${id}-exercise`}
-              value={draft.exercise_id}
-              className={inputClass}
-              aria-invalid={Boolean(fields.exercise_id)}
-              aria-describedby={
-                fields.exercise_id ? `${id}-exercise_id-error` : undefined
-              }
-              onChange={(event) =>
+        <h3 className="font-medium">Default exercise</h3>
+        <ChoiceFields
+          id={id}
+          value={draft}
+          exercises={exercises}
+          fields={fields}
+          excluded={draft.alternatives.map((c) => c.exercise_id)}
+          onChange={(next) => setDraft((current) => ({ ...current, ...next }))}
+        />
+        <h3 className="font-medium">Alternatives</h3>
+        {draft.alternatives.map((choice, index) => (
+          <fieldset
+            key={index}
+            className="space-y-3 rounded-xl border border-border p-3"
+          >
+            <legend className="px-1 text-sm">Alternative {index + 1}</legend>
+            <ChoiceFields
+              id={`${id}-alt-${index}`}
+              value={choice}
+              exercises={exercises}
+              fields={Object.fromEntries(
+                Object.entries(fields)
+                  .filter(([key]) => key.startsWith(`alternatives.${index}.`))
+                  .map(([key, value]) => [
+                    key.slice(`alternatives.${index}.`.length),
+                    value,
+                  ]),
+              )}
+              excluded={[
+                draft.exercise_id,
+                ...draft.alternatives
+                  .filter((_, i) => i !== index)
+                  .map((c) => c.exercise_id),
+              ]}
+              onChange={(next) =>
                 setDraft((current) => ({
                   ...current,
-                  exercise_id: event.target.value,
+                  alternatives: current.alternatives.map((c, i) =>
+                    i === index ? next : c,
+                  ),
                 }))
               }
-            >
-              <option value="">Choose an exercise</option>
-              {exercises.map((exercise) => (
-                <option key={exercise.id} value={exercise.id}>
-                  {exercise.name}
-                </option>
-              ))}
-            </select>
-            {error("exercise_id")}
-          </div>
-        )}
-        <div className="grid gap-4 sm:grid-cols-2">
-          {(
-            [
-              ["set_count", "Working-set count"],
-              ["rep_min", "Minimum reps (optional)"],
-              ["rep_max", "Maximum reps (optional)"],
-              ["target_rir", "Target RIR (optional)"],
-            ] as const
-          ).map(([field, label]) => {
-            const errorKey = field.startsWith("rep_") ? "rep_range" : field;
-            return (
-              <div key={field}>
-                <label
-                  htmlFor={`${id}-${field}`}
-                  className="mb-2 block text-sm font-medium"
-                >
-                  {label}
-                </label>
-                <input
-                  autoFocus={!choosing && field === "set_count"}
-                  id={`${id}-${field}`}
-                  type="number"
-                  step={field === "target_rir" ? "any" : "1"}
-                  value={draft[field]}
-                  className={inputClass}
-                  aria-invalid={Boolean(fields[errorKey])}
-                  aria-describedby={
-                    fields[errorKey] ? `${id}-${errorKey}-error` : undefined
-                  }
-                  onChange={(event) =>
-                    setDraft((current) => ({
-                      ...current,
-                      [field]: event.target.value,
-                    }))
-                  }
-                />
-                {!field.startsWith("rep_") && error(errorKey)}
-              </div>
-            );
-          })}
-        </div>
-        {error("rep_range")}
+            />
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() =>
+                  setDraft((current) => {
+                    const { key, alternatives, ...defaultChoice } = current;
+                    return {
+                      key,
+                      ...choice,
+                      alternatives: alternatives.map((c, i) =>
+                        i === index ? defaultChoice : c,
+                      ),
+                    };
+                  })
+                }
+              >
+                Make default
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() =>
+                  setDraft((current) => ({
+                    ...current,
+                    alternatives: current.alternatives.filter(
+                      (_, i) => i !== index,
+                    ),
+                  }))
+                }
+              >
+                Remove alternative
+              </Button>
+            </div>
+          </fieldset>
+        ))}
+        <Button
+          type="button"
+          variant="outline"
+          disabled={
+            !draft.exercise_id ||
+            draft.alternatives.length >= exercises.length - 1
+          }
+          onClick={() =>
+            setDraft((current) => ({
+              ...current,
+              alternatives: [
+                ...current.alternatives,
+                {
+                  exercise_id: "",
+                  set_count: "3",
+                  rep_min: "",
+                  rep_max: "",
+                  target_rir: "",
+                },
+              ],
+            }))
+          }
+        >
+          Add alternative
+        </Button>
         <p className="text-sm text-muted-foreground">
           Targets are validated when you save the template.
         </p>
@@ -173,5 +197,87 @@ export function TemplateExerciseDialog({
         </div>
       </form>
     </dialog>
+  );
+}
+
+function ChoiceFields({
+  id,
+  value,
+  exercises,
+  fields,
+  excluded,
+  onChange,
+}: {
+  id: string;
+  value: ChoiceDraft;
+  exercises: Exercise[];
+  fields: Record<string, string>;
+  excluded: string[];
+  onChange: (value: ChoiceDraft) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <label className="block text-sm font-medium" htmlFor={`${id}-exercise`}>
+        Exercise
+      </label>
+      <select
+        id={`${id}-exercise`}
+        className={inputClass}
+        value={value.exercise_id}
+        onChange={(e) => onChange({ ...value, exercise_id: e.target.value })}
+        aria-invalid={!!fields.exercise_id}
+      >
+        <option value="">Choose an exercise</option>
+        {exercises
+          .filter((e) => !excluded.includes(e.id))
+          .map((e) => (
+            <option key={e.id} value={e.id}>
+              {e.name}
+            </option>
+          ))}
+      </select>
+      {fields.exercise_id && (
+        <p role="alert" className="text-sm text-destructive">
+          {fields.exercise_id}
+        </p>
+      )}
+      <div className="grid gap-4 sm:grid-cols-2">
+        {(
+          [
+            ["set_count", "Working-set count"],
+            ["rep_min", "Minimum reps (optional)"],
+            ["rep_max", "Maximum reps (optional)"],
+            ["target_rir", "Target RIR (optional)"],
+          ] as const
+        ).map(([field, label]) => (
+          <div key={field}>
+            <label
+              htmlFor={`${id}-${field}`}
+              className="mb-2 block text-sm font-medium"
+            >
+              {label}
+            </label>
+            <input
+              id={`${id}-${field}`}
+              type="number"
+              step={field === "target_rir" ? "any" : "1"}
+              className={inputClass}
+              value={value[field]}
+              onChange={(e) => onChange({ ...value, [field]: e.target.value })}
+              aria-invalid={
+                !!fields[field.startsWith("rep_") ? "rep_range" : field]
+              }
+            />
+          </div>
+        ))}
+      </div>
+      {Object.entries(fields)
+        .filter(([k]) => k !== "exercise_id")
+        .map(([k, v]) => (
+          <p role="alert" key={k} className="text-sm text-destructive">
+            {v}
+          </p>
+        ))}
+    </div>
   );
 }
