@@ -25,6 +25,9 @@ import {
   type Session,
 } from "@/lib/sessions";
 
+import { ChevronDown } from "lucide-react";
+import type { TemplateExercise } from "@/lib/templates";
+
 type Values = {
   partial_reps: string;
   weight: string;
@@ -69,7 +72,13 @@ export function SessionSets({
   onBlocked,
   previousWeight,
   plannedCount,
+  exercise,
+  onSelected,
+  children,
 }: {
+  children: ReactNode;
+  exercise: TemplateExercise;
+  onSelected: (session: Session, position: number) => void;
   sessionID: string;
   position: number;
   initial: SavedSet[];
@@ -79,6 +88,21 @@ export function SessionSets({
   plannedCount: number;
 }) {
   const formID = useId();
+  const alternativesID = `session-${sessionID}-exercise-${position}-alternatives`;
+  const [alternativesOpen, setAlternativesOpen] = useState(false);
+  function acceptSelection(saved: Session) {
+    onSelected(saved, position);
+    requestAnimationFrame(() =>
+      document.getElementById(`${alternativesID}-trigger`)?.focus(),
+    );
+  }
+  const [switchTo, setSwitchTo] = useState<string | null>(null);
+  const [switchPending, setSwitchPending] = useState<string | null>(null);
+  const [switchBusy, setSwitchBusy] = useState(false);
+  const [switchError, setSwitchError] = useState("");
+  const revision = exercise.selection_revision ?? 0;
+  const externallyDisabled = disabled;
+  disabled = disabled || switchBusy || !!switchPending || !!switchTo;
   const sensors = useSensors(
     useSensor(CardMouseSensor, { activationConstraint: { distance: 6 } }),
     useSensor(CardTouchSensor, {
@@ -122,7 +146,10 @@ export function SessionSets({
   useEffect(() => {
     onBlocked(
       position,
-      !!draft ||
+      switchBusy ||
+        !!switchPending ||
+        !!switchTo ||
+        !!draft ||
         busy ||
         attempted ||
         !!staleCount ||
@@ -146,6 +173,9 @@ export function SessionSets({
     entry.rir,
     entry.partial_reps,
     addFields,
+    switchBusy,
+    switchPending,
+    switchTo,
   ]);
   function resetAdd() {
     addID.current = null;
@@ -191,6 +221,7 @@ export function SessionSets({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           exercise_position: position,
+          selection_revision: revision,
           technique: values.technique,
           partial_reps:
             values.partial_reps.trim() === ""
@@ -203,6 +234,19 @@ export function SessionSets({
       });
       const body = await response.json();
       if (!response.ok) {
+        if (body.error?.code === "selection_conflict") {
+          setStaleCount(
+            "This slot’s exercise changed in another tab. Reload this slot to use its saved selection; your unsaved inputs for this slot will be discarded.",
+          );
+          setAttempted(false);
+          if (editing) {
+            setDraft((current) => current && { ...current, attempted: false });
+            setError(
+              "The exercise selection changed. Cancel this edit, then reload this slot to use the saved selection.",
+            );
+          }
+          return;
+        }
         if (
           !editing &&
           response.status === 400 &&
@@ -251,6 +295,13 @@ export function SessionSets({
       });
       if (!response.ok) throw new Error();
       const saved: Session = await response.json();
+      if (
+        saved.exercises.find((e) => e.position === position)
+          ?.selection_revision !== revision
+      ) {
+        acceptSelection(saved);
+        return;
+      }
       setSets(saved.sets.filter((set) => set.exercise_position === position));
       // Only this exercise's rejected addition is cleared after an explicit,
       // successful reload. Other mounted exercise drafts stay untouched.
@@ -314,6 +365,7 @@ export function SessionSets({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           exercise_position: position,
+          selection_revision: revision,
           set_ids: next.map((set) => set.id),
         }),
       });
@@ -337,8 +389,212 @@ export function SessionSets({
     }
   }
 
+  const switchingBlocked =
+    !!draft ||
+    busy ||
+    attempted ||
+    !!staleCount ||
+    !!pendingDelete ||
+    !!pendingOrder;
+  const hasDraft =
+    entry.weight !== (previousWeight ?? "") ||
+    !!entry.reps.trim() ||
+    !!entry.rir.trim() ||
+    !!entry.partial_reps.trim() ||
+    entry.technique !== "decent" ||
+    Object.keys(addFields).length > 0;
+  async function selectExercise(target: string) {
+    if (inFlight.current || externallyDisabled) return;
+    inFlight.current = true;
+    setSwitchBusy(true);
+    setSwitchTo(null);
+    setSwitchError("");
+    onBlocked(position, true);
+    try {
+      const response = await fetch(`/api/sessions/${sessionID}/selection`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          exercise_position: position,
+          exercise_id: target,
+          selection_revision: revision,
+        }),
+      });
+      if (response.ok) {
+        const saved: Session = await response.json();
+        acceptSelection(saved);
+        return;
+      }
+      const body = await response.json();
+      if (body.error?.code === "selection_conflict") {
+        // The revision has advanced, so retrying the original CAS can no longer
+        // switch this slot. Reconcile only this slot; other drafts stay mounted.
+        setSwitchPending(target);
+        const current = await fetch(`/api/sessions/${sessionID}`, {
+          cache: "no-store",
+        });
+        if (!current.ok) throw new Error();
+        const saved: Session = await current.json();
+        if (
+          saved.exercises.find((e) => e.position === position)
+            ?.selection_revision === revision
+        )
+          throw new Error();
+        acceptSelection(saved);
+        return;
+      }
+      if (response.status >= 500 || switchPending) {
+        setSwitchPending(target);
+      }
+      if (body.error?.code === "exercise_has_sets") {
+        // This revision cannot switch while sets survive. Require a fresh
+        // snapshot before allowing writes, even after an uncertain attempt.
+        setSwitchPending(null);
+        setStaleCount(
+          "Saved sets were added in another tab. Reload this slot before switching; its unsaved inputs will be discarded.",
+        );
+      }
+      setSwitchError(
+        body.error?.message ??
+          "Could not change exercise. Your selection and inputs have been kept.",
+      );
+    } catch {
+      setSwitchPending(target);
+      setSwitchError(
+        "Could not confirm the selection. Resolve it before adding sets. Your inputs have been kept until the saved selection is known.",
+      );
+    } finally {
+      inFlight.current = false;
+      setSwitchBusy(false);
+    }
+  }
   return (
-    <div className="mt-5 space-y-4">
+    <div className="space-y-4">
+      <h2
+        aria-label={exercise.name}
+        className="min-w-0 break-words text-xl font-semibold"
+      >
+        {(exercise.choices?.length ?? 0) > 1 ? (
+          <button
+            id={`${alternativesID}-trigger`}
+            type="button"
+            aria-label={`Variations for ${exercise.name}`}
+            aria-expanded={alternativesOpen}
+            aria-controls={alternativesID}
+            disabled={disabled || switchingBlocked || sets.length > 0}
+            className="flex min-h-11 w-full cursor-pointer items-center justify-between gap-3 rounded-lg text-left focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-default"
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                setAlternativesOpen(false);
+              }
+            }}
+            onClick={() => setAlternativesOpen((open) => !open)}
+          >
+            <span className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+              <span className="break-words">{exercise.name}</span>
+              <span className="text-xs font-normal text-muted-foreground">
+                Variations
+              </span>
+            </span>
+            <ChevronDown
+              aria-hidden="true"
+              className={`size-4 shrink-0 text-muted-foreground ${alternativesOpen ? "rotate-180" : ""}`}
+            />
+          </button>
+        ) : (
+          exercise.name
+        )}
+      </h2>
+      {(exercise.choices?.length ?? 0) > 1 && (
+        <div
+          id={alternativesID}
+          hidden={!alternativesOpen}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              setAlternativesOpen(false);
+              document.getElementById(`${alternativesID}-trigger`)?.focus();
+            }
+          }}
+        >
+          <ul aria-label="Exercise alternatives" className="space-y-2">
+            {exercise.choices!.map((choice, index) => {
+              const selected = choice.exercise_id === exercise.exercise_id;
+              return (
+                <li key={choice.exercise_id}>
+                  <button
+                    type="button"
+                    aria-label={`Use ${choice.name}`}
+                    disabled={
+                      selected ||
+                      disabled ||
+                      switchingBlocked ||
+                      sets.length > 0
+                    }
+                    className={`flex min-h-12 w-full cursor-pointer flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-3 text-left focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-default ${selected ? "bg-primary/10" : "bg-muted/30 hover:bg-muted/60"}`}
+                    onClick={() => {
+                      if (hasDraft) setSwitchTo(choice.exercise_id);
+                      else void selectExercise(choice.exercise_id);
+                    }}
+                  >
+                    <span className="min-w-0 flex-1 break-words font-medium">
+                      {choice.name}
+                    </span>
+                    <span className="flex flex-wrap items-center gap-2 text-xs">
+                      {index === 0 && (
+                        <span className="text-muted-foreground">Default</span>
+                      )}
+                      {selected && (
+                        <span className="font-medium text-highlight">
+                          Selected
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+      {children}
+      {(exercise.choices?.length ?? 0) > 1 && (
+        <div className="space-y-2">
+          {sets.length > 0 && (
+            <p className="text-sm text-muted-foreground">
+              Delete all saved sets in this slot to change exercise.
+            </p>
+          )}
+          {switchingBlocked && sets.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              Resolve this slot’s unfinished changes before switching.
+            </p>
+          )}
+          {switchError && (
+            <p role="alert" className="text-sm text-destructive">
+              {switchError}
+            </p>
+          )}
+          {switchBusy && <p role="status">Changing exercise…</p>}
+          {switchPending && (
+            <Button
+              disabled={switchBusy || externallyDisabled}
+              variant="outline"
+              onClick={() => void selectExercise(switchPending)}
+            >
+              Resolve exercise selection
+            </Button>
+          )}
+        </div>
+      )}
+      {switchTo && (
+        <SwitchDialog
+          onCancel={() => setSwitchTo(null)}
+          onConfirm={() => void selectExercise(switchTo)}
+        />
+      )}
+
       {staleCount && (
         <Alert variant="destructive">
           <AlertTitle>Saved sets changed</AlertTitle>
@@ -798,6 +1054,50 @@ function SetEditDialog({
       className="m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-2xl border border-border bg-card p-5 text-foreground shadow-xl backdrop:bg-black/60"
     >
       {children}
+    </dialog>
+  );
+}
+
+function SwitchDialog({
+  onCancel,
+  onConfirm,
+}: {
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const opener = document.activeElement;
+    ref.current?.showModal();
+    return () => {
+      ref.current?.close();
+      if (opener instanceof HTMLElement) opener.focus();
+    };
+  }, []);
+  return (
+    <dialog
+      ref={ref}
+      aria-label="Discard inputs and change exercise?"
+      onCancel={(e) => {
+        e.preventDefault();
+        onCancel();
+      }}
+      className="m-auto w-[calc(100%-2rem)] max-w-lg rounded-2xl border border-border bg-card p-5 text-foreground backdrop:bg-black/60"
+    >
+      <h2 className="text-xl font-semibold">
+        Discard inputs and change exercise?
+      </h2>
+      <p className="my-4 text-sm text-muted-foreground">
+        This clears this slot’s unsaved weight, reps, RIR, partial reps, and
+        technique. The chosen exercise starts with its previous weight and
+        Decent technique.
+      </p>
+      <div className="flex flex-wrap gap-3">
+        <Button autoFocus variant="outline" onClick={onCancel}>
+          Keep inputs
+        </Button>
+        <Button onClick={onConfirm}>Discard inputs and switch</Button>
+      </div>
     </dialog>
   );
 }

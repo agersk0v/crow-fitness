@@ -143,6 +143,10 @@ func TestSetMetadataUpgradePreservesExistingSets(t *testing.T) {
 	if err = Apply(ctx, pool); err != nil {
 		t.Fatal(err)
 	}
+	var choicesIntact bool
+	if err = pool.QueryRow(ctx, `SELECT count(*)=2 AND bool_and(c.choice_position=0 AND c.exercise_id=e.exercise_id AND c.name=e.name AND c.set_count=e.set_count AND e.selection_revision=0) FROM session_exercise_choices c JOIN session_exercises e USING(session_id,position)`).Scan(&choicesIntact); err != nil || !choicesIntact {
+		t.Fatal("upgrade lost single-choice snapshots", choicesIntact, err)
+	}
 	var noPartials bool
 	if err = pool.QueryRow(ctx, "SELECT count(*)=3 AND count(*) FILTER(WHERE partial_reps IS NOT NULL)=0 FROM session_sets").Scan(&noPartials); err != nil || !noPartials {
 		t.Fatal("migration invented partial counts", noPartials, err)

@@ -79,6 +79,8 @@ async function forward(
     (["PUT", "DELETE"].includes(request.method) && resource) ||
     (request.method === "PUT" && template) ||
     (request.method === "PUT" &&
+      /^sessions\/[1-9][0-9]*\/selection$/.test(endpoint)) ||
+    (request.method === "PUT" &&
       /^sessions\/[1-9][0-9]*\/sets\/order$/.test(endpoint)) ||
     (["PUT", "DELETE"].includes(request.method) && sessionSet);
   if (!allowed)

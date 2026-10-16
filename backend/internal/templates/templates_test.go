@@ -165,3 +165,16 @@ func (f *fakeStore) SetArchived(_ context.Context, owner int64, id string, archi
 	f.calls++
 	return Template{ID: id, Archived: archived}, f.err
 }
+
+func TestAlternativeValidation(t *testing.T) {
+	for _, c := range []Choice{{ExerciseID: "1", SetCount: 3}, {ExerciseID: "2", SetCount: 0}, {ExerciseID: "", SetCount: 2}} {
+		input := Input{Name: "Choices", Exercises: []InputEntry{{ExerciseID: "1", SetCount: 3, Alternatives: []Choice{c}}}}
+		if len(Validate(&input)) == 0 {
+			t.Fatal("invalid alternative accepted", c)
+		}
+	}
+	input := Input{Name: "Choices", Exercises: []InputEntry{{ExerciseID: "1", SetCount: 3, Alternatives: []Choice{{ExerciseID: "2", SetCount: 2}}}, {ExerciseID: "2", SetCount: 1}}}
+	if fields := Validate(&input); len(fields) != 0 {
+		t.Fatal("cross-slot repetition rejected", fields)
+	}
+}

@@ -24,7 +24,7 @@ type referenceQueryer interface {
 }
 
 func references(ctx context.Context, db referenceQueryer, owner int64, id string) ([]TemplateReference, error) {
-	rows, err := db.Query(ctx, `SELECT DISTINCT t.id::text,t.name,t.archived FROM templates t JOIN template_exercises te ON te.template_id=t.id AND te.owner_id=t.owner_id WHERE te.owner_id=$1 AND te.exercise_id=$2 ORDER BY t.id::text`, owner, id)
+	rows, err := db.Query(ctx, `SELECT DISTINCT t.id::text,t.name,t.archived FROM templates t WHERE t.owner_id=$1 AND (EXISTS(SELECT 1 FROM template_exercises te WHERE te.owner_id=t.owner_id AND te.template_id=t.id AND te.exercise_id=$2) OR EXISTS(SELECT 1 FROM template_exercise_alternatives a WHERE a.owner_id=t.owner_id AND a.template_id=t.id AND a.exercise_id=$2)) ORDER BY t.id::text`, owner, id)
 	if err != nil {
 		return nil, err
 	}

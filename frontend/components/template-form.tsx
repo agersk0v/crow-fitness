@@ -24,7 +24,16 @@ import {
   TemplateExerciseDialog,
   type TemplateExerciseDraft as DraftEntry,
 } from "@/components/template-exercise-dialog";
-import type { Template } from "@/lib/templates";
+import type { ExerciseChoice, Template } from "@/lib/templates";
+function draftChoice(c: ExerciseChoice) {
+  return {
+    exercise_id: c.exercise_id,
+    set_count: String(c.set_count),
+    rep_min: c.rep_min === null ? "" : String(c.rep_min),
+    rep_max: c.rep_max === null ? "" : String(c.rep_max),
+    target_rir: c.target_rir === null ? "" : String(c.target_rir),
+  };
+}
 const inputClass =
   "min-h-12 w-full rounded-lg border border-input bg-background px-3 text-base focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
 export function TemplateForm({
@@ -53,6 +62,7 @@ export function TemplateForm({
     () =>
       initial?.exercises.map((entry) => ({
         key: crypto.randomUUID(),
+        alternatives: (entry.alternatives ?? []).map(draftChoice),
         exercise_id: entry.exercise_id,
         set_count: String(entry.set_count),
         rep_min: entry.rep_min === null ? "" : String(entry.rep_min),
@@ -76,6 +86,7 @@ export function TemplateForm({
     description: initial?.description ?? "",
     entries:
       initial?.exercises.map((entry) => ({
+        alternatives: (entry.alternatives ?? []).map(draftChoice),
         exercise_id: entry.exercise_id,
         set_count: String(entry.set_count),
         rep_min: entry.rep_min === null ? "" : String(entry.rep_min),
@@ -93,6 +104,7 @@ export function TemplateForm({
     setInsertAfter(after);
     setPopupDirty(false);
     setEditing({
+      alternatives: [],
       key: crypto.randomUUID(),
       exercise_id: "",
       set_count: "",
@@ -152,6 +164,13 @@ export function TemplateForm({
             name,
             description,
             exercises: entries.map((entry) => ({
+              alternatives: entry.alternatives.map((c) => ({
+                exercise_id: c.exercise_id,
+                set_count: numeric(c.set_count),
+                rep_min: numeric(c.rep_min),
+                rep_max: numeric(c.rep_max),
+                target_rir: numeric(c.target_rir),
+              })),
               exercise_id: entry.exercise_id,
               set_count: numeric(entry.set_count),
               rep_min: numeric(entry.rep_min),
@@ -311,6 +330,32 @@ export function TemplateForm({
                                 <> · RIR {entry.target_rir}</>
                               )}
                             </p>
+                            {entry.alternatives.length > 0 && (
+                              <div className="mt-3 space-y-1 text-sm text-muted-foreground">
+                                <p>Default: {label}</p>
+                                {entry.alternatives.map((c, i) => (
+                                  <p key={i}>
+                                    Or{" "}
+                                    {exercises.find(
+                                      (e) => e.id === c.exercise_id,
+                                    )?.name ?? "Choose exercise"}{" "}
+                                    · {c.set_count} sets
+                                    {c.rep_min &&
+                                      ` · ${c.rep_min}–${c.rep_max} reps`}
+                                    {c.target_rir && ` · RIR ${c.target_rir}`}
+                                  </p>
+                                ))}
+                              </div>
+                            )}
+                            {Object.entries(fields)
+                              .filter(([k]) =>
+                                k.startsWith(prefix + "alternatives."),
+                              )
+                              .map(([k, v]) => (
+                                <p key={k} className="text-sm text-destructive">
+                                  {v}
+                                </p>
+                              ))}
                             {[
                               "exercise_id",
                               "set_count",
@@ -413,7 +458,10 @@ export function TemplateForm({
                   `exercises.${entries.findIndex((entry) => entry.key === editing.key)}.`,
                 ),
               )
-              .map(([key, value]) => [key.split(".").at(-1)!, value]),
+              .map(([key, value]) => [
+                key.split(".").slice(2).join("."),
+                value,
+              ]),
           )}
           onDirtyChange={setPopupDirty}
           onClose={() => {

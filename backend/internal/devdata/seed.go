@@ -63,6 +63,14 @@ var routines = []routine{
 	}},
 }
 
+// Alternatives use existing library identities and keep the slot's set count.
+var variations = map[string]map[int][]string{
+	"Upper 1": {1: {"Smith bench press"}, 2: {"Neutral-grip weighted pull-up"}, 6: {"Incline dumbbell curls", "Hammer curls"}},
+	"Lower 1": {1: {"Leg extensions"}, 8: {"Pronated curls"}},
+	"Upper 2": {1: {"Dips"}, 6: {"JM press"}, 7: {"Preacher curl"}},
+	"Lower 2": {2: {"Platz squat"}, 7: {"Hammer curls"}},
+}
+
 type Result struct {
 	Exercises         int    `json:"exercises"`
 	Templates         int    `json:"templates"`
@@ -81,7 +89,7 @@ func (p Postgres) Reset(ctx context.Context, now time.Time) (Result, error) {
 	defer tx.Rollback(ctx)
 	// EXCLUSIVE blocks writes and row-locking readers while ordinary MVCC reads
 	// can see the prior committed dataset. All replacement records commit together.
-	if _, err = tx.Exec(ctx, `LOCK TABLE owners,exercises,templates,template_exercises,workout_sessions,session_exercises,session_sets IN EXCLUSIVE MODE`); err != nil {
+	if _, err = tx.Exec(ctx, `LOCK TABLE owners,exercises,templates,template_exercises,workout_sessions,session_exercises,session_sets,template_exercise_alternatives,session_exercise_choices IN EXCLUSIVE MODE`); err != nil {
 		return Result{}, err
 	}
 	owner := exercises.LocalOwnerID
@@ -100,6 +108,7 @@ func (p Postgres) Reset(ctx context.Context, now time.Time) (Result, error) {
 	}
 	result := Result{Templates: len(routines), CompletedSessions: 48, ActiveSets: 3}
 	ids := map[string]string{}
+	movements := map[string]movement{}
 	templateIDs := make([]string, len(routines))
 	for index, r := range routines {
 		if err = tx.QueryRow(ctx, "INSERT INTO templates(owner_id,name,description) VALUES($1,$2,$3) RETURNING id::text", owner, r.name, templateDescriptions[r.name]).Scan(&templateIDs[index]); err != nil {
@@ -112,9 +121,19 @@ func (p Postgres) Reset(ctx context.Context, now time.Time) (Result, error) {
 					return Result{}, err
 				}
 				ids[m.name] = id
+				movements[m.name] = m
 			}
 			if _, err = tx.Exec(ctx, "INSERT INTO template_exercises(template_id,owner_id,position,exercise_id,set_count) VALUES($1,$2,$3,$4,$5)", templateIDs[index], owner, position+1, ids[m.name], m.sets); err != nil {
 				return Result{}, err
+			}
+		}
+	}
+	for index, r := range routines {
+		for position, m := range r.movements {
+			for choice, name := range variations[r.name][position+1] {
+				if _, err = tx.Exec(ctx, `INSERT INTO template_exercise_alternatives(template_id,owner_id,position,choice_position,exercise_id,set_count) VALUES($1,$2,$3,$4,$5,$6)`, templateIDs[index], owner, position+1, choice+1, ids[name], m.sets); err != nil {
+					return Result{}, err
+				}
 			}
 		}
 	}
@@ -129,7 +148,7 @@ func (p Postgres) Reset(ctx context.Context, now time.Time) (Result, error) {
 			if err = tx.QueryRow(ctx, "INSERT INTO workout_sessions(owner_id,template_id,name,started_at,completed_at) VALUES($1,$2,$3,$4,$5) RETURNING id::text", owner, templateIDs[index], r.name, started, completed).Scan(&sessionID); err != nil {
 				return Result{}, err
 			}
-			count, err := seedSession(ctx, tx, owner, sessionID, r, ids, week, started, false)
+			count, err := seedSession(ctx, tx, owner, sessionID, r, ids, movements, week, started, false)
 			if err != nil {
 				return Result{}, err
 			}
@@ -140,7 +159,7 @@ func (p Postgres) Reset(ctx context.Context, now time.Time) (Result, error) {
 	if err = tx.QueryRow(ctx, "INSERT INTO workout_sessions(owner_id,template_id,name,started_at) VALUES($1,$2,$3,$4) RETURNING id::text", owner, templateIDs[0], routines[0].name, activeStarted).Scan(&result.ActiveSessionID); err != nil {
 		return Result{}, err
 	}
-	if _, err = seedSession(ctx, tx, owner, result.ActiveSessionID, routines[0], ids, 12, activeStarted, true); err != nil {
+	if _, err = seedSession(ctx, tx, owner, result.ActiveSessionID, routines[0], ids, movements, 12, activeStarted, true); err != nil {
 		return Result{}, err
 	}
 	if err = tx.Commit(ctx); err != nil {
@@ -149,10 +168,21 @@ func (p Postgres) Reset(ctx context.Context, now time.Time) (Result, error) {
 	return result, nil
 }
 
-func seedSession(ctx context.Context, tx pgx.Tx, owner int64, id string, r routine, ids map[string]string, week int, started time.Time, active bool) (int, error) {
+func seedSession(ctx context.Context, tx pgx.Tx, owner int64, id string, r routine, ids map[string]string, movements map[string]movement, week int, started time.Time, active bool) (int, error) {
 	batch := &pgx.Batch{}
 	count := 0
 	for position, m := range r.movements {
+		// Rotate actual historical choices, retaining the original planned
+		// count. The active example starts with defaults and three saved sets.
+		choices := variations[r.name][position+1]
+		if !active && len(choices) > 0 {
+			selected := week % (len(choices) + 1)
+			if selected > 0 {
+				planned := m.sets
+				m = movements[choices[selected-1]]
+				m.sets = planned
+			}
+		}
 		batch.Queue("INSERT INTO session_exercises(session_id,owner_id,position,exercise_id,name,set_count) VALUES($1,$2,$3,$4,$5,$6)", id, owner, position+1, ids[m.name], m.name, m.sets)
 		if active && position > 0 {
 			continue
@@ -170,6 +200,14 @@ func seedSession(ctx context.Context, tx pgx.Tx, owner int64, id string, r routi
 	}
 	results := tx.SendBatch(ctx, batch)
 	if err := results.Close(); err != nil {
+		return 0, err
+	}
+	// Capture every allowed choice, including the default even when the seed
+	// performed an alternative. Recorded sets refer only to the selected identity.
+	_, err := tx.Exec(ctx, `INSERT INTO session_exercise_choices(session_id,owner_id,position,choice_position,exercise_id,name,set_count,rep_min,rep_max,target_rir)
+ SELECT $1,te.owner_id,te.position,0,te.exercise_id,e.name,te.set_count,te.rep_min,te.rep_max,te.target_rir FROM template_exercises te JOIN exercises e ON e.owner_id=te.owner_id AND e.id=te.exercise_id JOIN workout_sessions s ON s.template_id=te.template_id AND s.owner_id=te.owner_id WHERE s.id=$1 AND s.owner_id=$2
+ UNION ALL SELECT $1,a.owner_id,a.position,a.choice_position,a.exercise_id,e.name,a.set_count,a.rep_min,a.rep_max,a.target_rir FROM template_exercise_alternatives a JOIN exercises e ON e.owner_id=a.owner_id AND e.id=a.exercise_id JOIN workout_sessions s ON s.template_id=a.template_id AND s.owner_id=a.owner_id WHERE s.id=$1 AND s.owner_id=$2`, id, owner)
+	if err != nil {
 		return 0, err
 	}
 	return count, nil
