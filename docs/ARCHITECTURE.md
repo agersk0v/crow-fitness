@@ -61,11 +61,9 @@ Go tests cover configuration, credential encoding, health/readiness timeouts, HT
 
 CI retains formatting, Go vet/race tests, and a Docker stack job. The Dockerfiles perform the production builds; Next.js checks TypeScript during its build. The smoke script checks a representative exercise/template/session flow through forwarding, a validation response, health/readiness outage recovery, and persistence through database and whole-stack restarts. HTTP page fetches are not interactive browser tests. Local commands and test-database setup are in README.md.
 
-## Implemented exercise set history (#36)
+## Exercise-specific history
 
-`GET /api/exercises/{id}/history` reads the local owner's exercise identity and all completed nondeleted sets in a read-only repeatable-read transaction. The library name takes precedence; a completed snapshot supplies a fallback identity/name after library removal. Active-only snapshots do not expose a removed identity. Completed snapshots with no eligible sets remain readable as empty history.
-
-The query scopes ownership and stable exercise ID, orders workouts by completion time and numeric session ID descending, then occurrences by source position and sets by saved time/UUID. Grouping preserves captured workout/occurrence names and decimal-string weights. No schema change or mutation is needed. The dedicated exercise-history UI and completed-workout links are removed under #57; library cards use Workout history filtered to the exercise in Sets. The backend read endpoint remains available without data changes. Identity and snapshot retention tests cover renames, template edits/archives, removal, reconnect, exclusions, and unchanged active data.
+Exercise-library links use the existing Sets filter. The legacy exercise-history API/query/models/store method and dedicated tests are removed under #62; the Go router and Next proxy no longer expose it. Shared previous-performance types remain for the retained readers.
 
 ## Proposed future reference performance and history
 
@@ -188,3 +186,7 @@ Migration009 adds nullable numeric `session_sets.rir` without rewriting historic
 Migration010 backfills set_order from existing saved-time/UUID order. New sets append under the existing session row lock; edits preserve order. The active-only sets/order endpoint validates an exact permutation for one occurrence and updates atomically under that same lock, serializing with add/delete/complete. All readers and comparison set numbering use set_order with saved-time/UUID fallbacks. Dragging reuses the existing dnd-kit sensors and sortable component (with a set-specific accessible role description); actions/inputs do not activate dragging. Popup editing mounts outside the drag context and restores focus. Failed order writes preserve the intended permutation for idempotent retry and block completion.
 
 New-set cap checks run inside SaveSet’s existing session row lock using the captured set_count and count of nondeleted rows for that occurrence. Existing IDs bypass only the new-row cap, preserving edits/retries. The completion warning is a client confirmation built from a fresh active snapshot read, so current persisted values (including other-tab changes) drive the displayed missing ranges. Incomplete completion remains supported after confirmation, and failed/pending writes still block completion.
+
+### Exact completed-workout selection (#62)
+
+The Sessions query accepts a positive bigint `session` selector and applies parameterized owner-scoped SQL alongside existing criteria. Browser URLs retain it through tab changes; only Sessions sends it to its API. Sets links serialize a fresh URL containing only `tab=sessions` and the workout ID. Filter Apply preserves it, and Clear workout filter removes it while retaining applied shared/template criteria. The existing list/snapshot readers render every source occurrence and saved set, without carrying over the Sets exercise filter. The direct detail page and `GET /api/history/sessions/{id}` remain available. No migrations or dependencies.

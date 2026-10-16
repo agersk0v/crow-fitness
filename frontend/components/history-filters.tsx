@@ -69,6 +69,25 @@ export function HistoryFilters({
       className="space-y-4 rounded-xl border border-border p-4"
       aria-label="History search and filters"
     >
+      {selected === "sessions" && draft.session && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm font-medium">
+            Showing workout #{draft.session}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              const params = new URLSearchParams(query);
+              params.delete("session");
+              params.set("tab", "sessions");
+              router.push(`/history?${params}`, { scroll: false });
+            }}
+          >
+            Clear workout filter
+          </Button>
+        </div>
+      )}
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="text-sm font-medium">
           Search names
@@ -158,7 +177,14 @@ export function HistoryFilters({
           type="button"
           variant="outline"
           onClick={() => {
-            setDraft({ q: "", exercise: "", template: "", from: "", to: "" });
+            setDraft({
+              q: "",
+              exercise: "",
+              template: "",
+              session: "",
+              from: "",
+              to: "",
+            });
             setError("");
             router.push(
               selected === "sessions" ? "/history?tab=sessions" : "/history",

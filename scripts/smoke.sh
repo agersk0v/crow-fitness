@@ -220,13 +220,6 @@ import json,sys
 with open(sys.argv[1]) as f: saved=json.load(f)
 assert saved['completed_at'] and saved['sets'][0]['weight']=='12.50' and saved['exercises'][0]['name']=='Smoke squat',saved
 CHECK
-curl --fail --silent --show-error "$base_url/api/exercises/$exercise_id/history" --output "$response_file"
-python3 - "$response_file" "$exercise_id" <<'CHECK'
-import json,sys
-with open(sys.argv[1]) as f: history=json.load(f)
-assert history['id']==sys.argv[2] and len(history['workouts'])==1,history
-assert history['workouts'][0]['name']=='Smoke routine' and history['workouts'][0]['occurrences'][0]['sets'][0]['weight']=='12.50',history
-CHECK
 removed_history_status="$(curl --silent --show-error --output "$response_file" --write-out '%{http_code}' "$base_url/exercises/$exercise_id/history")"
 [[ "$removed_history_status" == "404" ]]
 curl --fail --silent --show-error "$base_url/history/$completed_id" --output "$response_file"

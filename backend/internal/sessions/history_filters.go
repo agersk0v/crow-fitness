@@ -13,6 +13,7 @@ type HistoryFilter struct {
 	Query    string
 	Exercise string
 	Template string
+	Session  string
 	From     *time.Time
 	Until    *time.Time
 }
@@ -27,9 +28,9 @@ func ParseHistoryQuery(raw string) (HistoryFilter, error) {
 
 // Calendar boundaries use the caller's IANA timezone, including DST changes.
 func ParseHistoryFilter(values url.Values) (HistoryFilter, error) {
-	f := HistoryFilter{Query: strings.TrimSpace(values.Get("q")), Exercise: values.Get("exercise"), Template: values.Get("template")}
+	f := HistoryFilter{Query: strings.TrimSpace(values.Get("q")), Exercise: values.Get("exercise"), Template: values.Get("template"), Session: values.Get("session")}
 	for key, entries := range values {
-		if key != "q" && key != "exercise" && key != "template" && key != "from" && key != "to" && key != "tz" {
+		if key != "q" && key != "exercise" && key != "template" && key != "session" && key != "from" && key != "to" && key != "tz" {
 			return f, errors.New("Unknown history filter.")
 		}
 		if len(entries) != 1 {
@@ -41,6 +42,9 @@ func ParseHistoryFilter(values url.Values) (HistoryFilter, error) {
 	}
 	if f.Template != "" && !validID(f.Template) {
 		return f, errors.New("Choose a valid template ID.")
+	}
+	if f.Session != "" && !validID(f.Session) {
+		return f, errors.New("Choose a valid session ID.")
 	}
 	zone := values.Get("tz")
 	if zone == "" {

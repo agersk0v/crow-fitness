@@ -9,7 +9,7 @@ import (
 )
 
 func TestHistoryFilterValidationAndCalendarDays(t *testing.T) {
-	for _, query := range []string{"template=0", "template=x", "template=9223372036854775808", "template=1&template=2", "exercise=0", "exercise=9223372036854775808", "exercise=x", "from=2030-02-30", "from=0000-01-01", "to=2030-1-1", "from=2030-02-02&to=2030-02-01", "tz=Missing/Zone", "tz=Local", "q=a&q=b", "unknown=value", "from=%ZZ", "q=a;b"} {
+	for _, query := range []string{"session=0", "session=x", "session=9223372036854775808", "session=1&session=2", "template=0", "template=x", "template=9223372036854775808", "template=1&template=2", "exercise=0", "exercise=9223372036854775808", "exercise=x", "from=2030-02-30", "from=0000-01-01", "to=2030-1-1", "from=2030-02-02&to=2030-02-01", "tz=Missing/Zone", "tz=Local", "q=a&q=b", "unknown=value", "from=%ZZ", "q=a;b"} {
 		if _, err := ParseHistoryQuery(query); err == nil {
 			t.Fatal("invalid filter accepted", query)
 		}
@@ -28,8 +28,8 @@ func TestHistoryFilterValidationAndCalendarDays(t *testing.T) {
 		day   string
 		hours time.Duration
 	}{{"2026-03-29", 23}, {"2026-10-25", 25}} {
-		f, err := ParseHistoryFilter(url.Values{"from": {tc.day}, "to": {tc.day}, "tz": {"Europe/Copenhagen"}, "q": {"  PrEsS  "}, "exercise": {"7"}})
-		if err != nil || f.Query != "PrEsS" || f.Exercise != "7" || f.From == nil || f.Until == nil || f.Until.Sub(*f.From) != tc.hours*time.Hour {
+		f, err := ParseHistoryFilter(url.Values{"from": {tc.day}, "to": {tc.day}, "tz": {"Europe/Copenhagen"}, "q": {"  PrEsS  "}, "exercise": {"7"}, "session": {"8"}})
+		if err != nil || f.Query != "PrEsS" || f.Exercise != "7" || f.Session != "8" || f.From == nil || f.Until == nil || f.Until.Sub(*f.From) != tc.hours*time.Hour {
 			t.Fatal("calendar/DST boundary", f, err)
 		}
 	}
