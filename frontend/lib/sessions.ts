@@ -10,9 +10,23 @@ export type Session = {
   completed_at: string | null;
 };
 
+export type Technique = "good" | "decent" | "bad";
+
+export function techniqueLabel(value: Technique | null | undefined) {
+  return value
+    ? { good: "Good", decent: "Decent", bad: "Bad" }[value]
+    : "Not recorded";
+}
+
 export type SavedSet = {
+  technique: Technique;
   rir?: string | null;
-  change?: { weight: string; reps: string };
+  change?: {
+    weight: string;
+    reps: string;
+    technique?: "improved" | "regressed" | "unchanged";
+    previous_technique?: Technique;
+  };
   id: string;
   exercise_position: number;
   weight: string;

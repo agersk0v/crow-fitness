@@ -159,9 +159,9 @@ func seedSession(ctx context.Context, tx pgx.Tx, owner int64, id string, r routi
 		}
 		for set := 0; set < m.sets; set++ {
 			count++
-			cents := m.cents + week*125 + set*25
+			cents := m.cents + (week/2)*125 + set*25
 			weight := fmt.Sprintf("%d.%02d", cents/100, cents%100)
-			batch.Queue("INSERT INTO session_sets(session_id,owner_id,id,exercise_position,weight,reps,saved_at) VALUES($1,$2,$3,$4,$5::text::numeric,$6,$7)", id, owner, fmt.Sprintf("00000000-0000-4000-8000-%012d", count), position+1, weight, 8+(week+set)%5, started.Add(time.Duration(count)*time.Second))
+			batch.Queue("INSERT INTO session_sets(session_id,owner_id,id,exercise_position,weight,reps,saved_at,technique) VALUES($1,$2,$3,$4,$5::text::numeric,$6,$7,$8)", id, owner, fmt.Sprintf("00000000-0000-4000-8000-%012d", count), position+1, weight, 8+(week/2+set)%5, started.Add(time.Duration(count)*time.Second), []string{"bad", "decent", "decent", "good"}[(week+position+set)%4])
 		}
 	}
 	results := tx.SendBatch(ctx, batch)

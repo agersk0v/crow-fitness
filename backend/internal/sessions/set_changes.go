@@ -21,7 +21,8 @@ const completedSetComparisons = `WITH occurrences AS (
  WHERE NOT ss.deleted
 ), compared_sets AS (
  SELECT current.*,(current.weight-previous.weight)::text AS weight_change,
- (current.reps-previous.reps)::text AS reps_change
+ (current.reps-previous.reps)::text AS reps_change,
+ previous.technique AS previous_technique
  FROM numbered_sets current
  LEFT JOIN LATERAL (
  SELECT s.id FROM workout_sessions s
@@ -36,20 +37,34 @@ const completedSetComparisons = `WITH occurrences AS (
 ) `
 
 type SetChange struct {
-	Weight string `json:"weight"`
-	Reps   string `json:"reps"`
+	Technique         string `json:"technique,omitempty"`
+	PreviousTechnique string `json:"previous_technique,omitempty"`
+	Weight            string `json:"weight"`
+	Reps              string `json:"reps"`
 }
 
-func setChange(weight, reps *string) *SetChange {
+func setChange(weight, reps *string, technique string, previous *string) *SetChange {
 	if weight == nil || reps == nil {
 		return nil
 	}
-	return &SetChange{Weight: *weight, Reps: *reps}
+	change := &SetChange{Weight: *weight, Reps: *reps}
+	if previous != nil {
+		rank := map[string]int{"bad": 1, "decent": 2, "good": 3}
+		change.PreviousTechnique = *previous
+		change.Technique = "unchanged"
+		if rank[technique] > rank[*previous] {
+			change.Technique = "improved"
+		}
+		if rank[technique] < rank[*previous] {
+			change.Technique = "regressed"
+		}
+	}
+	return change
 }
 
 func readCompletedSets(ctx context.Context, tx pgx.Tx, owner int64, id string) ([]SavedSet, error) {
 	rows, err := tx.Query(ctx, completedSetComparisons+`
- SELECT id::text,exercise_position,weight::text,reps,weight_change,reps_change,rir::text
+ SELECT id::text,exercise_position,weight::text,reps,weight_change,reps_change,rir::text,technique,previous_technique
  FROM compared_sets WHERE session_id=$2 ORDER BY exercise_position,set_order,saved_at,id`, owner, id)
 	if err != nil {
 		return nil, err
@@ -58,11 +73,11 @@ func readCompletedSets(ctx context.Context, tx pgx.Tx, owner int64, id string) (
 	items := []SavedSet{}
 	for rows.Next() {
 		var item SavedSet
-		var weight, reps *string
-		if err = rows.Scan(&item.ID, &item.Position, &item.Weight, &item.Reps, &weight, &reps, &item.RIR); err != nil {
+		var weight, reps, previousTechnique *string
+		if err = rows.Scan(&item.ID, &item.Position, &item.Weight, &item.Reps, &weight, &reps, &item.RIR, &item.Technique, &previousTechnique); err != nil {
 			return nil, err
 		}
-		item.Change = setChange(weight, reps)
+		item.Change = setChange(weight, reps, item.Technique, previousTechnique)
 		items = append(items, item)
 	}
 	return items, rows.Err()

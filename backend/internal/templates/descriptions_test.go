@@ -54,7 +54,7 @@ func TestDescriptionsRoundTripCopyAndSnapshotIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = workouts.SaveSet(ctx, 152, completed.ID, "11111111-1111-4111-8111-111111111111", sessions.SetInput{Position: 1, Weight: "12.50", Reps: 8}); err != nil {
+	if _, err = workouts.SaveSet(ctx, 152, completed.ID, "11111111-1111-4111-8111-111111111111", sessions.SetInput{Technique: "decent", Position: 1, Weight: "12.50", Reps: 8}); err != nil {
 		t.Fatal(err)
 	}
 	if err = workouts.Complete(ctx, 152, completed.ID); err != nil {

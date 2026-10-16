@@ -84,7 +84,7 @@ func TestPostgresPrevious(t *testing.T) {
 	}
 	save := func(sessionID, id string, pos int64, weight string) {
 		t.Helper()
-		if _, err := store.SaveSet(ctx, 81, sessionID, id, SetInput{Position: pos, Weight: weight, Reps: 8}); err != nil {
+		if _, err := store.SaveSet(ctx, 81, sessionID, id, SetInput{Technique: "decent", Position: pos, Weight: weight, Reps: 8}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -234,6 +234,32 @@ func TestPostgresPrevious(t *testing.T) {
 	reloadedBests, err := (Postgres{Pool: fresh}).PersonalBests(ctx, 81, current.ID)
 	if err != nil || !reflect.DeepEqual(bests, reloadedBests) {
 		t.Fatal("personal best reconnect changed", reloadedBests, err)
+	}
+
+	// Technique breaks ties only after weight/reps and before source recency.
+	for _, tc := range []struct {
+		first, second, winner string
+		reps                  int
+	}{
+		{"good", "bad", first.ID, 8}, {"bad", "decent", second.ID, 8},
+		{"decent", "bad", first.ID, 8}, {"good", "good", second.ID, 8},
+		{"bad", "good", first.ID, 9},
+	} {
+		if _, err = pool.Exec(ctx, "UPDATE session_sets SET reps=$3,technique=$4 WHERE session_id=$1 AND id=$2", first.ID, setID, tc.reps, tc.first); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = pool.Exec(ctx, "UPDATE session_sets SET technique=$2 WHERE session_id=$1", second.ID, tc.second); err != nil {
+			t.Fatal(err)
+		}
+		results, err := store.PersonalBests(ctx, 81, current.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, result := range results {
+			if result.ExerciseID == press && (result.SessionID != tc.winner || len(result.Occurrences) != 2) {
+				t.Fatal("technique/source tie", tc, result)
+			}
+		}
 	}
 
 }

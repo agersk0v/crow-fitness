@@ -55,10 +55,10 @@ Cancel session confirms that the workout and **all its sets will be discarded**;
 
 ### Reference tabs
 
-Each exercise card has Previous session (initial tab) and Personal best, with plain Weight (kg), Reps, and RIR tables. Repeated source occurrences stay separate and ordered; repeated current occurrences may share a reference. Empty history and retryable load failures have concise states. References load independently and never remount/reset entry controls.
+Each exercise card has Previous session (initial tab) and Personal best, with plain Weight (kg), Reps, RIR, and Technique tables. Repeated source occurrences stay separate and ordered; repeated current occurrences may share a reference. Empty history and retryable load failures have concise states. References load independently and never remount/reset entry controls.
 
 - **Previous session:** latest completed workout with at least one nondeleted set for that exercise identity, across any template. Skip active/cancelled workouts and completed workouts without eligible sets. Completion time, then numeric session ID, breaks recency ties.
-- **Personal best:** choose the completed workout containing the exercise's heaviest nondeleted set, with reps breaking equal-weight ties and deterministic source ordering for remaining ties. Show **all surviving sets for the exercise in that workout**, not just the winning set. This is not a volume score.
+- **Personal best:** choose the completed workout containing the exercise's heaviest nondeleted set, with reps breaking equal-weight ties, then technique (Good > Decent > Bad), then deterministic source ordering for remaining ties. Show **all surviving sets for the exercise in that workout**, not just the winning set. This is not a volume score.
 
 References are read-only. Renaming does not disconnect history. No automatic progression or per-set suggestion mapping is implemented.
 
@@ -66,15 +66,17 @@ References are read-only. Renaming does not disconnect history. No automatic pro
 
 Weight, Reps, and optional recorded RIR inputs remain visible. Weight is kilograms, nonnegative with at most two decimal places, including zero; reps are positive whole numbers. Recorded RIR is an optional nonnegative decimal, including zero; blank means absent and clears it on Save. It is separate from target RIR and does not affect personal-best selection. Missing recorded RIR displays “—”.
 
+Every set requires Good, Decent, or Bad technique. New entry defaults to Decent and resets to Decent after successful Add, alongside clearing reps/RIR while retaining weight. Edit loads the saved rating; failed saves retain the chosen rating. Migration assigns Decent to all existing sets, including completed and deleted records, without changing their other data. This is a default backfill, not a claim about observed historical form. Technique selection alone, like retained weight, does not create an unfinished set.
+
 Weight initializes **once** from the first set of the first Previous session occurrence, or stays blank without history. User edits prevent a late load from overwriting it. It never advances to another previous set. Successful Add set clears reps/RIR and retains the current weight exactly; failure retains all inputs. Tab switches and reference retries do not replace weight.
 
-Saved rows use a larger Set N at top left and short Edit/Delete buttons at right, followed by weight/reps/RIR columns. Dividers separate rows. Edit opens a popup with Save/Cancel/Escape and focus restoration; failed or uncertain saves retain input and require retry before discarding the edit. There is no Discard set action. Clear unfinished reps/RIR manually; resolve uncertain additions by retrying the same request, then Delete the confirmed set if necessary.
+Saved rows use a larger Set N at top left and short Edit/Delete buttons at right, followed by weight/reps/RIR/technique values. Dividers separate rows. Edit opens a popup with Save/Cancel/Escape and focus restoration; failed or uncertain saves retain input and require retry before discarding the edit. There is no Discard set action. Clear unfinished reps/RIR manually; resolve uncertain additions by retrying the same request, then Delete the confirmed set if necessary.
 
 Drag saved sets with the same background/touch/keyboard behavior as template cards. Reordering stays within an occurrence and saves immediately, preserving exact values. Failure retains the desired order with Retry set order and blocks further changes/completion until resolved or refreshed. All views and comparisons use persisted set order.
 
 New sets cannot exceed the occurrence's **captured planned count**. At the cap, Add is disabled; saved sets remain editable, reorderable, and deletable. Deletion frees a slot. Retries and edits at the cap remain valid; legacy excess sets are preserved.
 
-If another tab fills the planned count, a rejected addition shows the set-count message and Reload saved sets instead of an impossible Add retry. Inputs stay until that explicit action succeeds. Reload updates only this exercise’s saved sets, clears its rejected addition and unsaved reps/RIR, and keeps weight and other exercise drafts. Failed reloads retain inputs for retry. Uncertain saves still retry their original UUID.
+If another tab fills the planned count, a rejected addition shows the set-count message and Reload saved sets instead of an impossible Add retry. Inputs stay until that explicit action succeeds. Reload updates only this exercise’s saved sets, clears its rejected addition and unsaved reps/RIR, resets technique to Decent, and keeps weight and other exercise drafts. Failed reloads retain inputs for retry. Uncertain saves still retry their original UUID.
 
 ### Complete with missing sets
 
@@ -86,7 +88,7 @@ History is read-only and excludes active/cancelled workouts and deleted sets. Se
 
 Sets groups matching rows by completed workout and then source occurrence, newest workout first. Captured exercise names and exact set tables are prominent above the smaller workout name and browser-local completion date on one wrapping line. Workout names open `/history?tab=sessions&session=<completed-session-id>`, clearing unrelated criteria and showing the entire selected workout rather than only the previously filtered exercise. Repeated workouts/occurrences remain separate; filters never create empty groups.
 
-Sessions shows captured workout name/date and the full ordered exercise list. Each padded exercise row independently expands to recorded sets first and compact saved targets second; multiple exercises can remain open. No occurrence-number prefixes or green set boxes are shown. Both tabs use plain Weight (kg), Reps, and RIR tables, pointer cursors for enabled buttons/links/accordion triggers, useful empty/error/retry states, and snapshot names rather than mutable library names. Empty completed workouts appear in Sessions but contribute no Sets rows. Direct completed detail remains available; absent/foreign IDs show not found.
+Sessions shows captured workout name/date and the full ordered exercise list. Each padded exercise row independently expands to recorded sets first and compact saved targets second; multiple exercises can remain open. No occurrence-number prefixes or green set boxes are shown. Both tabs use plain Weight (kg), Reps, RIR, and Technique tables, pointer cursors for enabled buttons/links/accordion triggers, useful empty/error/retry states, and snapshot names rather than mutable library names. Empty completed workouts appear in Sessions but contribute no Sets rows. Direct completed detail remains available; absent/foreign IDs show not found.
 
 ### Search and filters
 
@@ -96,18 +98,18 @@ Apply/Search or Enter updates URL criteria; form drafts do not filter immediatel
 
 The exact completed-workout `session` selector combines with ordinary Sessions criteria. A banner offers Clear workout filter, which removes only that selector and stays on Sessions. Apply, refresh, and Back/Forward preserve it. Tab changes retain it in the URL, but Sets ignores it. Invalid/repeated selectors show validation; missing, foreign, active, or cancelled IDs yield no matching completed workout.
 
-### Weight and rep changes
+### Weight, rep, and technique changes
 
-Both tabs show small signed green increases/red decreases beside weight/reps. Equal values or no matching baseline show no indicator. Text/accessible labels communicate direction independently of color. RIR is not compared.
+Both tabs show small signed green increases/red decreases beside weight/reps. Equal values or no matching baseline show no indicator. Text/accessible labels communicate direction independently of color. RIR is not compared. Technique has its own column: the rating text is green with an up arrow when improved, red with a down arrow when worse, and neutral when unchanged or without a baseline. Good > Decent > Bad; technique is compared independently even if weight/reps are unchanged. Accessible text names the old and new ratings. It does not multiply weight/reps or change their differences. Saved display order never sorts by quality.
 
 Compare each surviving numbered set to the matching occurrence/set in the **latest earlier completed workout containing the exercise**, across templates, ordered by completion time then numeric session ID. Match repeated exercises by occurrence order. Missing occurrences/sets or an empty prior workout have no baseline. Unlike Previous session, this selection does **not** skip an earlier workout merely because its occurrence has no saved sets. Current filters never change the baseline, and comparisons use exact recorded numbers.
 
 ## Temporary testing data
 
-The optional Home reset is disabled by default and requires explicit enablement and confirmation. It atomically replaces the local owner's workout data within the existing schema, preserving migration/owner records and increasing IDs. Failure rolls back; success refreshes continuation. The dataset has 26 tagged/described exercises, four described Upper/Lower templates with approved occurrence order/counts, 48 completed workouts over 12 weeks (1,032 sets), and one active workout with three saved sets. Optional target rep ranges/RIR remain unset; pipes do not imply supersets. Actual RIR defaults to absent. [README](../README.md#temporary-dummy-data-reset) explains operation and data care.
+The optional Home reset is disabled by default and requires explicit enablement and confirmation. It atomically replaces the local owner's workout data within the existing schema, preserving migration/owner records and increasing IDs. Failure rolls back; success refreshes continuation. The dataset has 26 tagged/described exercises, four described Upper/Lower templates with approved occurrence order/counts, 48 completed workouts over 12 weeks (1,032 sets), and one active workout with three saved sets. Optional target rep ranges/RIR remain unset; pipes do not imply supersets. Actual RIR defaults to absent. Technique cycles deterministically through Good, Decent, and Bad, including historical improvements, regressions, unchanged ratings, and paired weeks with equal weight/reps to exercise tie-breaking. [README](../README.md#temporary-dummy-data-reset) explains operation and data care.
 
 ## Future work and unresolved choices
 
-[Issue #51](https://github.com/agersk0v/crow-fitness/issues/51) proposes a small shadcn chart for a selected exercise in Sets history; it is not implemented. Metrics and any further automatic suggestions must follow their approved issue requirements, not old MVP proposals.
+[Issue #51](https://github.com/agersk0v/crow-fitness/issues/51) proposes a small shadcn chart for a selected exercise in Sets history; it is not implemented. Its future source-set tooltips must include recorded technique, and equal-metric candidates with equal weight/reps should prefer better technique before final deterministic ties. Technique adds no strength multiplier. Metrics and any further automatic suggestions must follow their approved issue requirements, not old MVP proposals.
 
 Authentication/multiple users, custom muscle groups, warm-up/individual-set targets, planned weights, timers/supersets, imports/integrations, offline synchronization, permanent template deletion, and corrections/deletion of completed workouts require separate scope. Do not treat previous proposed schemas, pagination, replay protocols, or progression rules as approved behavior.

@@ -66,9 +66,13 @@ func TestPostgresSetChanges(t *testing.T) {
 		}
 		return item
 	}
-	save := func(s Session, id int, pos int64, weight string, reps int64) {
+	save := func(s Session, id int, pos int64, weight string, reps int64, technique ...string) {
 		t.Helper()
-		_, err := store.SaveSet(ctx, 171, s.ID, fmt.Sprintf("%08d-1111-4111-8111-111111111111", id), SetInput{Position: pos, Weight: weight, Reps: reps})
+		rating := "decent"
+		if len(technique) > 0 {
+			rating = technique[0]
+		}
+		_, err := store.SaveSet(ctx, 171, s.ID, fmt.Sprintf("%08d-1111-4111-8111-111111111111", id), SetInput{Technique: rating, Position: pos, Weight: weight, Reps: reps})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -82,17 +86,17 @@ func TestPostgresSetChanges(t *testing.T) {
 	a := makeTemplate("Earlier", press.ID, row.ID, press.ID)
 	b := makeTemplate("Current", row.ID, press.ID, press.ID)
 	source := start(a.ID)
-	save(source, 1, 1, "20.00", 8)
+	save(source, 1, 1, "20.00", 8, "bad")
 	save(source, 2, 1, "999", 999)
-	save(source, 3, 1, "30", 10)
+	save(source, 3, 1, "30", 10, "good")
 	save(source, 4, 3, "20", 10)
 	if err := store.DeleteSet(ctx, 171, source.ID, "00000002-1111-4111-8111-111111111111"); err != nil {
 		t.Fatal(err)
 	}
 	complete(source)
 	target := start(b.ID)
-	save(target, 1, 2, "22.50", 9)
-	save(target, 2, 2, "30", 7)
+	save(target, 1, 2, "22.50", 9, "good")
+	save(target, 2, 2, "30", 7, "bad")
 	save(target, 3, 2, "40", 8)
 	save(target, 4, 3, "18", 8)
 	save(target, 5, 1, "5", 5)
@@ -136,6 +140,13 @@ func TestPostgresSetChanges(t *testing.T) {
 	assertChange(3, "", "")
 	assertChange(4, "-2", "-2")
 	assertChange(5, "", "")
+	for id, want := range map[int]string{1: "improved", 2: "regressed", 4: "unchanged"} {
+		change := changes[fmt.Sprintf("%08d-1111-4111-8111-111111111111", id)]
+		if change.Technique != want || change.PreviousTechnique == "" {
+			t.Fatal("wrong technique change", id, change, want)
+		}
+	}
+
 	// Filtering excludes the source rows, but must not exclude their comparisons.
 	all, err := store.CompletedSets(ctx, 171, HistoryFilter{Query: "Current", Exercise: press.ID})
 	if err != nil || len(all) != 4 {
