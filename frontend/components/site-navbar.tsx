@@ -14,12 +14,16 @@ const destinations = [
 export function Navbar({
   selected = "",
   historySearch = "",
+  pointerControls = false,
 }: {
   selected?: string;
   historySearch?: string;
+  pointerControls?: boolean;
 }) {
   return (
-    <header className="mx-auto max-w-5xl px-6 pt-8 sm:px-12">
+    <header
+      className={`mx-auto max-w-5xl px-6 pt-8 sm:px-12 ${pointerControls ? "[&_button:enabled]:cursor-pointer [&_a[href]]:cursor-pointer" : ""}`}
+    >
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
         <nav aria-label="Main navigation" className="flex flex-wrap gap-2">
           {destinations.map(({ label, href, section }) => (
@@ -59,6 +63,7 @@ export function SiteNavbar() {
   return (
     <Navbar
       selected={selected}
+      pointerControls={pathname.startsWith("/templates")}
       historySearch={pathname === "/history" ? searchParams.toString() : ""}
     />
   );

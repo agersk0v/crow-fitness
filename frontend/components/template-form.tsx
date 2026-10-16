@@ -61,6 +61,7 @@ export function TemplateForm({
       })) ?? [],
   );
   const [editing, setEditing] = useState<DraftEntry | null>(null);
+  const [insertAfter, setInsertAfter] = useState<string | null>(null);
   const [popupDirty, setPopupDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -88,6 +89,18 @@ export function TemplateForm({
   useEffect(() => {
     onSavingChange?.(saving);
   }, [saving, onSavingChange]);
+  function addBelow(after: string | null) {
+    setInsertAfter(after);
+    setPopupDirty(false);
+    setEditing({
+      key: crypto.randomUUID(),
+      exercise_id: "",
+      set_count: "",
+      rep_min: "",
+      rep_max: "",
+      target_rir: "",
+    });
+  }
   const sensors = useSensors(
     useSensor(CardMouseSensor, { activationConstraint: { distance: 8 } }),
     useSensor(CardTouchSensor, {
@@ -338,6 +351,17 @@ export function TemplateForm({
                             </Button>
                           </div>
                         </div>
+                        <div className="mt-4 flex justify-end">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={disabled || exercises.length === 0}
+                            aria-label={`Add exercise below ${label}, exercise ${index + 1}`}
+                            onClick={() => addBelow(entry.key)}
+                          >
+                            Add exercise below
+                          </Button>
+                        </div>
                       </div>
                     </SortableExercise>
                   );
@@ -351,24 +375,16 @@ export function TemplateForm({
             to save your changes.
           </p>
           {fieldError("exercises")}
-          <Button
-            type="button"
-            variant="outline"
-            disabled={disabled || exercises.length === 0}
-            onClick={() => {
-              setPopupDirty(false);
-              setEditing({
-                key: crypto.randomUUID(),
-                exercise_id: "",
-                set_count: "",
-                rep_min: "",
-                rep_max: "",
-                target_rir: "",
-              });
-            }}
-          >
-            Add exercise to template
-          </Button>
+          {!entries.length && (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={disabled || exercises.length === 0}
+              onClick={() => addBelow(null)}
+            >
+              Add first exercise
+            </Button>
+          )}
         </fieldset>
         {error && (
           <Alert variant="destructive">
@@ -402,25 +418,38 @@ export function TemplateForm({
           onDirtyChange={setPopupDirty}
           onClose={() => {
             setEditing(null);
+            setInsertAfter(null);
             setPopupDirty(false);
           }}
           onApply={(saved) => {
             const index = entries.findIndex((entry) => entry.key === saved.key);
-            setEntries((current) =>
+            setEntries((current) => {
+              if (index >= 0)
+                return current.map((entry) =>
+                  entry.key === saved.key ? saved : entry,
+                );
+              const anchor =
+                insertAfter === null
+                  ? -1
+                  : current.findIndex((entry) => entry.key === insertAfter);
+              const position = anchor < 0 ? current.length : anchor + 1;
+              return [
+                ...current.slice(0, position),
+                saved,
+                ...current.slice(position),
+              ];
+            });
+            setFields((current) =>
               index < 0
-                ? [...current, saved]
-                : current.map((entry) =>
-                    entry.key === saved.key ? saved : entry,
+                ? {}
+                : Object.fromEntries(
+                    Object.entries(current).filter(
+                      ([key]) => !key.startsWith(`exercises.${index}.`),
+                    ),
                   ),
             );
-            setFields((current) =>
-              Object.fromEntries(
-                Object.entries(current).filter(
-                  ([key]) => !key.startsWith(`exercises.${index}.`),
-                ),
-              ),
-            );
             setEditing(null);
+            setInsertAfter(null);
             setPopupDirty(false);
           }}
         />

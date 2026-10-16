@@ -3,7 +3,7 @@ import { TemplateLibrary } from "@/components/template-library";
 
 export default function TemplatesPage() {
   return (
-    <main className="mx-auto min-h-screen max-w-5xl px-6 py-8 sm:px-12">
+    <main className="[&_button:enabled]:cursor-pointer [&_a[href]]:cursor-pointer mx-auto min-h-screen max-w-5xl px-6 py-8 sm:px-12">
       <PageEntrance className="py-10 sm:py-16">
         <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
           Workout templates
