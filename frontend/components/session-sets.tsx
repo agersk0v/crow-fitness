@@ -17,7 +17,7 @@ import { CardMouseSensor, CardTouchSensor } from "@/lib/template-drag-sensors";
 import { SortableExercise } from "@/components/sortable-exercise";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import type { SavedSet } from "@/lib/sessions";
+import type { SavedSet, Session } from "@/lib/sessions";
 
 type Values = { weight: string; reps: string; rir: string };
 type EditDraft = Values & { id: string; attempted: boolean };
@@ -79,6 +79,7 @@ export function SessionSets({
   const addID = useRef<string | null>(null);
   const inFlight = useRef(false);
   const [attempted, setAttempted] = useState(false);
+  const [staleCount, setStaleCount] = useState("");
   const [draft, setDraft] = useState<EditDraft | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -101,6 +102,7 @@ export function SessionSets({
       !!draft ||
         busy ||
         attempted ||
+        !!staleCount ||
         !!pendingDelete ||
         !!pendingOrder ||
         Object.keys(addFields).length > 0 ||
@@ -113,6 +115,7 @@ export function SessionSets({
     draft,
     busy,
     attempted,
+    staleCount,
     pendingDelete,
     pendingOrder,
     entry.reps,
@@ -133,7 +136,7 @@ export function SessionSets({
       pendingDelete ||
       pendingOrder ||
       (!editing && draft) ||
-      (!editing && atLimit && !attempted)
+      (!editing && (staleCount || (atLimit && !attempted)))
     )
       return;
     const values = editing ? draft : entry;
@@ -164,6 +167,20 @@ export function SessionSets({
       });
       const body = await response.json();
       if (!response.ok) {
+        if (
+          !editing &&
+          response.status === 400 &&
+          body.error?.code === "validation_error" &&
+          typeof body.error?.fields?.set_count === "string"
+        ) {
+          // Go checks this cap only for a new UUID: this addition was rejected,
+          // unlike a lost response that must still retry the same UUID.
+          addID.current = null;
+          setAttempted(false);
+          setAddFields({});
+          setStaleCount(body.error.fields.set_count);
+          return;
+        }
         if (editing) setEditFields(body.error?.fields ?? {});
         else setAddFields(body.error?.fields ?? {});
         setError(
@@ -187,8 +204,33 @@ export function SessionSets({
       setBusy(false);
     }
   }
+  async function reloadSavedSets() {
+    if (inFlight.current || disabled || !staleCount) return;
+    inFlight.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/sessions/${sessionID}`, {
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error();
+      const saved: Session = await response.json();
+      setSets(saved.sets.filter((set) => set.exercise_position === position));
+      // Only this exercise's rejected addition is cleared after an explicit,
+      // successful reload. Other mounted exercise drafts stay untouched.
+      resetAdd();
+      setStaleCount("");
+    } catch {
+      setError(
+        "Could not reload saved sets. Your inputs have been kept. Try again.",
+      );
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
+    }
+  }
   async function remove(id: string) {
-    if (inFlight.current || disabled) return;
+    if (inFlight.current || disabled || staleCount) return;
     inFlight.current = true;
     setBusy(true);
     setPendingDelete({ id });
@@ -215,7 +257,14 @@ export function SessionSets({
     }
   }
   async function reorder(next: SavedSet[]) {
-    if (inFlight.current || disabled || draft || attempted || pendingDelete)
+    if (
+      inFlight.current ||
+      disabled ||
+      staleCount ||
+      draft ||
+      attempted ||
+      pendingDelete
+    )
       return;
     inFlight.current = true;
     setBusy(true);
@@ -254,6 +303,26 @@ export function SessionSets({
 
   return (
     <div className="mt-5 space-y-4">
+      {staleCount && (
+        <Alert variant="destructive">
+          <AlertTitle>Saved sets changed</AlertTitle>
+          <AlertDescription>
+            <p>{staleCount}</p>
+            <p className="mt-2">
+              Reload saved sets updates this exercise and clears its unsaved
+              reps and RIR. Your weight and drafts for other exercises are kept.
+            </p>
+            {error && <p className="mt-2">{error}</p>}
+          </AlertDescription>
+          <Button
+            className="col-start-2 mt-3"
+            disabled={busy || disabled}
+            onClick={() => void reloadSavedSets()}
+          >
+            {busy ? "Reloading saved sets…" : "Reload saved sets"}
+          </Button>
+        </Alert>
+      )}
       <form
         className="space-y-3"
         aria-label="Add a set"
@@ -286,7 +355,7 @@ export function SessionSets({
                 ? {}
                 : remaining;
             });
-            if (!attempted) setError("");
+            if (!attempted && !staleCount) setError("");
           }}
         />
         <div className="flex flex-wrap gap-3">
@@ -298,6 +367,7 @@ export function SessionSets({
               !!draft ||
               !!pendingDelete ||
               !!pendingOrder ||
+              !!staleCount ||
               (atLimit && !attempted)
             }
           >
@@ -329,6 +399,7 @@ export function SessionSets({
               busy ||
               disabled ||
               draft ||
+              staleCount ||
               attempted ||
               pendingDelete ||
               pendingOrder
@@ -360,6 +431,7 @@ export function SessionSets({
                       !!draft ||
                       !!pendingDelete ||
                       attempted ||
+                      !!staleCount ||
                       !!pendingOrder
                     }
                   >
@@ -376,6 +448,7 @@ export function SessionSets({
                             !!draft ||
                             !!pendingDelete ||
                             attempted ||
+                            !!staleCount ||
                             !!pendingOrder
                           }
                           onClick={() => {
@@ -400,6 +473,7 @@ export function SessionSets({
                             !!draft ||
                             !!pendingDelete ||
                             attempted ||
+                            !!staleCount ||
                             !!pendingOrder
                           }
                           onClick={() => void remove(set.id)}
@@ -492,7 +566,7 @@ export function SessionSets({
           Saving changes…
         </p>
       )}
-      {error && !draft && (
+      {error && !draft && !staleCount && (
         <Alert variant="destructive">
           <AlertTitle>Set could not be saved or removed</AlertTitle>
           <AlertDescription>{error}</AlertDescription>

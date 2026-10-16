@@ -74,6 +74,8 @@ Drag saved sets with the same background/touch/keyboard behavior as template car
 
 New sets cannot exceed the occurrence's **captured planned count**. At the cap, Add is disabled; saved sets remain editable, reorderable, and deletable. Deletion frees a slot. Retries and edits at the cap remain valid; legacy excess sets are preserved.
 
+If another tab fills the planned count, a rejected addition shows the set-count message and Reload saved sets instead of an impossible Add retry. Inputs stay until that explicit action succeeds. Reload updates only this exercise’s saved sets, clears its rejected addition and unsaved reps/RIR, and keeps weight and other exercise drafts. Failed reloads retain inputs for retry. Uncertain saves still retry their original UUID.
+
 ### Complete with missing sets
 
 Completion waits for pending requests, open edits, failed/uncertain changes, or unfinished reps/RIR. A retained/default weight alone is not an unfinished set. Complete first refreshes the saved active snapshot. If planned sets are missing, a warning names each exercise occurrence and missing set numbers/ranges. Return/Escape keeps it active; **Complete anyway** retains the current partial or empty workout. A failed check never silently completes. A full plan completes directly. The backend permits partial/empty completion; the warning is a UI confirmation.
