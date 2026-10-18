@@ -117,7 +117,7 @@ After a push to `main` passes CI and the stack smoke check, GitHub Actions build
 - `ghcr.io/agersk0v/crow-fitness-api`
 - `ghcr.io/agersk0v/crow-fitness-frontend`
 
-Each image supports `linux/amd64` (typical Windows/WSL and Linux PCs) and `linux/arm64` (a compatible Raspberry Pi with a 64-bit OS). Tags are `sha-<full Git commit SHA>` for a specific revision and `latest` for the most recently published main build. Prefer the SHA tag, or an image digest, for repeatable deployments. PRs run existing checks but do not publish images.
+Each image supports `linux/amd64` (typical Windows/WSL and Linux PCs) and `linux/arm64` (a compatible Raspberry Pi with a 64-bit OS). Tags are `sha-<full Git commit SHA>` for a specific revision and `latest` for the most recently published component build. After both component builds succeed, a final job also publishes matching `main-<CI run number>-<full Git commit SHA>` tags. Flux can sort the numeric run number to select newer main builds; SHA text itself is not chronological. The frontend chronological tag is published first and the API tag last, so the API tag announces that both matching tags exist. Re-running an older workflow retains its original run number and does not outrank newer builds. Prefer the SHA tag, or an image digest, for repeatable deployments. PRs run existing checks but do not publish images.
 
 The workflow uses the built-in `GITHUB_TOKEN` with package-write permission; no personal token or repository secret needs adding for publishing. Find run results under **Actions → CI** and images under your GitHub account's **Packages**. The first packages appear only after this workflow is merged and its main run succeeds. Builds use the existing Dockerfiles and repository-root context; database credentials and runtime configuration are supplied when running containers, not baked into images.
 
@@ -130,7 +130,7 @@ docker pull ghcr.io/agersk0v/crow-fitness-api:latest
 docker pull ghcr.io/agersk0v/crow-fitness-frontend:latest
 ```
 
-Publishing images does not deploy or restart the app. The Compose workflow above still builds locally; Kubernetes deployment and automatic updates are a later step.
+Publishing alone does not deploy or restart the app. The separate crow-kube repository owns Kubernetes and Flux image automation; it uses the API chronological tag to update both component references together. During a Kubernetes rollout, old and new pods can still briefly coexist. The Compose workflow above still builds locally.
 
 ## Use the app
 
