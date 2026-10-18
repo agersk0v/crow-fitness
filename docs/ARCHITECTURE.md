@@ -14,7 +14,7 @@ The browser uses relative `/api` URLs. Next's server-only allowlisted forwarding
 
 Compose publishes only the frontend, bound to localhost. Go/PostgreSQL use the internal network; PostgreSQL 18 stores data in a named volume at `/var/lib/postgresql`. Dockerfiles and CI pin runtime versions. Rebuilds apply source changes; there are no development source mounts. One implicit owner (ID 1) is selected in Go; clients cannot supply identity. This is not authentication.
 
-The root layout owns shared URL-aware navigation, theme provider, and one theme-aware Sonner Toaster. `next-themes` persists theme choice; the toggle waits for mounting to avoid hydration mismatch. shadcn/ui components are committed source, with shared Tailwind tokens/class merging. Motion entrance effects leave SSR content visible and respect reduced motion. Existing dnd-kit sensors ignore interactive descendants, support mouse/touch/keyboard, and are shared by template occurrence and session-set sorting.
+The root layout owns shared URL-aware navigation, theme provider, and one theme-aware Sonner Toaster. `next-themes` persists theme choice; the toggle waits for mounting to avoid hydration mismatch. shadcn/ui components are committed source, with shared Tailwind tokens/class merging. shadcn’s chart primitives wrap Recharts for progress presentation; Go owns source selection. The chart is dynamically loaded only for selected-exercise Sets history. Motion entrance effects leave SSR content visible and respect reduced motion. Existing dnd-kit sensors ignore interactive descendants, support mouse/touch/keyboard, and are shared by template occurrence and session-set sorting.
 
 ## Persistence and migrations
 
@@ -79,6 +79,7 @@ All paths below start with `/api`. Resource IDs are positive decimal strings. JS
 | GET | `/sessions/{id}/previous`, `/bests` | Per-exercise references for an owner-scoped active session |
 | GET | `/sets` | Completed nondeleted set collection, including captured session/exercise names and identities |
 | GET | `/history/sessions`, `/history/sessions/{id}` | Completed summaries (including empty workouts) or read-only snapshot |
+| GET | `/history/progress` | Requires one exercise ID; average recorded-load estimate across saved exercise sets per completed workout |
 | GET | `/history/exercises`, `/history/templates` | Completed-snapshot filter identities with latest captured names |
 | POST | `/dev/reset` | Explicitly enabled confirmed data replacement; otherwise `404` |
 
@@ -107,6 +108,16 @@ History parses `q`, `exercise`, `template`, `session`, `from`, `to`, and `tz` in
 Per-set `change: {weight, reps, technique, previous_technique}` uses the shared PostgreSQL comparison CTE to select the baseline before display filters. Match exercise identity, chronological prior workout, repeated occurrence ordinal, and surviving set ordinal. The prior workout need not contain saved sets, unlike reference selection. Exact signed decimal/integer strings avoid browser floating-point subtraction. Technique uses that same matched baseline: Go returns `improved`, `regressed`, or `unchanged` plus the previous rating, using Good > Decent > Bad. With no matched set there is no comparison object. Changes are not stored; RIR and partial counts are not compared. Partial counts are selected for display only and never enter comparison arithmetic, eligibility, or the personal-best ORDER BY.
 
 Next uses URL-applied criteria separately from form drafts, with keyed/abortable results to prevent stale responses. Sessions loads snapshots per workout with independent retry; exercise accordions are local. Sets groups only matching rows. Sets workout links create a fresh `/history?tab=sessions&session=<id>` URL, clearing unrelated criteria. Apply/tab navigation retains that selector; Sets ignores it, and Clear workout filter removes only it. Direct completed detail remains supported, and `/sets` redirects to Sets history.
+
+### Progress query and presentation
+
+`GET /api/history/progress?exercise=<id>&q=...&from=...&to=...&tz=...` shares history parsing and the Sets SQL filter fragment. It reads only owner-scoped completed, nondeleted sets. No library/template join rewrites captured names or requires a live exercise record. Missing/invalid exercise IDs fail validation; valid unknown IDs return an empty collection.
+
+The response is `{metric:"average_estimated_strength",items:[...]}`. The query returns every matching saved set in completion-time/numeric-workout-ID, occurrence, persisted set order, saved-time, and UUID order. Go groups them by workout and calculates each exact rational estimate `weight × (1 + reps/30)` with `math/big.Rat`. Average unrounded estimates across all matching occurrences, rounding the result to two decimal places only for display. Zero-weight sets count in the denominator; any positive full-rep count qualifies. Technique and partials do not affect the calculation. No exercise classification or bodyweight/assistance correction is applied.
+
+Each point includes `session_id`, `session_name`, `completed_at`, `exercise_name`, decimal-string `average_estimate`, `set_count`, and ordered `sets`. Source sets contain `exercise_position`, surviving `set_number`, `set_id`, exact decimal-string `weight`, integer-string `reps`, nullable decimal-string `rir`, technique, partial count, and display-rounded per-set `estimate`. The query avoids unrelated historical set-change baselines and does not write workout data.
+
+The frontend converts average estimates to chart coordinates only; exact source values remain in touch/keyboard tooltips and the existing recorded-set list. Distinct session-ID categories preserve same-day/same-instant workouts, with local date labels. shadcn ChartContainer/ChartTooltipContent and Recharts LineChart provide presentation and accessibility. The latest average and contributing count also have a readable text summary; there is no duplicate expandable chart-data list. Animations are disabled. Keyed components and aborted requests isolate URL-filter changes; chart loading/retry/unavailable states remain independent of recorded sets.
 
 ## Temporary reset and operational safety
 

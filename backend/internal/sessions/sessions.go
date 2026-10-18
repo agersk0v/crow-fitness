@@ -31,6 +31,7 @@ type ActiveConflict struct{ Session Session }
 func (e ActiveConflict) Error() string { return "Continue the active session before starting another." }
 
 type Store interface {
+	ExerciseProgress(context.Context, int64, HistoryFilter) ([]ProgressPoint, error)
 	SelectExercise(context.Context, int64, string, SelectionInput) (Session, error)
 	Start(context.Context, int64, string) (Session, error)
 	Active(context.Context, int64) (*Session, error)

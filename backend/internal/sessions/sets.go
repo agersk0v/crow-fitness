@@ -209,10 +209,7 @@ func (p Postgres) CompletedSets(ctx context.Context, owner int64, filter History
  FROM compared_sets ss JOIN workout_sessions s ON s.owner_id=ss.owner_id AND s.id=ss.session_id
  JOIN session_exercises se ON se.session_id=ss.session_id AND se.owner_id=ss.owner_id AND se.position=ss.exercise_position
  WHERE ss.owner_id=$1
- AND ($2::text='' OR strpos(lower(se.name),lower($2))>0 OR strpos(lower(s.name),lower($2))>0)
- AND ($3::text='' OR se.exercise_id::text=$3)
- AND ($4::timestamptz IS NULL OR s.completed_at >= $4)
- AND ($5::timestamptz IS NULL OR s.completed_at < $5)
+`+completedSetFilter+`
  ORDER BY s.completed_at DESC,s.id DESC,ss.exercise_position,ss.set_order,ss.saved_at,ss.id`, owner, filter.Query, filter.Exercise, filter.From, filter.Until)
 	if err != nil {
 		return nil, err

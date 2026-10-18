@@ -1,4 +1,5 @@
 "use client";
+import dynamic from "next/dynamic";
 import { useRef, type KeyboardEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,14 @@ import {
   historyFilterError,
   historyQuery,
 } from "@/lib/history-filters";
+
+const ExerciseProgress = dynamic(
+  () =>
+    import("@/components/exercise-progress").then(
+      (module) => module.ExerciseProgress,
+    ),
+  { loading: () => <p role="status">Loading progress…</p> },
+);
 
 const tabs = ["sets", "sessions"] as const;
 export function HistoryTabs({ selected }: { selected: "sessions" | "sets" }) {
@@ -97,7 +106,16 @@ export function HistoryTabs({ selected }: { selected: "sessions" | "sets" }) {
         tabIndex={0}
       >
         {selected === "sets" && !validation && (
-          <CompletedSets key={apiQuery} query={apiQuery} filtered={filtered} />
+          <>
+            {criteria.exercise && (
+              <ExerciseProgress key={`progress-${apiQuery}`} query={apiQuery} />
+            )}
+            <CompletedSets
+              key={apiQuery}
+              query={apiQuery}
+              filtered={filtered}
+            />
+          </>
         )}
       </div>
       <div
