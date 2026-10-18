@@ -169,3 +169,8 @@ func (f *fakeStore) SelectExercise(_ context.Context, owner int64, id string, _ 
 	f.owner = owner
 	return f.Get(context.Background(), owner, id)
 }
+
+func (f *fakeStore) ExerciseProgress(_ context.Context, owner int64, _ HistoryFilter) ([]ProgressPoint, error) {
+	f.owner = owner
+	return nil, f.err
+}

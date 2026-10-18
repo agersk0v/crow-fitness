@@ -124,3 +124,11 @@ func (p Postgres) HistoryTemplates(ctx context.Context, owner int64) ([]HistoryE
 	}
 	return items, rows.Err()
 }
+
+// Shared by recorded Sets and progress: source selection never broadens applied criteria.
+const completedSetFilter = `
+ AND ($2::text='' OR strpos(lower(se.name),lower($2))>0 OR strpos(lower(s.name),lower($2))>0)
+ AND ($3::text='' OR se.exercise_id::text=$3)
+ AND ($4::timestamptz IS NULL OR s.completed_at >= $4)
+ AND ($5::timestamptz IS NULL OR s.completed_at < $5)
+`

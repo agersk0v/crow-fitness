@@ -19,6 +19,28 @@ func validID(id string) bool {
 	return err == nil && n > 0 && strconv.FormatInt(n, 10) == id
 }
 func Register(mux *http.ServeMux, store Store) {
+	mux.HandleFunc("GET /api/history/progress", func(w http.ResponseWriter, r *http.Request) {
+		filter, err := ParseHistoryQuery(r.URL.RawQuery)
+		if err != nil {
+			problem(w, 400, "validation_error", err.Error())
+			return
+		}
+		if filter.Exercise == "" {
+			problem(w, 400, "validation_error", "Choose one exercise for progress.")
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+		items, err := store.ExerciseProgress(ctx, exercises.LocalOwnerID, filter)
+		if err != nil {
+			operationError(w, err)
+			return
+		}
+		if items == nil {
+			items = []ProgressPoint{}
+		}
+		write(w, 200, map[string]any{"metric": "max_full_reps", "items": items})
+	})
 	mux.HandleFunc("PUT /api/sessions/{id}/selection", func(w http.ResponseWriter, r *http.Request) {
 		if !validID(r.PathValue("id")) {
 			problem(w, 400, "validation_error", "Invalid session ID.")

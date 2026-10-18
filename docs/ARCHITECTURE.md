@@ -14,7 +14,7 @@ The browser uses relative `/api` URLs. Next's server-only allowlisted forwarding
 
 Compose publishes only the frontend, bound to localhost. Go/PostgreSQL use the internal network; PostgreSQL 18 stores data in a named volume at `/var/lib/postgresql`. Dockerfiles and CI pin runtime versions. Rebuilds apply source changes; there are no development source mounts. One implicit owner (ID 1) is selected in Go; clients cannot supply identity. This is not authentication.
 
-The root layout owns shared URL-aware navigation, theme provider, and one theme-aware Sonner Toaster. `next-themes` persists theme choice; the toggle waits for mounting to avoid hydration mismatch. shadcn/ui components are committed source, with shared Tailwind tokens/class merging. Motion entrance effects leave SSR content visible and respect reduced motion. Existing dnd-kit sensors ignore interactive descendants, support mouse/touch/keyboard, and are shared by template occurrence and session-set sorting.
+The root layout owns shared URL-aware navigation, theme provider, and one theme-aware Sonner Toaster. `next-themes` persists theme choice; the toggle waits for mounting to avoid hydration mismatch. shadcn/ui components are committed source, with shared Tailwind tokens/class merging. shadcn’s chart primitives wrap Recharts for progress presentation; Go owns source selection. The chart is dynamically loaded only for selected-exercise Sets history. Motion entrance effects leave SSR content visible and respect reduced motion. Existing dnd-kit sensors ignore interactive descendants, support mouse/touch/keyboard, and are shared by template occurrence and session-set sorting.
 
 ## Persistence and migrations
 
@@ -79,6 +79,7 @@ All paths below start with `/api`. Resource IDs are positive decimal strings. JS
 | GET | `/sessions/{id}/previous`, `/bests` | Per-exercise references for an owner-scoped active session |
 | GET | `/sets` | Completed nondeleted set collection, including captured session/exercise names and identities |
 | GET | `/history/sessions`, `/history/sessions/{id}` | Completed summaries (including empty workouts) or read-only snapshot |
+| GET | `/history/progress` | Requires one exercise ID; one max-full-rep source set per matching completed workout |
 | GET | `/history/exercises`, `/history/templates` | Completed-snapshot filter identities with latest captured names |
 | POST | `/dev/reset` | Explicitly enabled confirmed data replacement; otherwise `404` |
 
@@ -107,6 +108,14 @@ History parses `q`, `exercise`, `template`, `session`, `from`, `to`, and `tz` in
 Per-set `change: {weight, reps, technique, previous_technique}` uses the shared PostgreSQL comparison CTE to select the baseline before display filters. Match exercise identity, chronological prior workout, repeated occurrence ordinal, and surviving set ordinal. The prior workout need not contain saved sets, unlike reference selection. Exact signed decimal/integer strings avoid browser floating-point subtraction. Technique uses that same matched baseline: Go returns `improved`, `regressed`, or `unchanged` plus the previous rating, using Good > Decent > Bad. With no matched set there is no comparison object. Changes are not stored; RIR and partial counts are not compared. Partial counts are selected for display only and never enter comparison arithmetic, eligibility, or the personal-best ORDER BY.
 
 Next uses URL-applied criteria separately from form drafts, with keyed/abortable results to prevent stale responses. Sessions loads snapshots per workout with independent retry; exercise accordions are local. Sets groups only matching rows. Sets workout links create a fresh `/history?tab=sessions&session=<id>` URL, clearing unrelated criteria. Apply/tab navigation retains that selector; Sets ignores it, and Clear workout filter removes only it. Direct completed detail remains supported, and `/sets` redirects to Sets history.
+
+### Progress query and presentation
+
+`GET /api/history/progress?exercise=<id>&q=...&from=...&to=...&tz=...` shares history parsing and the Sets SQL filter fragment. It reads only owner-scoped completed, nondeleted sets. No library/template join rewrites captured names or requires a live exercise record. Missing/invalid exercise IDs fail validation; valid unknown IDs return an empty collection.
+
+The response is `{metric:"max_full_reps",items:[...]}`. PostgreSQL selects the highest full-rep count across every matching occurrence per workout, then technique rank, occurrence position, persisted set order, saved timestamp, and UUID. Partial counts and load never affect selection. Source metadata includes `session_id`, `session_name`, `completed_at`, `exercise_name`, `exercise_position`, surviving `set_number`, `set_id`, exact decimal `weight`, exact integer `reps` as a string, nullable decimal-string `rir`, technique, and nullable partial count. Points order by completion time and numeric session ID. This query avoids computing unrelated historical set-change baselines.
+
+The frontend converts reps to chart coordinates only; exact source strings stay in tooltips and the readable data list. Distinct session-ID categories preserve same-day/same-instant workouts, with browser-local date labels. shadcn ChartContainer/ChartTooltipContent and Recharts LineChart provide presentation, keyboard accessibility, and touch inspection; a collapsible source list provides equivalent readable values and workout links. There is no strength calculation or implicit load classification. Animations are disabled. Keyed components and aborted requests isolate URL-filter changes; progress loads/retries independently of recorded sets, and unexpected metric versions show an unavailable state.
 
 ## Temporary reset and operational safety
 
