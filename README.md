@@ -110,6 +110,28 @@ bash scripts/smoke.sh
 
 It uses port `13000`; set `SMOKE_PORT` to another available port if necessary. No `.env` file is required for the smoke check because it supplies its own test configuration.
 
+## Container images on GHCR
+
+After a push to `main` passes CI and the stack smoke check, GitHub Actions builds and publishes these images:
+
+- `ghcr.io/agersk0v/crow-fitness-api`
+- `ghcr.io/agersk0v/crow-fitness-frontend`
+
+Each image supports `linux/amd64` (typical Windows/WSL and Linux PCs) and `linux/arm64` (a compatible Raspberry Pi with a 64-bit OS). Tags are `sha-<full Git commit SHA>` for a specific revision and `latest` for the most recently published main build. Prefer the SHA tag, or an image digest, for repeatable deployments. PRs run existing checks but do not publish images.
+
+The workflow uses the built-in `GITHUB_TOKEN` with package-write permission; no personal token or repository secret needs adding for publishing. Find run results under **Actions → CI** and images under your GitHub account's **Packages**. The first packages appear only after this workflow is merged and its main run succeeds. Builds use the existing Dockerfiles and repository-root context; database credentials and runtime configuration are supplied when running containers, not baked into images.
+
+New GHCR packages are private by default, even for a public repository. To allow anonymous pulls, change each package's visibility to public in its package settings. To keep them private, authenticate pulls with a classic personal access token with `read:packages`; use `docker login ghcr.io` locally and an image-pull secret in Kubernetes later. If publishing to an existing package reports permission denied, check that package grants this repository Actions access.
+
+For public packages (or after authenticating), download the images with:
+
+```sh
+docker pull ghcr.io/agersk0v/crow-fitness-api:latest
+docker pull ghcr.io/agersk0v/crow-fitness-frontend:latest
+```
+
+Publishing images does not deploy or restart the app. The Compose workflow above still builds locally; Kubernetes deployment and automatic updates are a later step.
+
 ## Use the app
 
 Use the shared navbar for Exercises, Templates, and Workout history, and its light/dark toggle. Create tagged exercises first, then a template with planned working-set counts. Start workout opens the saved session; Home offers Continue session. Add/Save records sets in the active workout, Complete session puts them in history, and confirmed cancellation discards the workout and its sets. See [product behavior](docs/PRODUCT.md) for editing, reference, and filtering rules.
