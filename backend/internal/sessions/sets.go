@@ -12,12 +12,13 @@ import (
 )
 
 type SetInput struct {
-	PartialReps *int64             `json:"partial_reps"`
-	Technique   string             `json:"technique"`
-	RIR         *templates.Decimal `json:"rir"`
-	Position    int64              `json:"exercise_position"`
-	Weight      string             `json:"weight"`
-	Reps        int64              `json:"reps"`
+	SelectionRevision *int64             `json:"selection_revision"`
+	PartialReps       *int64             `json:"partial_reps"`
+	Technique         string             `json:"technique"`
+	RIR               *templates.Decimal `json:"rir"`
+	Position          int64              `json:"exercise_position"`
+	Weight            string             `json:"weight"`
+	Reps              int64              `json:"reps"`
 }
 type SavedSet struct {
 	PartialReps *int64     `json:"partial_reps"`
@@ -117,6 +118,9 @@ func (p Postgres) SaveSet(ctx context.Context, owner int64, sessionID, id string
 	}
 	defer tx.Rollback(ctx)
 	if err = lockSession(ctx, tx, owner, sessionID); err != nil {
+		return SavedSet{}, err
+	}
+	if err = checkSelection(ctx, tx, owner, sessionID, input.Position, input.SelectionRevision); err != nil {
 		return SavedSet{}, err
 	}
 	var existingPosition int64

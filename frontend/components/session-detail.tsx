@@ -15,13 +15,36 @@ import type { Session } from "@/lib/sessions";
 
 export function SessionDetail({ id }: { id: string }) {
   const router = useRouter();
-  const previous = usePreviousPerformance(id);
-  const bests = usePersonalBests(id);
   const modal = useRef<HTMLDialogElement>(null);
   const dialogID = useId();
   const blockers = useRef(new Set<number>());
   const [blocked, setBlocked] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
+  const selectionKey =
+    session?.exercises
+      .map((e) => `${e.position}:${e.selection_revision ?? 0}`)
+      .join(",") ?? "";
+  const previous = usePreviousPerformance(id, selectionKey);
+  const bests = usePersonalBests(id, selectionKey);
+  const onSelected = useCallback((saved: Session, position: number) => {
+    setSession(
+      (current) =>
+        current && {
+          ...current,
+          exercises: current.exercises.map((e) =>
+            e.position === position
+              ? saved.exercises.find((next) => next.position === position)!
+              : e,
+          ),
+          sets: [
+            ...current.sets.filter((s) => s.exercise_position !== position),
+            ...saved.sets.filter((s) => s.exercise_position === position),
+          ],
+        },
+    );
+    blockers.current.delete(position);
+    setBlocked(blockers.current.size > 0);
+  }, []);
   const [loading, setLoading] = useState(true);
   const [missing, setMissing] = useState(false);
   const [error, setError] = useState("");
@@ -167,34 +190,10 @@ export function SessionDetail({ id }: { id: string }) {
             key={entry.position}
             className="rounded-2xl border border-border bg-card p-5"
           >
-            <h2 className="break-words text-xl font-semibold">{entry.name}</h2>
-            <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-              <dt>Working sets</dt>
-              <dd>{entry.set_count}</dd>
-              <dt>Rep target</dt>
-              <dd>
-                {entry.rep_min === null
-                  ? "Not specified"
-                  : entry.rep_min === entry.rep_max
-                    ? entry.rep_min
-                    : `${entry.rep_min}–${entry.rep_max}`}
-              </dd>
-              <dt>Target RIR</dt>
-              <dd>{entry.target_rir ?? "Not specified"}</dd>
-            </dl>
-            <ExerciseReferences
-              label={entry.name}
-              previous={previous.items.find(
-                (item) => item.exercise_id === entry.exercise_id,
-              )}
-              best={bests.items.find(
-                (item) => item.exercise_id === entry.exercise_id,
-              )}
-              previousState={previous}
-              bestState={bests}
-            />
             <SessionSets
-              key={`${id}-${entry.position}`}
+              key={`${id}-${entry.position}-${entry.selection_revision ?? 0}`}
+              exercise={entry}
+              onSelected={onSelected}
               sessionID={id}
               position={entry.position}
               plannedCount={entry.set_count}
@@ -208,7 +207,33 @@ export function SessionDetail({ id }: { id: string }) {
                 )?.occurrences[0]?.sets[0]?.weight
               }
               onBlocked={onBlocked}
-            />
+            >
+              <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                <dt>Working sets</dt>
+                <dd>{entry.set_count}</dd>
+                <dt>Rep target</dt>
+                <dd>
+                  {entry.rep_min === null
+                    ? "Not specified"
+                    : entry.rep_min === entry.rep_max
+                      ? entry.rep_min
+                      : `${entry.rep_min}–${entry.rep_max}`}
+                </dd>
+                <dt>Target RIR</dt>
+                <dd>{entry.target_rir ?? "Not specified"}</dd>
+              </dl>
+              <ExerciseReferences
+                label={entry.name}
+                previous={previous.items.find(
+                  (item) => item.exercise_id === entry.exercise_id,
+                )}
+                best={bests.items.find(
+                  (item) => item.exercise_id === entry.exercise_id,
+                )}
+                previousState={previous}
+                bestState={bests}
+              />
+            </SessionSets>
           </li>
         ))}
       </ol>

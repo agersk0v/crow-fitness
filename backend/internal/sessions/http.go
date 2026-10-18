@@ -19,6 +19,24 @@ func validID(id string) bool {
 	return err == nil && n > 0 && strconv.FormatInt(n, 10) == id
 }
 func Register(mux *http.ServeMux, store Store) {
+	mux.HandleFunc("PUT /api/sessions/{id}/selection", func(w http.ResponseWriter, r *http.Request) {
+		if !validID(r.PathValue("id")) {
+			problem(w, 400, "validation_error", "Invalid session ID.")
+			return
+		}
+		var input SelectionInput
+		if !decode(w, r, &input) {
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+		item, err := store.SelectExercise(ctx, exercises.LocalOwnerID, r.PathValue("id"), input)
+		if err != nil {
+			operationError(w, err)
+			return
+		}
+		write(w, 200, item)
+	})
 	mux.HandleFunc("GET /api/sessions/active", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
@@ -289,6 +307,10 @@ func operationError(w http.ResponseWriter, err error) {
 		write(w, 409, map[string]any{"error": map[string]any{"code": "active_session_exists", "message": conflict.Error(), "session": conflict.Session}})
 	case errors.As(err, &fields):
 		write(w, 400, map[string]any{"error": map[string]any{"code": "validation_error", "message": fields.Error(), "fields": fields}})
+	case errors.Is(err, ErrSelection):
+		problem(w, 409, "selection_conflict", "The exercise selection changed. Reload this slot before saving or switching.")
+	case errors.Is(err, ErrHasSets):
+		problem(w, 409, "exercise_has_sets", "Delete all saved sets for this slot before switching exercises.")
 	case errors.Is(err, ErrCompleted):
 		problem(w, 409, "session_completed", "This workout has been completed. Its sets cannot be changed.")
 	case errors.Is(err, ErrDeleted):

@@ -164,3 +164,8 @@ func (f *fakeStore) ReorderSets(_ context.Context, owner int64, id string, _ Set
 	f.owner, f.id = owner, id
 	return []SavedSet{}, f.err
 }
+
+func (f *fakeStore) SelectExercise(_ context.Context, owner int64, id string, _ SelectionInput) (Session, error) {
+	f.owner = owner
+	return f.Get(context.Background(), owner, id)
+}

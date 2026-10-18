@@ -21,13 +21,20 @@ func lockTemplate(ctx context.Context, tx pgx.Tx, owner int64, id string) (bool,
 }
 func lockExercises(ctx context.Context, tx pgx.Tx, owner int64, input Input) error {
 	for i, entry := range input.Exercises {
-		var id string
-		err := tx.QueryRow(ctx, "SELECT id::text FROM exercises WHERE owner_id=$1 AND id=$2 FOR KEY SHARE", owner, entry.ExerciseID).Scan(&id)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ValidationError{fmt.Sprintf("exercises.%d.exercise_id", i): "This exercise is unavailable. Choose one from your library."}
-		}
-		if err != nil {
-			return err
+		choices := append([]Choice{{ExerciseID: entry.ExerciseID}}, entry.Alternatives...)
+		for j, choice := range choices {
+			var id string
+			err := tx.QueryRow(ctx, "SELECT id::text FROM exercises WHERE owner_id=$1 AND id=$2 FOR KEY SHARE", owner, choice.ExerciseID).Scan(&id)
+			if errors.Is(err, pgx.ErrNoRows) {
+				key := fmt.Sprintf("exercises.%d.exercise_id", i)
+				if j > 0 {
+					key = fmt.Sprintf("exercises.%d.alternatives.%d.exercise_id", i, j-1)
+				}
+				return ValidationError{key: "This exercise is unavailable. Choose one from your library."}
+			}
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -40,6 +47,15 @@ func insertEntries(ctx context.Context, tx pgx.Tx, owner int64, id string, entri
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO template_exercises(template_id,owner_id,position,exercise_id,set_count,rep_min,rep_max,target_rir) VALUES($1,$2,$3,$4,$5,$6,$7,$8::text::numeric)`, id, owner, i+1, entry.ExerciseID, entry.SetCount, entry.RepMin, entry.RepMax, rir); err != nil {
 			return err
+		}
+		for j, c := range entry.Alternatives {
+			var target any
+			if c.TargetRIR != nil {
+				target = string(*c.TargetRIR)
+			}
+			if _, err := tx.Exec(ctx, `INSERT INTO template_exercise_alternatives(template_id,owner_id,position,choice_position,exercise_id,set_count,rep_min,rep_max,target_rir) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::text::numeric)`, id, owner, i+1, j+1, c.ExerciseID, c.SetCount, c.RepMin, c.RepMax, target); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -105,6 +121,9 @@ func (p Postgres) Duplicate(ctx context.Context, owner int64, id, name string) (
 	// Copy numeric values in PostgreSQL without client-side rounding. The parent
 	// lock guarantees all occurrences come from the same committed configuration.
 	if _, err = tx.Exec(ctx, `INSERT INTO template_exercises(template_id,owner_id,position,exercise_id,set_count,rep_min,rep_max,target_rir) SELECT $3,owner_id,position,exercise_id,set_count,rep_min,rep_max,target_rir FROM template_exercises WHERE owner_id=$1 AND template_id=$2`, owner, id, copyID); err != nil {
+		return Template{}, err
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO template_exercise_alternatives(template_id,owner_id,position,choice_position,exercise_id,set_count,rep_min,rep_max,target_rir) SELECT $3,owner_id,position,choice_position,exercise_id,set_count,rep_min,rep_max,target_rir FROM template_exercise_alternatives WHERE owner_id=$1 AND template_id=$2`, owner, id, copyID); err != nil {
 		return Template{}, err
 	}
 	item, err := get(ctx, tx, owner, copyID)
