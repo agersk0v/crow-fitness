@@ -39,7 +39,7 @@ func Register(mux *http.ServeMux, store Store) {
 		if items == nil {
 			items = []ProgressPoint{}
 		}
-		write(w, 200, map[string]any{"metric": "max_full_reps", "items": items})
+		write(w, 200, map[string]any{"metric": "average_estimated_strength", "items": items})
 	})
 	mux.HandleFunc("PUT /api/sessions/{id}/selection", func(w http.ResponseWriter, r *http.Request) {
 		if !validID(r.PathValue("id")) {

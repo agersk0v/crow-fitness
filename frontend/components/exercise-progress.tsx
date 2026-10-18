@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import Link from "next/link";
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import {
   ChartContainer,
@@ -20,17 +19,24 @@ type ProgressPoint = {
   session_name: string;
   completed_at: string;
   exercise_name: string;
-  exercise_position: number;
-  set_number: number;
-  set_id: string;
-  weight: string;
-  reps: string;
-  rir: string | null;
-  technique: Technique;
-  partial_reps: number | null;
+  average_estimate: string;
+  set_count: number;
+  sets: {
+    exercise_position: number;
+    set_number: number;
+    set_id: string;
+    weight: string;
+    reps: string;
+    rir: string | null;
+    technique: Technique;
+    partial_reps: number | null;
+    estimate: string;
+  }[];
 };
 type Datum = ProgressPoint & { value: number };
-const config = { value: { label: "Full reps", color: "var(--highlight)" } };
+const config = {
+  value: { label: "Estimated strength (kg)", color: "var(--highlight)" },
+};
 
 export function ExerciseProgress({ query }: { query: string }) {
   const id = useId();
@@ -54,7 +60,7 @@ export function ExerciseProgress({ query }: { query: string }) {
         const body = await response.json();
         if (!Array.isArray(body.items)) throw new Error();
         if (!controller.signal.aborted) {
-          setUnavailable(body.metric !== "max_full_reps");
+          setUnavailable(body.metric !== "average_estimated_strength");
           setPoints(body.items);
         }
       } catch {
@@ -66,9 +72,12 @@ export function ExerciseProgress({ query }: { query: string }) {
     void load();
     return () => controller.abort();
   }, [query, retry]);
+  const chartUnavailable =
+    unavailable ||
+    points.some((point) => !Number.isFinite(Number(point.average_estimate)));
   const data: Datum[] = points.map((point) => ({
     ...point,
-    value: Number(point.reps),
+    value: Number(point.average_estimate),
   }));
   const dates = new Map(
     data.map((point) => [
@@ -85,15 +94,14 @@ export function ExerciseProgress({ query }: { query: string }) {
       className="mb-6 min-w-0 rounded-2xl border border-border bg-card p-4 sm:p-5"
     >
       <h2 id={`${id}-title`} className="text-lg font-semibold">
-        Most full reps in one set
+        Average estimated strength
       </h2>
       <p
         id={`${id}-description`}
         className="mt-2 text-sm text-muted-foreground"
       >
-        One set per completed workout, using the applied filters. Weight,
-        assistance, and partial reps do not change this value. Higher reps at a
-        different load do not necessarily mean greater strength.
+        Average of weight × (1 + full reps ÷ 30) across saved sets. Uses entered
+        weight as resistance; bodyweight and assistance are not adjusted.
       </p>
       {loading ? (
         <p role="status" className="mt-4 text-sm text-muted-foreground">
@@ -112,7 +120,7 @@ export function ExerciseProgress({ query }: { query: string }) {
             Retry progress
           </Button>
         </div>
-      ) : unavailable ? (
+      ) : chartUnavailable ? (
         <p role="status" className="mt-4 text-sm text-muted-foreground">
           This progress metric is unavailable. You can still browse recorded
           sets below.
@@ -139,7 +147,7 @@ export function ExerciseProgress({ query }: { query: string }) {
               accessibilityLayer
               data={data}
               margin={{ top: 12, right: 12, bottom: 4, left: 0 }}
-              aria-label="Full-rep records by completed workout. Use left and right arrow keys to inspect points, or open View chart data below."
+              aria-label="Average recorded-load strength estimates by completed workout. Use left and right arrow keys to inspect the averages and contributing sets. Recorded sets are listed below."
             >
               <CartesianGrid vertical={false} />
               <XAxis
@@ -151,7 +159,6 @@ export function ExerciseProgress({ query }: { query: string }) {
                 tickMargin={8}
               />
               <YAxis
-                allowDecimals={false}
                 domain={[0, "auto"]}
                 tickLine={false}
                 axisLine={false}
@@ -190,56 +197,43 @@ export function ExerciseProgress({ query }: { query: string }) {
             Completed workouts, oldest first. Tap a point or focus the chart and
             use arrow keys. Equal-date workouts remain separate.
           </p>
-          <details className="mt-4">
-            <summary className="cursor-pointer rounded text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring">
-              View chart data ({points.length}{" "}
-              {points.length === 1 ? "workout" : "workouts"})
-            </summary>
-            <ol aria-label="Progress source sets" className="mt-3 space-y-3">
-              {points.map((point) => (
-                <li
-                  key={point.session_id}
-                  className="rounded-lg bg-muted/30 p-3 text-sm"
-                >
-                  <Link
-                    href={`/history?tab=sessions&session=${point.session_id}`}
-                    className="break-words font-medium text-highlight underline"
-                  >
-                    {point.session_name}
-                  </Link>
-                  <PointDetails point={point} showName={false} />
-                </li>
-              ))}
-            </ol>
-          </details>
+          <p className="mt-3 text-sm">
+            Latest average: {points.at(-1)!.average_estimate} kg from{" "}
+            {points.at(-1)!.set_count} saved{" "}
+            {points.at(-1)!.set_count === 1 ? "set" : "sets"}.
+          </p>
         </>
       )}
     </section>
   );
 }
 
-function PointDetails({
-  point,
-  showName = true,
-}: {
-  point: ProgressPoint;
-  showName?: boolean;
-}) {
+function PointDetails({ point }: { point: ProgressPoint }) {
   return (
-    <div className="min-w-0 space-y-1 break-words text-xs">
+    <div className="min-w-0 space-y-2 break-words text-xs">
       <p className="font-medium">
-        {point.reps} full reps · {point.weight} kg
+        {point.average_estimate} kg average · {point.set_count}{" "}
+        {point.set_count === 1 ? "set" : "sets"}
       </p>
-      {showName && <p>{point.session_name}</p>}
+      <p>{point.session_name}</p>
       <p>{new Date(point.completed_at).toLocaleString()}</p>
-      <p>
-        Exercise {point.exercise_position}, set {point.set_number} ·{" "}
-        {techniqueLabel(point.technique)}
-      </p>
-      {point.rir !== null && <p>RIR {point.rir}</p>}
-      {!!point.partial_reps && (
-        <p>{partialRepsLabel(point.partial_reps)} (context only)</p>
-      )}
+      <ol className="space-y-2">
+        {point.sets.map((set) => (
+          <li key={set.set_id}>
+            <p>
+              Exercise {set.exercise_position}, set {set.set_number}:{" "}
+              {set.weight} kg × {set.reps} reps
+            </p>
+            <p className="text-muted-foreground">
+              {techniqueLabel(set.technique)}
+              {set.rir !== null && ` · RIR ${set.rir}`}
+              {set.partial_reps
+                ? ` · ${partialRepsLabel(set.partial_reps)} (context only)`
+                : ""}
+            </p>
+          </li>
+        ))}
+      </ol>
     </div>
   );
 }

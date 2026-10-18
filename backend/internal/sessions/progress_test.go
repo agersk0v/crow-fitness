@@ -36,7 +36,7 @@ func TestProgressHTTP(t *testing.T) {
 		if response.Code != tc.status || strings.Contains(response.Body.String(), "private database details") {
 			t.Fatal(tc, response.Code, response.Body.String())
 		}
-		if tc.status == 200 && (store.owner != exercises.LocalOwnerID || response.Body.String() != "{\"items\":[],\"metric\":\"max_full_reps\"}\n") {
+		if tc.status == 200 && (store.owner != exercises.LocalOwnerID || response.Body.String() != "{\"items\":[],\"metric\":\"average_estimated_strength\"}\n") {
 			t.Fatal(store.owner, response.Body.String())
 		}
 	}
@@ -126,27 +126,24 @@ func TestProgressSelectionFiltersAndCapturedIdentity(t *testing.T) {
 	if err != nil || len(points) != 1 {
 		t.Fatal(points, err)
 	}
-	if p := points[0]; p.SetID != uuid(3) || p.Position != 3 || p.SetNumber != 2 || p.Reps != "12" || p.Weight != "0" || p.Technique != "good" {
-		t.Fatal("wrong rep/technique/order selection or zero-load exclusion", p)
+	if p := points[0]; p.AverageEstimate != "450.12" || p.SetCount != 5 || len(p.Sets) != 5 || p.Sets[3].SetID != uuid(3) || p.Sets[3].Weight != "0" || p.Sets[3].Technique != "good" {
+		t.Fatal("incorrect average or contributing sets", p)
 	}
-	// Equal reps and technique prefer the earlier occurrence regardless of load.
-	if _, err = pool.Exec(ctx, "UPDATE session_sets SET technique='good',weight=1 WHERE session_id=$1 AND id=$2", first.ID, uuid(2)); err != nil {
+	// Technique and partials remain visible without changing the mean.
+	if _, err = pool.Exec(ctx, "UPDATE session_sets SET technique='bad',partial_reps=1 WHERE session_id=$1 AND id=$2", first.ID, uuid(4)); err != nil {
 		t.Fatal(err)
 	}
-	points, err = store.ExerciseProgress(ctx, 251, HistoryFilter{Exercise: exercise})
-	if err != nil || points[0].SetID != uuid(2) {
-		t.Fatal("occurrence tie", points, err)
+	afterContext, err := store.ExerciseProgress(ctx, 251, HistoryFilter{Exercise: exercise})
+	if err != nil || afterContext[0].AverageEstimate != points[0].AverageEstimate {
+		t.Fatal("context changed average", afterContext, err)
 	}
-	// Within an occurrence, persisted set order takes precedence over UUID/time.
-	if _, err = pool.Exec(ctx, "UPDATE session_sets SET technique='bad' WHERE session_id=$1 AND id=$2", first.ID, uuid(2)); err != nil {
-		t.Fatal(err)
-	}
+	// Reordering changes source display order, not the aggregate.
 	if _, err = pool.Exec(ctx, "UPDATE session_sets SET set_order=CASE WHEN id=$2::uuid THEN 1 ELSE set_order+1 END WHERE session_id=$1 AND exercise_position=3", first.ID, uuid(4)); err != nil {
 		t.Fatal(err)
 	}
 	points, err = store.ExerciseProgress(ctx, 251, HistoryFilter{Exercise: exercise})
-	if err != nil || points[0].SetID != uuid(4) || points[0].SetNumber != 1 || *points[0].PartialReps != 999 {
-		t.Fatal("persisted order/partials context", points, err)
+	if err != nil || points[0].Sets[2].SetID != uuid(4) || points[0].Sets[2].SetNumber != 1 || points[0].AverageEstimate != "450.12" {
+		t.Fatal("source order or mean", points, err)
 	}
 	second := makeWorkout(251, template.ID, "Second same instant", "2026-10-25T00:30:00Z", []SetInput{{Position: 1, Weight: "20", Reps: 1, Technique: "good"}})
 	third := makeWorkout(251, template.ID, "Second local 02:30", "2026-10-25T01:30:00Z", []SetInput{{Position: 1, Weight: "0", Reps: 50, Technique: "bad"}})
@@ -182,7 +179,7 @@ func TestProgressSelectionFiltersAndCapturedIdentity(t *testing.T) {
 	if got := []string{points[0].SessionID, points[1].SessionID, points[2].SessionID}; !reflect.DeepEqual(got, []string{first.ID, second.ID, third.ID}) {
 		t.Fatal("same-day/instant ordering", got)
 	}
-	if points[1].Reps != "1" || points[2].Reps != "50" {
+	if points[1].AverageEstimate != "20.67" || points[2].AverageEstimate != "0.00" {
 		t.Fatal("arbitrary rep cap", points)
 	}
 	filter.Query = "record SOURCE"
@@ -194,14 +191,16 @@ func TestProgressSelectionFiltersAndCapturedIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	found := false
-	for _, s := range list {
-		if s.ID == narrowed[0].SetID {
-			found = true
+	for _, source := range narrowed[0].Sets {
+		found := false
+		for _, set := range list {
+			if set.ID == source.SetID {
+				found = true
+			}
 		}
-	}
-	if !found {
-		t.Fatal("chart source hidden by Sets filters")
+		if !found {
+			t.Fatal("chart contributing set hidden by Sets filters", source)
+		}
 	}
 	filter.Query = "does not match"
 	if empty, err := store.ExerciseProgress(ctx, 251, filter); err != nil || len(empty) != 0 {
@@ -230,5 +229,26 @@ func TestProgressSelectionFiltersAndCapturedIdentity(t *testing.T) {
 	after, err := store.ExerciseProgress(ctx, 251, filter)
 	if err != nil || !reflect.DeepEqual(after, points) {
 		t.Fatal("snapshots changed", after, err)
+	}
+}
+
+func TestAverageEstimatedStrength(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		sets []ProgressSet
+		want string
+	}{
+		{"three sets", []ProgressSet{{Weight: "30", Reps: "10"}, {Weight: "30", Reps: "9"}, {Weight: "30", Reps: "8"}}, "39.00"},
+		{"zero counted", []ProgressSet{{Weight: "30", Reps: "10"}, {Weight: "0", Reps: "999"}}, "20.00"},
+		{"one saved set", []ProgressSet{{Weight: "30", Reps: "1"}}, "31.00"},
+		{"round after averaging", []ProgressSet{{Weight: "0.01", Reps: "16"}, {Weight: "0.02", Reps: "8"}}, "0.02"},
+		{"exact large load", []ProgressSet{{Weight: "100000000000000000000.00", Reps: "30"}}, "200000000000000000000.00"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := averageEstimates(tc.sets)
+			if err != nil || got != tc.want {
+				t.Fatal(got, tc.want, err)
+			}
+		})
 	}
 }
