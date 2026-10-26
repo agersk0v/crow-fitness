@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-const PageSize int64 = 20
+const PageSize int64 = 4
 
 type ListQuery struct {
 	Page   int64
