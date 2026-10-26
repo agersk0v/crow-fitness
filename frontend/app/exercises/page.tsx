@@ -1,5 +1,9 @@
+import { Suspense } from "react";
 import { PageEntrance } from "@/components/page-entrance";
 import { ExerciseLibrary } from "@/components/exercise-library";
+
+// Render the URL-dependent library on the server, including its create form.
+export const dynamic = "force-dynamic";
 
 export default function ExercisesPage() {
   return (
@@ -12,7 +16,9 @@ export default function ExercisesPage() {
           Browse your exercises and add the movements you train.
         </p>
         <div className="mt-8">
-          <ExerciseLibrary />
+          <Suspense fallback={<p role="status">Loading exercises…</p>}>
+            <ExerciseLibrary />
+          </Suspense>
         </div>
       </PageEntrance>
     </main>

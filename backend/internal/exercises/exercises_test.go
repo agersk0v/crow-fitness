@@ -91,3 +91,32 @@ func (f *fakeStore) Delete(_ context.Context, owner int64, id string) error {
 	f.owner = owner
 	return f.err
 }
+
+func (f *fakeStore) ListPage(_ context.Context, owner int64, query ListQuery) (Page, error) {
+	f.owner = owner
+	return Page{Items: []Exercise{}, MuscleGroups: MuscleGroups, Number: query.Page, Size: PageSize}, f.err
+}
+
+func TestPaginatedValidation(t *testing.T) {
+	for _, query := range []string{"page=0", "page=-1", "page=1.5", "page=", "page=9223372036854775808", "page=1&page=2", "page=+1", "muscle_group=invalid", "q=a&q=b", "unknown=1", "paginated=false"} {
+		mux := http.NewServeMux()
+		Register(mux, &fakeStore{})
+		response := httptest.NewRecorder()
+		mux.ServeHTTP(response, httptest.NewRequest("GET", "/api/exercises?paginated=true&"+query, nil))
+		if response.Code != 400 {
+			t.Fatalf("%s: %d %s", query, response.Code, response.Body)
+		}
+	}
+	store := &fakeStore{}
+	mux := http.NewServeMux()
+	Register(mux, store)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest("GET", "/api/exercises?paginated=true&page=3&q=press&muscle_group=chest", nil))
+	if response.Code != 200 || store.owner != LocalOwnerID || !strings.Contains(response.Body.String(), `"page":3`) {
+		t.Fatal(response.Body)
+	}
+	query, err := parseListQuery("paginated=true&q=%20A%25_%20&muscle_group=chest")
+	if err != nil || query.Search != "A%_" || query.Page != 1 {
+		t.Fatalf("%+v %v", query, err)
+	}
+}
