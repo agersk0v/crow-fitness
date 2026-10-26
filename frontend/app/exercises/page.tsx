@@ -2,6 +2,9 @@ import { Suspense } from "react";
 import { PageEntrance } from "@/components/page-entrance";
 import { ExerciseLibrary } from "@/components/exercise-library";
 
+// Render the URL-dependent library on the server, including its create form.
+export const dynamic = "force-dynamic";
+
 export default function ExercisesPage() {
   return (
     <main className="mx-auto min-h-screen max-w-5xl px-6 py-8 sm:px-12">
