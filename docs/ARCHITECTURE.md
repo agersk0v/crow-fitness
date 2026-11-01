@@ -2,10 +2,6 @@
 
 This document describes the implemented technical design. [PRODUCT](PRODUCT.md) owns user-visible rules; [README](../README.md) owns setup, configuration, operational data care, and check commands. Open issues/PRs describe future changes, not deployed contracts.
 
-## Proposed changes
-
-[Google authentication and private accounts](proposals/google-authentication.md) is a design proposal for #88/#87 awaiting owner review. It does not change the single-user contracts documented below.
-
 ## Components and boundaries
 
 | Component | Responsibility | Location |
@@ -140,3 +136,51 @@ Go tests own detailed decoding/validation, ownership, transactions, constraints,
 The smoke script builds production images and checks one browser-origin API flow through Next forwarding, frontend route availability, validation/conflict propagation, active saved-set restoration after database and full-stack restarts, completed reads/references, cancellation, and liveness/readiness outage recovery. It owns a fresh randomly named Compose project and volume, prints service logs on failure, and removes only its disposable resources. Page fetches do not verify interactive browser behavior.
 
 CI retains frontend formatting, Go formatting/vet/race tests with PostgreSQL, and the dependent production-stack smoke job. Next's production build checks TypeScript. After those checks pass on a push to main, a matrix job builds the existing API/frontend Dockerfiles for Linux AMD64 and ARM64 and publishes to GHCR using a job-scoped package-write token. Repository-root build contexts, separate component caches, source/revision labels, and full-commit-SHA plus latest tags are used. PRs never publish. After both components publish, a dependent release job adds matching main-<CI run number>-<full SHA> tags without rebuilding. It promotes frontend first and API last; external image automation can use the API tag as the signal that a matching pair is available. Numeric CI run order supports chronological selection even when an older run is retried. Publication itself does not deploy containers; the separate crow-kube repository owns Flux deployment. Setup and package access instructions belong in README.
+
+## Future: Google authentication and private accounts
+
+Design for [#88](https://github.com/agersk0v/crow-fitness/issues/88), under [#87](https://github.com/agersk0v/crow-fitness/issues/87). **Not implemented:** the sections above still describe the current single-user app. The owner selected the behavior below; library and integration details remain recommendations for review.
+
+### Selected behavior
+
+| Decision | First version |
+| --- | --- |
+| Login | Google sign-in handled by Go; anyone with a Google account can join |
+| Accounts | Internal account ID and verified Google subject; first login creates a private, empty account |
+| Sessions | PostgreSQL-backed sessions; browser holds a protected opaque cookie, not a JWT session |
+| Expiry | 30 days without activity; accepted use renews the window, with no fixed maximum lifetime |
+| Sign out | Revoke the current device/browser session; other devices remain signed in |
+| Environments | Login required locally and in production; automated tests use test identities, with no runtime bypass |
+| Existing records | Disposable dummy data; no claim/import workflow or automatic deletion; the owner will reset tables separately |
+
+### Authentication and ownership boundary
+
+```mermaid
+flowchart LR
+    Browser -->|Same-origin requests and cookie| Next[Next.js]
+    Next -->|Forward credentials| Go[Go API]
+    Go <-->|Google login only| Google
+    Go -->|Verify session and select owner| DB[PostgreSQL]
+```
+
+Go owns login initiation, the Google callback, application sessions, and authorization. Use established OIDC/OAuth libraries to verify Google's response, including signature, issuer, audience, expiry and nonce, with state and PKCE protecting the login flow. Google's ID token proves identity at login; it is not the application's session credential. Request only identity/profile scopes and keep secrets server-side.
+
+Recommend `go-oidc/v3` and `golang.org/x/oauth2` for Google sign-in, with SCS v2/pgxstore for sessions. Pin supported versions and verify that the integration supports rolling expiry and reliable revocation before implementation; library defaults are not the product requirements.
+
+Next must forward the application cookie and CSRF information, preserve individual Set-Cookie headers, and relay authentication redirects without following them upstream. Go verifies the session on every private API request, including direct API calls, and derives the owner internally. Never trust browser-supplied user/owner IDs or identity headers. Use the configured public origin for callbacks and redirect validation.
+
+Associate each account with one internal owner and enforce unique Google subjects. Create account/owner records atomically so concurrent first logins cannot duplicate accounts. Keep workout data attached to existing owner-based relationships, preserving one active workout per account. Email is profile metadata, not an identity or automatic account-linking key. Future providers can map to the same internal account through a separate identity table.
+
+### Session and privacy requirements
+
+Use HttpOnly, Secure production cookies with an appropriate SameSite policy and CSRF protection for cookie-authenticated writes, including login initiation and logout. Keep all private responses uncached. Missing/expired credentials return 401; missing or foreign resources use non-disclosing 404 responses. Session-store failures must fail closed rather than fall back to owner 1. Public health/readiness endpoints remain available.
+
+Successful foreground application activity extends the 30-day window consistently in PostgreSQL and the browser; health checks, background-only polling and failed/anonymous requests do not. Expired or revoked sessions cannot be revived by concurrent renewal. Login renews the session credential; logout revokes it server-side. Clear private UI data and ignore outstanding responses after logout/account switching, including across tabs and browser navigation.
+
+Store sessions in shared PostgreSQL so restarts and multiple replicas do not require sticky routing. Exact session tables, renewal mechanics and revocation handling belong in the implementation task; avoid prescribing duplicate session state without a demonstrated need.
+
+### Implementation and release
+
+Implement Google login/session handling, complete owner isolation across every API, then deployment/setup verification. Do not allow public access until login and all ownership checks ship together. New accounts must never inherit legacy dummy records, and authentication migrations must not reset data automatically.
+
+Before release, configure the Google web client, exact public origin/callback URI, HTTPS and server-only credentials. Keep Go/DB private, disable production reset/seed access, and reject missing authentication configuration. Verify real Google login/logout, rolling expiry, concurrent login/renewal/revocation, two-account isolation, stale UI/cache handling, and replica/restart behavior using disposable data and existing checks. Update the current-behavior sections when authentication is actually implemented.
