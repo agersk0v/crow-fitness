@@ -64,7 +64,7 @@ func run() error {
 
 	server := &http.Server{
 		Addr:              ":" + cfg.HTTPPort,
-		Handler:           app.Handler(pool, manager),
+		Handler:           app.Handler(pool, manager, cfg.EnableDevReset && !authConfig.Production),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,

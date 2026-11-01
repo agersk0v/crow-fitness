@@ -10,7 +10,9 @@ async function forward(
   const { path } = await params;
   const endpoint = path.join("/");
   const reset =
-    endpoint === "dev/reset" && process.env.ENABLE_DEV_RESET === "true";
+    ["dev/reset", "dev/reset-all"].includes(endpoint) &&
+    process.env.APP_ENV === "development" &&
+    process.env.ENABLE_DEV_RESET === "true";
   const resource =
     path.length === 2 &&
     path[0] === "exercises" &&
@@ -142,6 +144,8 @@ async function forward(
         upstream.headers.get("content-type") ?? "application/json",
       "Cache-Control": "private, no-store",
     });
+    if (upstream.headers.has("X-Crow-Account"))
+      headers.set("X-Crow-Account", upstream.headers.get("X-Crow-Account")!);
     for (const cookie of upstream.headers.getSetCookie())
       headers.append("Set-Cookie", cookie);
     if (upstream.headers.has("Location"))

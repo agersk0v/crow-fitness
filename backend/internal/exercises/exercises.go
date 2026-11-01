@@ -17,8 +17,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// LocalOwnerID identifies only legacy fixtures and the currently unregistered
-// development seed tool. Runtime HTTP handlers use the authenticated principal.
+// LocalOwnerID identifies legacy test fixtures only. Runtime HTTP handlers
+// and the retained development seed tool require an explicit verified owner.
 const LocalOwnerID int64 = 1
 
 var MuscleGroups = []string{"chest", "back", "shoulders", "biceps", "triceps", "forearms", "core", "glutes", "quadriceps", "hamstrings", "calves"}

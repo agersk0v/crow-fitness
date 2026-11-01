@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/agersk0v/crow-fitness/backend/internal/auth"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -22,11 +23,13 @@ import (
 
 type fakeStore struct {
 	calls int
+	owner int64
 	err   error
 }
 
-func (f *fakeStore) Reset(context.Context, time.Time) (Result, error) {
+func (f *fakeStore) Reset(_ context.Context, owner int64, _ time.Time) (Result, error) {
 	f.calls++
+	f.owner = owner
 	return Result{CompletedSessions: 48, CompletedSets: 1032}, f.err
 }
 func TestResetGateAndConfirmation(t *testing.T) {
@@ -39,12 +42,13 @@ func TestResetGateAndConfirmation(t *testing.T) {
 		store := &fakeStore{err: tc.err}
 		Register(mux, store, tc.enabled)
 		request := httptest.NewRequest("POST", "/api/dev/reset", nil)
+		request = request.WithContext(auth.WithPrincipal(request.Context(), auth.Account{ID: 8, OwnerID: 73}))
 		if tc.confirm {
 			request.Header.Set("X-Confirm-Reset", "replace-workout-data")
 		}
 		response := httptest.NewRecorder()
 		mux.ServeHTTP(response, request)
-		if response.Code != tc.status || store.calls != tc.calls || strings.Contains(response.Body.String(), "private details") {
+		if response.Code != tc.status || store.calls != tc.calls || (store.calls > 0 && store.owner != 73) || strings.Contains(response.Body.String(), "private details") {
 			t.Fatal(tc, response.Code, response.Body.String(), store.calls)
 		}
 	}
@@ -173,7 +177,7 @@ func TestPostgresResetReplacementRollbackAndWrites(t *testing.T) {
 			}
 		}
 	}
-	first, err := store.Reset(ctx, now)
+	first, err := store.Reset(ctx, 1, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +224,7 @@ func TestPostgresResetReplacementRollbackAndWrites(t *testing.T) {
 	if err != nil || len(previous) != 7 {
 		t.Fatal("previous performance missing", previous, err)
 	}
-	second, err := store.Reset(ctx, now)
+	second, err := store.Reset(ctx, 1, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,7 +240,7 @@ func TestPostgresResetReplacementRollbackAndWrites(t *testing.T) {
 	if _, err = pool.Exec(ctx, `CREATE FUNCTION fail_seed() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.name='Lower 2' THEN RAISE EXCEPTION 'injected seed failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER fail_seed BEFORE INSERT ON workout_sessions FOR EACH ROW EXECUTE FUNCTION fail_seed()`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = store.Reset(ctx, now); err == nil {
+	if _, err = store.Reset(ctx, 1, now); err == nil {
 		t.Fatal("injected seed failure did not fail")
 	}
 	after, err := workouts.Get(ctx, 1, second.ActiveSessionID)
@@ -257,7 +261,7 @@ func TestPostgresResetReplacementRollbackAndWrites(t *testing.T) {
 		t.Fatal(err)
 	}
 	done := make(chan error, 1)
-	go func() { _, err := store.Reset(ctx, now); done <- err }()
+	go func() { _, err := store.Reset(ctx, 1, now); done <- err }()
 	select {
 	case err := <-done:
 		t.Fatal("reset bypassed in-flight write", err)
@@ -274,3 +278,19 @@ func TestPostgresResetReplacementRollbackAndWrites(t *testing.T) {
 		t.Fatal("reset/write ordering", stale, err)
 	}
 }
+
+func TestResetRequiresVerifiedOwner(t *testing.T) {
+	mux := http.NewServeMux()
+	store := &fakeStore{}
+	Register(mux, store, true)
+	r := httptest.NewRequest("POST", "/api/dev/reset", nil)
+	r.Header.Set("X-Confirm-Reset", "replace-workout-data")
+	r.Header.Set("X-Owner-ID", "1")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, r)
+	if w.Code != 401 || store.calls != 0 {
+		t.Fatal(w.Code, store.calls)
+	}
+}
+
+func (f *fakeStore) FullReset(context.Context) error { f.calls++; return f.err }

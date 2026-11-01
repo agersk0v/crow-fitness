@@ -1,3 +1,4 @@
+import { AccountDataReset } from "@/components/account-data-reset";
 import { PageEntrance } from "@/components/page-entrance";
 import { ConnectionStatus } from "@/components/connection-status";
 
@@ -23,6 +24,8 @@ export default function Home() {
           </p>
         </div>
         <ConnectionStatus />
+        {process.env.APP_ENV === "development" &&
+          process.env.ENABLE_DEV_RESET === "true" && <AccountDataReset />}
       </PageEntrance>
 
       <footer className="border-t border-border pt-6 text-sm text-muted-foreground">

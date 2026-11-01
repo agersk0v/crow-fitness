@@ -2,7 +2,7 @@
 
 A personal workout tracker with Google sign-in and private account sessions.
 
-Create personal exercises and reusable workout templates, record one active workout, and browse completed sessions and sets. Google sign-in is required for workout features locally and in production; Home is public. Keep this authentication increment private until the full isolation audit (#91) and deployment verification (#92) are complete.
+Create personal exercises and reusable workout templates, record one active workout, and browse completed sessions and sets. Google sign-in is required for workout features locally and in production; Home is public. Keep this authentication increment private until deployment verification (#92) is complete.
 
 - [Product behavior](docs/PRODUCT.md): current pages, rules, and separately identified future work.
 - [Architecture](docs/ARCHITECTURE.md): services, persistence, API contracts, and validation responsibilities.
@@ -26,7 +26,7 @@ On Windows PowerShell, use `Copy-Item .env.example .env` instead of `cp`. Open `
 | --- | --- | --- |
 | `POSTGRES_PASSWORD` | Required local database password | Replace the example value |
 | `APP_PORT` | Frontend port on your computer | `3000` |
-| `ENABLE_DEV_RESET` | Must remain disabled; route unavailable pending owner-scope audit | `false` |
+| `ENABLE_DEV_RESET` | Optional development-only account reset; confirmation required | `false` |
 | `APP_ENV` | Cookie/configuration mode; production requires HTTPS | `development` |
 | `PUBLIC_ORIGIN` | Exact browser origin and callback base; match the port/hostname used | `http://localhost:3000` |
 | `GOOGLE_CLIENT_ID` | Google OAuth web-client ID, server-side | Required |
@@ -150,7 +150,9 @@ For PostgreSQL tests, set `TEST_DATABASE_URL` to a **separate disposable test da
 
 ## Temporary dummy-data reset
 
-The reset route is currently unregistered while its per-account audit is pending in #91. Keep `ENABLE_DEV_RESET=false`; production startup rejects an enabled reset flag. Authentication migrations do not delete, import, or claim the legacy dummy data. The owner's planned table reset is a separate explicit action.
+For local testing, set `APP_ENV=development` and `ENABLE_DEV_RESET=true` in `.env`, then rebuild with `docker compose up --build --detach --wait --wait-timeout 180`. Sign in to the Google account you want to populate, open Home, and choose **Reset my workout data and add dummy data**. Confirmation replaces only that account’s exercises, templates, workouts and sets; other accounts and unclaimed legacy records are untouched. The active-session tab refreshes after success. The adjacent **Full reset: delete all data and users** button requires typing `DELETE ALL`; it deletes all accounts and workout data, signs everyone out, and adds no dummy data.
+
+Keep the flag `false` for normal use. Production startup rejects an enabled reset flag. Migrations never trigger a reset or claim legacy data.
 
 ## UI development
 

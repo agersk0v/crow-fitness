@@ -12,7 +12,7 @@ import {
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
-function leaveAccount() {
+export function leaveAccount() {
   try {
     const channel = new BroadcastChannel("crow-auth");
     channel.postMessage("signed-out");
@@ -81,6 +81,7 @@ export function Login() {
 }
 
 type AuthState = {
+  revalidating: boolean;
   status: "loading" | "signed-out" | "signed-in" | "error";
   activeSessionId: string | null;
   error: string;
@@ -89,6 +90,7 @@ type AuthState = {
   retry: () => void;
 };
 const AuthContext = createContext<AuthState>({
+  revalidating: false,
   status: "loading",
   activeSessionId: null,
   error: "",
@@ -104,6 +106,7 @@ export function useAuth() {
 // Public Home remains rendered even while identity is unavailable.
 export function AuthBoundary({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const [revalidating, setRevalidating] = useState(false);
   const [status, setStatus] = useState<AuthState["status"]>("loading");
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -124,6 +127,8 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
     const controller = new AbortController();
     let active = true;
     let accountID = "";
+    let validation = 0;
+    let checking = false;
     let sessionRequest: AbortController | null = null;
     const original = window.fetch.bind(window);
     const requests = new Set<AbortController>();
@@ -138,7 +143,7 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
     }
     channel.onmessage = clear;
     async function refreshActive() {
-      if (!active || !accountID) return;
+      if (!active || !accountID || checking) return;
       sessionRequest?.abort();
       const request = new AbortController();
       sessionRequest = request;
@@ -148,6 +153,10 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
           signal: AbortSignal.any([controller.signal, request.signal]),
         });
         if (response.status === 401) {
+          clear();
+          return;
+        }
+        if (response.headers.get("X-Crow-Account") !== accountID) {
           clear();
           return;
         }
@@ -161,6 +170,7 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
     }
     async function initialize() {
       setStatus("loading");
+      setRevalidating(false);
       setError("");
       setActiveSessionId(null);
       try {
@@ -187,7 +197,7 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
         if (!tokens.ok) throw new Error();
         const token = await tokens.json();
         if (!active) return;
-        accountID = account.id;
+        accountID = String(account.id);
         setCSRF(token.csrf);
         window.fetch = async (input, init) => {
           const url = new URL(
@@ -203,6 +213,9 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
             input instanceof Request ? input : url,
             init,
           );
+          if (checking || !active)
+            throw new DOMException("Checking account", "AbortError");
+          const generation = validation;
           const abort = new AbortController();
           requests.add(abort);
           const headers = new Headers(request.headers);
@@ -217,8 +230,15 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
                 signal: AbortSignal.any([request.signal, abort.signal]),
               }),
             );
-            if (!active)
+            if (!active || generation !== validation)
               throw new DOMException("Account changed", "AbortError");
+            if (
+              result.headers.has("X-Crow-Account") &&
+              result.headers.get("X-Crow-Account") !== accountID
+            ) {
+              clear();
+              throw new DOMException("Account changed", "AbortError");
+            }
             if (result.status === 401) {
               channel.postMessage("signed-out");
               clear();
@@ -247,7 +267,19 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
       }
     }
     function validate() {
-      if (document.visibilityState !== "visible" || !accountID) return;
+      if (
+        document.visibilityState !== "visible" ||
+        !accountID ||
+        checking ||
+        !active
+      )
+        return;
+      checking = true;
+      validation++;
+      setRevalidating(true);
+      setActiveSessionId(null);
+      sessionRequest?.abort();
+      requests.forEach((request) => request.abort());
       void original("/api/auth/me", {
         cache: "no-store",
         signal: controller.signal,
@@ -261,10 +293,12 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
           if (!response.ok) throw new Error();
           const account = await response.json();
           if (!active) return;
-          if (account.id !== accountID) {
+          if (String(account.id) !== accountID) {
             window.location.reload();
             return;
           }
+          checking = false;
+          setRevalidating(false);
           void refreshActive();
         })
         .catch(() => {
@@ -283,6 +317,7 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
     }
     document.addEventListener("visibilitychange", validate);
     window.addEventListener("pageshow", onPageShow);
+    window.addEventListener("focus", validate);
     window.addEventListener("crow-active-session", refreshActive);
     void initialize();
     return () => {
@@ -294,6 +329,7 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
       channel.close();
       document.removeEventListener("visibilitychange", validate);
       window.removeEventListener("pageshow", onPageShow);
+      window.removeEventListener("focus", validate);
       window.removeEventListener("crow-active-session", refreshActive);
     };
   }, [retry]);
@@ -320,6 +356,7 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         status,
+        revalidating,
         activeSessionId,
         error,
         openLogin,
@@ -361,8 +398,20 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
 export function AuthContent({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const auth = useAuth();
-  if (pathname === "/" || pathname === "/login" || auth.status === "signed-in")
-    return children;
+  if (pathname === "/" || pathname === "/login") return children;
+  if (auth.status === "signed-in")
+    return (
+      <>
+        {auth.revalidating && (
+          <p role="status" className="p-6">
+            Checking your session…
+          </p>
+        )}
+        <div hidden={auth.revalidating} inert={auth.revalidating}>
+          {children}
+        </div>
+      </>
+    );
   return (
     <main className="mx-auto max-w-5xl px-6 py-8">
       <p role={auth.error ? "alert" : "status"}>

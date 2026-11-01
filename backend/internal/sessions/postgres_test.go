@@ -81,7 +81,7 @@ func TestPostgresLifecycle(t *testing.T) {
 	if active, err := store.Active(ctx, 62); err != nil || active != nil {
 		t.Fatal("foreign active visible", active, err)
 	}
-	if err = store.End(ctx, 62, session.ID); err != nil {
+	if err = store.End(ctx, 62, session.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatal(err)
 	}
 	if _, err = store.Start(ctx, 61, template.ID); err == nil {
@@ -124,7 +124,7 @@ func TestPostgresLifecycle(t *testing.T) {
 	if err = store.End(ctx, 61, session.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err = store.End(ctx, 61, session.ID); err != nil {
+	if err = store.End(ctx, 61, session.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatal("end retry failed", err)
 	}
 	if _, err = store.Get(ctx, 61, session.ID); !errors.Is(err, ErrNotFound) {
@@ -200,7 +200,7 @@ func TestPostgresLifecycle(t *testing.T) {
 	if created != 1 {
 		t.Fatal("incorrect created count", created)
 	}
-	if err = store.End(ctx, 61, session.ID); err != nil {
+	if err = store.End(ctx, 61, session.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatal(err)
 	}
 	if active, err := store.Active(ctx, 61); err != nil || active == nil || active.ID != winnerID {

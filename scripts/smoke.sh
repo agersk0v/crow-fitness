@@ -10,6 +10,8 @@ base_url="http://127.0.0.1:${APP_PORT}"
 # The fake provider is compiled only into the dedicated test image.
 export COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml}:scripts/smoke.compose.yml"
 export PUBLIC_ORIGIN="$base_url"
+export APP_ENV=development
+export ENABLE_DEV_RESET=true
 cookie_file="$(mktemp)"
 csrf=""
 curl() {
@@ -175,7 +177,26 @@ assert_page /sets 'Checking your session'
 removed_history_status="$(curl --silent --show-error --max-time 8 --output "$response_file" --write-out '%{http_code}' "$base_url/exercises/$exercise_id/history")"
 [[ "$removed_history_status" == "404" ]]
 assert_response /api/ready 200 ok
+# The development reset uses the same authenticated proxy and session CSRF.
+curl --fail --silent --show-error -X POST -H 'X-Confirm-Reset: replace-workout-data' "$base_url/api/dev/reset" --output "$response_file"
+python3 - "$response_file" <<'CHECK'
+import json,sys
+with open(sys.argv[1]) as f: seeded=json.load(f)
+assert seeded['exercises']==26 and seeded['templates']==4 and seeded['completed_sessions']==48 and seeded['active_session_id'],seeded
+CHECK
+curl --fail --silent --show-error "$base_url/api/exercises?paginated=true" --output "$response_file"
+python3 - "$response_file" <<'CHECK'
+import json,sys
+with open(sys.argv[1]) as f: assert json.load(f)['total_items']==26
+CHECK
 curl --fail --silent --show-error -X POST "$base_url/api/auth/logout" --output "$response_file"
 code="$(curl --silent --show-error --output "$response_file" --write-out '%{http_code}' "$base_url/api/auth/me")"
 [[ "$code" == 401 ]]
-echo "Stack smoke check passed: frontend, proxied workout lifecycle, validation, readiness recovery, and restart persistence."
+csrf="$(curl --fail --silent --show-error "$base_url/api/auth/csrf" | python3 -c 'import json,sys; print(json.load(sys.stdin)["csrf"])')"
+curl --fail --silent --show-error --location --data-urlencode "csrf=$csrf" "$base_url/api/auth/google/start" --output "$response_file"
+csrf="$(curl --fail --silent --show-error "$base_url/api/auth/csrf" | python3 -c 'import json,sys; print(json.load(sys.stdin)["csrf"])')"
+code="$(curl --silent --show-error -X POST -H 'X-Confirm-Reset: delete-all-data-and-users' "$base_url/api/dev/reset-all" --output "$response_file" --write-out '%{http_code}')"
+[[ "$code" == 204 ]]
+code="$(curl --silent --show-error "$base_url/api/auth/me" --output "$response_file" --write-out '%{http_code}')"
+[[ "$code" == 401 ]]
+echo "Stack smoke check passed: frontend, proxied workout lifecycle, validation, readiness recovery, restart persistence, account dummy-data reset, and full reset."

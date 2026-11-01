@@ -47,6 +47,7 @@ services:
       dockerfile: frontend/Dockerfile
     environment:
       API_INTERNAL_URL: http://api:8080
+      APP_ENV: ${APP_ENV:-development}
       ENABLE_DEV_RESET: ${ENABLE_DEV_RESET:-false}
     ports:
       - "127.0.0.1:${APP_PORT:-3000}:3000"
