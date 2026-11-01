@@ -65,6 +65,7 @@ func Validate(input *Input) ValidationError {
 
 type Store interface {
 	List(context.Context, int64) ([]Exercise, error)
+	ListPage(context.Context, int64, ListQuery) (Page, error)
 	Create(context.Context, int64, Input) (Exercise, error)
 	Update(context.Context, int64, string, Input) (Exercise, error)
 	Usage(context.Context, int64, string) ([]TemplateReference, error)
@@ -111,6 +112,24 @@ func Register(mux *http.ServeMux, store Store) {
 	mux.HandleFunc("GET /api/exercises", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
+		if r.URL.Query().Has("paginated") || r.URL.Query().Has("page") {
+			query, err := parseListQuery(r.URL.RawQuery)
+			if err != nil {
+				operationError(w, err)
+				return
+			}
+			if r.URL.Query().Get("paginated") != "true" {
+				operationError(w, ValidationError{"paginated": "Use paginated=true for page requests."})
+				return
+			}
+			result, err := store.ListPage(ctx, LocalOwnerID, query)
+			if err != nil {
+				operationError(w, err)
+				return
+			}
+			write(w, 200, result)
+			return
+		}
 		items, err := store.List(ctx, LocalOwnerID)
 		if err != nil {
 			operationError(w, err)

@@ -97,6 +97,12 @@ Weight is a nonnegative decimal string with at most two fractional digits; exces
 
 The legacy `/exercises/{id}/history` API is removed from both Go and Next, along with its dedicated query/models/store methods and tests. It returns 404, as does the removed `/exercises/[id]/history` page. Exercise cards use filtered Sets history; completed snapshots and reference readers remain available.
 
+### Exercise library pagination
+
+`GET /api/exercises` without pagination keeps its full-library `{items,muscle_groups}` response for template pickers. The Exercises page opts in with `paginated=true`, optional positive bigint `page` (default 1), trimmed literal case-insensitive name substring `q`, and optional predefined `muscle_group`, combined with AND. This mode rejects unknown/repeated parameters, invalid muscle groups, malformed/overflowing/nonpositive pages, and invalid pagination flags with the existing 400 validation envelope. A `page` request requires `paginated=true`. Next forwarding preserves the query string and validation response.
+
+Paginated responses retain items/vocabulary and add `page`, `page_size:4`, `total_items`, and `total_pages` (zero for no matches). Out-of-range pages clamp to the final available page or page 1 for no matches; the browser replaces its URL with the canonical page. A read-only repeatable-read transaction counts owner-scoped filtered rows then selects only the page using `ORDER BY exercises.id LIMIT 4 OFFSET ...`. Numeric ID supplies deterministic ordering independently of the text ID returned in JSON. `strpos(lower(name),lower(q))` treats SQL wildcard characters literally. The complete muscle-group vocabulary is independent of results. No schema migration or full-library client slicing is involved. Mutation success triggers a fresh page/count read without changing write contracts. Browser URL criteria and aborted/keyed requests isolate navigation results; local create inputs remain mounted.
+
 ## Historical reads, filters, and comparisons
 
 Historical reads use captured names and owner-scoped identities. Completed snapshots are repeatable-read, with explicit completed-state selection; no mutable library join rewrites results. Lists order completion timestamp and numeric session ID descending, then occurrence and persisted set order.

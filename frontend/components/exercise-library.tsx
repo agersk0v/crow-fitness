@@ -1,56 +1,100 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { ExerciseRow } from "@/components/exercise-row";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { muscleGroupLabel, type Exercise } from "@/lib/exercises";
+import { muscleGroupLabel, type ExercisePage } from "@/lib/exercises";
 import { MuscleGroupPicker } from "@/components/muscle-group-picker";
 
 export function ExerciseLibrary() {
-  const [exercises, setExercises] = useState<Exercise[]>([]);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const criteria = searchParams.toString();
+  const appliedQuery = searchParams.get("q") ?? "";
+  const appliedFilter = searchParams.get("muscle_group") ?? "";
+  const [result, setResult] = useState<ExercisePage | null>(null);
+  const [loadedCriteria, setLoadedCriteria] = useState<string | null>(null);
+  const [revision, setRevision] = useState(0);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [groups, setGroups] = useState<string[]>([]);
   const [tags, setTags] = useState<string[]>([]);
   const [tagError, setTagError] = useState("");
-  const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState("");
+  const [query, setQuery] = useState(appliedQuery);
+  const [filter, setFilter] = useState(appliedFilter);
   const [error, setError] = useState("");
   const [listError, setListError] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [addedIDs, setAddedIDs] = useState<string[]>([]);
 
-  async function loadExercises(signal?: AbortSignal) {
-    setLoading(true);
-    setListError("");
-    try {
-      const response = await fetch("/api/exercises", {
-        cache: "no-store",
-        signal,
-      });
-      if (!response.ok)
-        throw new Error("Could not load exercises. Please try again.");
-      const body = await response.json();
-      if (!signal?.aborted) {
-        setExercises(body.items);
-        setGroups(body.muscle_groups);
-      }
-    } catch {
-      if (!signal?.aborted)
-        setListError("Could not load exercises. Please try again.");
-    } finally {
-      if (!signal?.aborted) setLoading(false);
-    }
-  }
+  const pageHref = useCallback(
+    (page: number, query = appliedQuery, group = appliedFilter) => {
+      const params = new URLSearchParams();
+      if (query.trim()) params.set("q", query.trim());
+      if (group) params.set("muscle_group", group);
+      if (page !== 1) params.set("page", String(page));
+      return `/exercises${params.size ? `?${params}` : ""}`;
+    },
+    [appliedQuery, appliedFilter],
+  );
+
+  useEffect(() => {
+    setQuery(appliedQuery);
+    setFilter(appliedFilter);
+  }, [appliedQuery, appliedFilter]);
+
   useEffect(() => {
     const controller = new AbortController();
-    void loadExercises(controller.signal);
-
+    setLoading(true);
+    setListError("");
+    const params = new URLSearchParams(criteria);
+    params.set("paginated", "true");
+    async function load() {
+      try {
+        const response = await fetch(`/api/exercises?${params}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const body = await response.json();
+        if (!response.ok)
+          throw new Error(
+            body.error?.message ??
+              "Could not load exercises. Please try again.",
+          );
+        if (controller.signal.aborted) return;
+        const page = body as ExercisePage;
+        setResult(page);
+        setGroups(page.muscle_groups);
+        setLoadedCriteria(criteria);
+        const canonical = pageHref(page.page);
+        if (canonical !== `/exercises${criteria ? `?${criteria}` : ""}`)
+          router.replace(canonical, { scroll: false });
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setListError(
+            error instanceof Error
+              ? error.message
+              : "Could not load exercises. Please try again.",
+          );
+          setLoadedCriteria(criteria);
+        }
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }
+    void load();
     return () => controller.abort();
-  }, []);
+  }, [criteria, revision, router, pageHref]);
+
+  function refresh() {
+    setLoading(true);
+    setRevision((value) => value + 1);
+  }
 
   async function addExercise(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -74,7 +118,7 @@ export function ExerciseLibrary() {
         );
         return;
       }
-      setExercises((current) => [...current, body]);
+      refresh();
       setAddedIDs((current) => [...current, body.id]);
       setName("");
       setDescription("");
@@ -87,11 +131,8 @@ export function ExerciseLibrary() {
     }
   }
 
-  const visible = exercises.filter(
-    (exercise) =>
-      exercise.name.toLowerCase().includes(query.trim().toLowerCase()) &&
-      (!filter || exercise.muscle_groups.includes(filter)),
-  );
+  const visible = result?.items ?? [];
+  const waiting = loading || loadedCriteria !== criteria;
 
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_20rem]">
@@ -99,7 +140,13 @@ export function ExerciseLibrary() {
         <h2 id="exercise-list-heading" className="mb-4 text-xl font-semibold">
           Exercise library
         </h2>
-        <div className="mb-4 grid gap-3 sm:grid-cols-2">
+        <form
+          className="mb-4 grid gap-3 sm:grid-cols-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            router.push(pageHref(1, query, filter), { scroll: false });
+          }}
+        >
           <div>
             <label
               htmlFor="exercise-search"
@@ -137,18 +184,21 @@ export function ExerciseLibrary() {
               ))}
             </select>
           </div>
-        </div>
-        {loading && exercises.length === 0 ? (
+          <Button type="submit" variant="outline">
+            Apply search and filter
+          </Button>
+        </form>
+        {waiting ? (
           <p role="status">Loading exercises…</p>
         ) : listError ? (
           <Alert variant="destructive">
             <AlertTitle>Could not load exercises</AlertTitle>
             <AlertDescription>{listError}</AlertDescription>
-            <Button onClick={() => void loadExercises()} className="mt-3">
+            <Button onClick={refresh} className="mt-3">
               Try again
             </Button>
           </Alert>
-        ) : exercises.length === 0 ? (
+        ) : visible.length === 0 && !appliedQuery && !appliedFilter ? (
           <p className="rounded-2xl border border-dashed border-border p-6 text-muted-foreground">
             No exercises yet. Add your first exercise using the form.
           </p>
@@ -161,8 +211,7 @@ export function ExerciseLibrary() {
               variant="outline"
               className="mt-3"
               onClick={() => {
-                setQuery("");
-                setFilter("");
+                router.push("/exercises", { scroll: false });
               }}
             >
               Clear search and filter
@@ -176,21 +225,39 @@ export function ExerciseLibrary() {
                 exercise={exercise}
                 animateEntrance={addedIDs.includes(exercise.id)}
                 groups={groups}
-                onUpdated={(updated) =>
-                  setExercises((current) =>
-                    current.map((item) =>
-                      item.id === updated.id ? updated : item,
-                    ),
-                  )
-                }
-                onDeleted={(id) =>
-                  setExercises((current) =>
-                    current.filter((item) => item.id !== id),
-                  )
-                }
+                onUpdated={refresh}
+                onDeleted={refresh}
               />
             ))}
           </ul>
+        )}
+        {!waiting && !listError && result && result.total_pages > 0 && (
+          <nav aria-label="Exercise pages" className="mt-6">
+            <p role="status" className="mb-3 text-sm text-muted-foreground">
+              Page {result.page} of {result.total_pages}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {Array.from(
+                { length: result.total_pages },
+                (_, index) => index + 1,
+              ).map((page) => (
+                <Button
+                  key={page}
+                  asChild
+                  variant={page === result.page ? "default" : "outline"}
+                >
+                  <Link
+                    href={pageHref(page)}
+                    scroll={false}
+                    aria-label={`Page ${page}`}
+                    aria-current={page === result.page ? "page" : undefined}
+                  >
+                    {page}
+                  </Link>
+                </Button>
+              ))}
+            </div>
+          </nav>
         )}
       </section>
       <section
