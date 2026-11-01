@@ -1,8 +1,8 @@
 # Crow Fitness
 
-A simple workout tracker for one person, with no authentication or accounts.
+A personal workout tracker with Google sign-in and private account sessions.
 
-Create personal exercises and reusable workout templates, record one active workout, and browse completed sessions and sets. There is no login; use this on your own computer, not as a public service.
+Create personal exercises and reusable workout templates, record one active workout, and browse completed sessions and sets. Google sign-in is required locally and in production. Keep this authentication increment private until the full isolation audit (#91) and deployment verification (#92) are complete.
 
 - [Product behavior](docs/PRODUCT.md): current pages, rules, and separately identified future work.
 - [Architecture](docs/ARCHITECTURE.md): services, persistence, API contracts, and validation responsibilities.
@@ -26,7 +26,13 @@ On Windows PowerShell, use `Copy-Item .env.example .env` instead of `cp`. Open `
 | --- | --- | --- |
 | `POSTGRES_PASSWORD` | Required local database password | Replace the example value |
 | `APP_PORT` | Frontend port on your computer | `3000` |
-| `ENABLE_DEV_RESET` | Temporary destructive reset/seed tool | `false` |
+| `ENABLE_DEV_RESET` | Must remain disabled; route unavailable pending owner-scope audit | `false` |
+| `APP_ENV` | Cookie/configuration mode; production requires HTTPS | `development` |
+| `PUBLIC_ORIGIN` | Exact browser origin and callback base; match the port/hostname used | `http://localhost:3000` |
+| `GOOGLE_CLIENT_ID` | Google OAuth web-client ID, server-side | Required |
+| `GOOGLE_CLIENT_SECRET` | Google web-client secret, server-side | Required |
+
+Create a Google OAuth **web application** client and configure its authorized redirect URI as `<PUBLIC_ORIGIN>/api/auth/google/callback` (for example `http://localhost:3000/api/auth/google/callback`). Configure the consent screen/test audience and put the ID/secret in your ignored `.env`; never commit them or use `NEXT_PUBLIC_*`. Use a separate development client. Open the exact configured hostname/port; `localhost` and `127.0.0.1` are different cookie origins. Missing credentials prevent API startup rather than enabling an unauthenticated fallback.
 
 Start the stack:
 
@@ -34,7 +40,7 @@ Start the stack:
 docker compose up --build --detach --wait --wait-timeout 180
 ```
 
-The initial build downloads dependencies and takes longer than later starts. Open [http://localhost:3000](http://localhost:3000), or your configured `APP_PORT`. Click **Check again** if needed; both connection indicators should show **Connected**. The frontend is bound to localhost, and the API/database have no host-published ports.
+The initial build downloads dependencies and takes longer than later starts. Open [http://localhost:3000](http://localhost:3000), or your configured origin, and choose **Continue with Google**. New accounts start empty; existing dummy records are never claimed automatically. Accepted foreground use extends sign-in by 30 days; Sign out revokes this browser session only. Click **Check again** if needed; both connection indicators should show **Connected**. The frontend is bound to localhost, and the API/database have no host-published ports.
 
 After pulling code changes, run the same startup command to rebuild. This is a production-style local run, with no hot reload.
 
@@ -100,7 +106,7 @@ go build -o bin/api ./cmd/api
 
 CI runs frontend formatting and Go formatting, vet, and race tests (including disposable PostgreSQL tests) on PRs and commits to `main`. Its stack job builds both production Docker images and runs the smoke check; the Next.js build also checks TypeScript. Standalone build/typecheck commands above remain available locally.
 
-The smoke check covers one exercise/template/session flow through Next.js, a validation response, active-session conflict, completion/cancellation, readiness outage/recovery, and saved-session persistence through database and whole-stack restarts. Detailed CRUD and history-query assertions belong to the Go tests. Page fetches verify routes render, not interactive form behavior. Each run owns a randomly named Compose project and removes only its disposable test volume afterward.
+The smoke check uses a dedicated Go **test binary** with an injected fake provider (never included in the production executable), then covers one authenticated exercise/template/session flow through Next.js, a validation response, active-session conflict, completion/cancellation, readiness outage/recovery, and saved-session persistence through database and whole-stack restarts. Detailed CRUD and history-query assertions belong to the Go tests. Page fetches verify routes render, not interactive form behavior. Each run owns a randomly named Compose project and removes only its disposable test volume afterward.
 
 To run the same integration check locally, use Bash with Docker running:
 
@@ -144,9 +150,7 @@ For PostgreSQL tests, set `TEST_DATABASE_URL` to a **separate disposable test da
 
 ## Temporary dummy-data reset
 
-For disposable local data only, set `ENABLE_DEV_RESET=true` in `.env` and run the Docker startup command again. Home then shows **Reset database and add dummy data**, with a confirmation before replacing the local owner's exercises, templates, sessions, and sets. Set the flag back to `false` and recreate containers to hide the button and disable the endpoint. Invalid flag values stop Go startup.
-
-Reset is atomic and preserves tables, migration metadata, the owner record, and increasing IDs; it does not drop tables. It seeds 26 tagged exercises and four described templates (Upper 1, Lower 1, Upper 2, Lower 2), 48 completed workouts over 12 weeks with 1,032 completed sets, and one active Upper 1 workout with three saved sets. It replaces rather than accumulates data. If the response is lost, refresh and inspect the current data before confirming another reset. This temporary tool is disabled by default in both frontend and Go.
+The reset route is currently unregistered while its per-account audit is pending in #91. Keep `ENABLE_DEV_RESET=false`; production startup rejects an enabled reset flag. Authentication migrations do not delete, import, or claim the legacy dummy data. The owner's planned table reset is a separate explicit action.
 
 ## UI development
 

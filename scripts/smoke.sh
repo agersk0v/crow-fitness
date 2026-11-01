@@ -7,6 +7,15 @@ export COMPOSE_PROJECT_NAME="crowfitness-smoke-${RANDOM}-${RANDOM}"
 export POSTGRES_PASSWORD="smoke-only-test-password"
 export APP_PORT="${SMOKE_PORT:-13000}"
 base_url="http://127.0.0.1:${APP_PORT}"
+# The fake provider is compiled only into the dedicated test image.
+export COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml}:scripts/smoke.compose.yml"
+export PUBLIC_ORIGIN="$base_url"
+cookie_file="$(mktemp)"
+csrf=""
+curl() {
+  command curl --cookie "$cookie_file" --cookie-jar "$cookie_file" \
+    -H "Origin: $base_url" -H "X-CSRF-Token: $csrf" -H 'X-Crow-Activity: foreground' "$@"
+}
 response_file="$(mktemp)"
 request_file="$(mktemp)"
 
@@ -15,7 +24,7 @@ cleanup() {
     docker compose logs --no-color || true
   fi
   docker compose down --volumes --remove-orphans >/dev/null 2>&1 || true
-  rm -f "$response_file" "$request_file"
+  rm -f "$response_file" "$request_file" "$cookie_file"
 }
 trap cleanup EXIT
 
@@ -50,9 +59,13 @@ wait_ready() {
 
 docker compose config --quiet
 docker compose up --build --detach --wait --wait-timeout 180
-assert_page / 'Crow Fitness'
-assert_page /exercises 'Exercise name'
-assert_page /templates 'Create a template'
+assert_page /login 'Continue with Google'
+csrf="$(curl --fail --silent --show-error "$base_url/api/auth/csrf" | python3 -c 'import json,sys;print(json.load(sys.stdin)["csrf"])')"
+curl --fail --silent --show-error --location "$base_url/api/auth/google/start" --data-urlencode "csrf=$csrf" --output "$response_file"
+csrf="$(curl --fail --silent --show-error "$base_url/api/auth/csrf" | python3 -c 'import json,sys;print(json.load(sys.stdin)["csrf"])')"
+assert_page / 'Checking your session'
+assert_page /exercises 'Checking your session'
+assert_page /templates 'Checking your session'
 assert_response /api/health 200 ok
 assert_response /api/ready 200 ok
 exercise_id="$(curl --fail --silent --show-error "$base_url/api/exercises" -H 'Content-Type: application/json' --data '{"name":"  Smoke squat  ","muscle_groups":["quadriceps"]}' | python3 -c 'import json,sys; x=json.load(sys.stdin); assert x["name"]=="Smoke squat"; print(x["id"])')"
@@ -72,7 +85,7 @@ print(json.dumps({'name':'  Smoke routine  ','exercises':[
  {'exercise_id':exercise,'set_count':3,'rep_min':8,'rep_max':12,'target_rir':1.5}]}))
 CHECK
 template_id="$(curl --fail --silent --show-error "$base_url/api/templates" -H 'Content-Type: application/json' --data-binary "@$request_file" | python3 -c 'import json,sys; x=json.load(sys.stdin); assert x["name"]=="Smoke routine"; print(x["id"])')"
-assert_page "/templates/$template_id" 'Loading template'
+assert_page "/templates/$template_id" 'Checking your session'
 # Session transport and restart persistence share this disposable stack.
 session_id="$(curl --fail --silent --show-error "$base_url/api/sessions" -H 'Content-Type: application/json' --data "{\"template_id\":\"$template_id\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 curl --fail --silent --show-error "$base_url/api/sessions/$session_id/sets/11111111-1111-4111-8111-111111111111" -X PUT -H 'Content-Type: application/json' --data '{"technique":"decent","exercise_position":1,"weight":"12.50","reps":8,"rir":1.5,"partial_reps":2}' --output "$response_file"
@@ -101,7 +114,7 @@ import json,sys
 with open(sys.argv[1]) as f: body=json.load(f)
 assert body['error']['code']=='active_session_exists' and body['error']['session']['id']==sys.argv[2],body
 CHECK
-assert_page "/sessions/$session_id" 'Loading session'
+assert_page "/sessions/$session_id" 'Checking your session'
 docker compose stop postgres
 assert_response /api/health 200 ok
 assert_response /api/ready 503 unavailable
@@ -156,9 +169,12 @@ with open(sys.argv[1]) as f: saved=json.load(f)
 assert saved['completed_at'] and saved['sets'][0]['weight']=='12.50' and saved['exercises'][0]['name']=='Smoke squat',saved
 CHECK
 # Route availability only; these fetches do not exercise interactive controls.
-assert_page "/history/$completed_id" 'Loading completed session'
-assert_page /sets 'Loading completed sets'
+assert_page "/history/$completed_id" 'Checking your session'
+assert_page /sets 'Checking your session'
 removed_history_status="$(curl --silent --show-error --max-time 8 --output "$response_file" --write-out '%{http_code}' "$base_url/exercises/$exercise_id/history")"
 [[ "$removed_history_status" == "404" ]]
 assert_response /api/ready 200 ok
+curl --fail --silent --show-error -X POST "$base_url/api/auth/logout" --output "$response_file"
+code="$(curl --silent --show-error --output "$response_file" --write-out '%{http_code}' "$base_url/api/auth/me")"
+[[ "$code" == 401 ]]
 echo "Stack smoke check passed: frontend, proxied workout lifecycle, validation, readiness recovery, and restart persistence."

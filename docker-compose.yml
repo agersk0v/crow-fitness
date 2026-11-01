@@ -20,6 +20,10 @@ services:
       dockerfile: backend/Dockerfile
     environment:
       HTTP_PORT: "8080"
+      APP_ENV: ${APP_ENV:-development}
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:3000}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       ENABLE_DEV_RESET: ${ENABLE_DEV_RESET:-false}
       DB_HOST: postgres
       DB_PORT: "5432"

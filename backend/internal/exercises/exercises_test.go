@@ -41,7 +41,7 @@ func TestCreate(t *testing.T) {
 		store := &fakeStore{}
 		mux := http.NewServeMux()
 		Register(mux, store)
-		req := httptest.NewRequest("POST", "/api/exercises", strings.NewReader(tc.body))
+		req := ownedRequest("POST", "/api/exercises", strings.NewReader(tc.body))
 		req.Header.Set("Content-Type", "application/json")
 		response := httptest.NewRecorder()
 		mux.ServeHTTP(response, req)
@@ -58,11 +58,11 @@ func TestListAndErrors(t *testing.T) {
 	mux := http.NewServeMux()
 	Register(mux, store)
 	response := httptest.NewRecorder()
-	mux.ServeHTTP(response, httptest.NewRequest("GET", "/api/exercises", nil))
+	mux.ServeHTTP(response, ownedRequest("GET", "/api/exercises", nil))
 	if response.Code != 200 || !strings.Contains(response.Body.String(), `"items":[]`) || store.owner != LocalOwnerID {
 		t.Fatal(response.Body)
 	}
-	req := httptest.NewRequest("POST", "/api/exercises", strings.NewReader(`{"name":"Squat","muscle_groups":["chest"]}`))
+	req := ownedRequest("POST", "/api/exercises", strings.NewReader(`{"name":"Squat","muscle_groups":["chest"]}`))
 	response = httptest.NewRecorder()
 	mux.ServeHTTP(response, req)
 	if response.Code != 415 {
@@ -70,7 +70,7 @@ func TestListAndErrors(t *testing.T) {
 	}
 	store.err = errors.New("secret SQL details")
 	for _, method := range []string{"GET", "POST"} {
-		req = httptest.NewRequest(method, "/api/exercises", strings.NewReader(`{"name":"Squat","muscle_groups":["chest"]}`))
+		req = ownedRequest(method, "/api/exercises", strings.NewReader(`{"name":"Squat","muscle_groups":["chest"]}`))
 		req.Header.Set("Content-Type", "application/json")
 		response = httptest.NewRecorder()
 		mux.ServeHTTP(response, req)
@@ -102,7 +102,7 @@ func TestPaginatedValidation(t *testing.T) {
 		mux := http.NewServeMux()
 		Register(mux, &fakeStore{})
 		response := httptest.NewRecorder()
-		mux.ServeHTTP(response, httptest.NewRequest("GET", "/api/exercises?paginated=true&"+query, nil))
+		mux.ServeHTTP(response, ownedRequest("GET", "/api/exercises?paginated=true&"+query, nil))
 		if response.Code != 400 {
 			t.Fatalf("%s: %d %s", query, response.Code, response.Body)
 		}
@@ -111,7 +111,7 @@ func TestPaginatedValidation(t *testing.T) {
 	mux := http.NewServeMux()
 	Register(mux, store)
 	response := httptest.NewRecorder()
-	mux.ServeHTTP(response, httptest.NewRequest("GET", "/api/exercises?paginated=true&page=3&q=press&muscle_group=chest", nil))
+	mux.ServeHTTP(response, ownedRequest("GET", "/api/exercises?paginated=true&page=3&q=press&muscle_group=chest", nil))
 	if response.Code != 200 || store.owner != LocalOwnerID || !strings.Contains(response.Body.String(), `"page":3`) {
 		t.Fatal(response.Body)
 	}

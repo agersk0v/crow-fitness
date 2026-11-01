@@ -4,13 +4,13 @@ This is the authoritative description of the current app on `main`. [README](../
 
 ## Scope and navigation
 
-Crow Fitness is a minimal personal workout tracker: maintain exercises, build reusable templates, record one active workout, and inspect completed results. Go selects one internal local owner. There is no authentication, account management, sharing, or multiple-user runtime support; the owner ID is not access protection.
+Crow Fitness is a minimal personal workout tracker: maintain exercises, build reusable templates, record one active workout, and inspect completed results. Google sign-in creates an internal account and a new empty owner. Go derives ownership from a verified PostgreSQL-backed session; private pages/API requests require sign-in. There is no sharing or automatic account linking. This increment remains private pending the complete isolation audit (#91) and deployment verification (#92).
 
 Every page shares Home, Exercises, Templates, and Workout history navigation plus a light/dark toggle. Detail pages highlight their parent section; active sessions highlight Templates. Dark is the default and the browser remembers the chosen theme. Controls support keyboard focus and phone layouts; motion respects reduced-motion preferences.
 
 | Route | Purpose |
 | --- | --- |
-| `/` | Connection checks, active-session continuation, optional testing reset |
+| `/` | Connection checks and active-session continuation |
 | `/exercises` | Exercise library and management |
 | `/templates` | Active/archived template overviews and creation |
 | `/templates/[id]` | Edit an active template or inspect/restore an archived one |
@@ -20,6 +20,14 @@ Every page shares Home, Exercises, Templates, and Workout history navigation plu
 | `/sets` | Compatibility redirect to `/history?tab=sets` |
 
 `/exercises/[id]/history` and `/api/exercises/{id}/history` are removed and return 404. Exercise browsing uses `/history?tab=sets&exercise=<id>`.
+
+## Sign-in and sessions
+
+Anyone with a Google account can use Continue with Google. The verified Google subject identifies the account; email changes do not create another account, and matching emails do not merge accounts. Cancelled/failed sign-in offers retry. No Google password or token is stored in the browser.
+
+An HttpOnly opaque cookie identifies a PostgreSQL-backed session. Successful foreground API use extends its expiry to 30 days from that activity, with no fixed maximum lifetime. Hidden-page/background reads and public health checks do not renew it. Sign out revokes this browser's session only; other devices stay signed in. Logout, session expiry, or account switching clears private views/drafts and requires a fresh login. Unavailable sign-in/session storage shows a retryable error rather than granting local-owner access. Login is required in development too; tests use a separate test-only fake provider.
+
+New accounts never inherit the existing dummy records. Authentication does not reset or claim them. The temporary reset route is unavailable until its owner-scope audit is complete.
 
 ## Exercise library
 
@@ -124,10 +132,10 @@ Points follow completion time and numeric workout ID, oldest first, preserving s
 
 Zero matching workouts show an explanation; one workout shows a visible point with no trend claim. Loading, retryable failure, and unsupported-metric states remain independent of usable recorded sets. Old or aborted requests cannot replace newer filter results. Renames, template edits/archives, and deletion of an unused exercise preserve captured chart data.
 
-## Temporary testing data
+## Temporary testing data (route currently unavailable)
 
-The optional Home reset is disabled by default and requires explicit enablement and confirmation. It atomically replaces the local owner's workout data within the existing schema, preserving migration/owner records and increasing IDs. Failure rolls back; success refreshes continuation. The dataset has 26 tagged/described exercises, four described Upper/Lower templates with approved occurrence order/counts, 48 completed workouts over 12 weeks (1,032 sets), and one active workout with three saved sets. All four routines offer variations using existing library exercises, including presses, pull-ups, curls, triceps exercises, and squat/leg-extension choices. Upper 1’s preacher-curl slot offers two alternatives. Historical workouts rotate the actual choices, preserving each slot’s planned set count and all dataset totals; the active example starts with defaults. Optional target rep ranges/RIR remain unset; pipes do not imply supersets. Actual RIR defaults to absent. A deterministic mix of dummy sets has positive partial counts or none, without changing their full reps, weights, or technique. Technique cycles deterministically through Good, Decent, and Bad, including historical improvements, regressions, unchanged ratings, and paired weeks with equal weight/reps to exercise tie-breaking. [README](../README.md#temporary-dummy-data-reset) explains operation and data care.
+The Home reset route is currently unregistered pending #91; the following describes the retained development seed package, not an available application action. It atomically replaces the local owner's workout data within the existing schema, preserving migration/owner records and increasing IDs. Failure rolls back; success refreshes continuation. The dataset has 26 tagged/described exercises, four described Upper/Lower templates with approved occurrence order/counts, 48 completed workouts over 12 weeks (1,032 sets), and one active workout with three saved sets. All four routines offer variations using existing library exercises, including presses, pull-ups, curls, triceps exercises, and squat/leg-extension choices. Upper 1’s preacher-curl slot offers two alternatives. Historical workouts rotate the actual choices, preserving each slot’s planned set count and all dataset totals; the active example starts with defaults. Optional target rep ranges/RIR remain unset; pipes do not imply supersets. Actual RIR defaults to absent. A deterministic mix of dummy sets has positive partial counts or none, without changing their full reps, weights, or technique. Technique cycles deterministically through Good, Decent, and Bad, including historical improvements, regressions, unchanged ratings, and paired weeks with equal weight/reps to exercise tie-breaking. [README](../README.md#temporary-dummy-data-reset) explains operation and data care.
 
 ## Future work and unresolved choices
 
-Authentication/multiple users, custom muscle groups, warm-up/individual-set targets, planned weights, timers/supersets, imports/integrations, offline synchronization, permanent template deletion, and corrections/deletion of completed workouts require separate scope. Do not treat previous proposed schemas, pagination, replay protocols, or progression rules as approved behavior.
+Additional login providers/account linking, custom muscle groups, warm-up/individual-set targets, planned weights, timers/supersets, imports/integrations, offline synchronization, permanent template deletion, and corrections/deletion of completed workouts require separate scope. Do not treat previous proposed schemas, pagination, replay protocols, or progression rules as approved behavior.

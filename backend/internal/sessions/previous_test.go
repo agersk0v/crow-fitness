@@ -27,7 +27,7 @@ func TestPreviousHTTP(t *testing.T) {
 			mux := http.NewServeMux()
 			Register(mux, store)
 			response := httptest.NewRecorder()
-			mux.ServeHTTP(response, httptest.NewRequest("GET", "/api/sessions/"+tc.id+"/"+endpoint, nil))
+			mux.ServeHTTP(response, ownedRequest("GET", "/api/sessions/"+tc.id+"/"+endpoint, nil))
 			if response.Code != tc.status || response.Header().Get("Cache-Control") != "no-store" {
 				t.Fatal(response.Code, response.Body.String())
 			}

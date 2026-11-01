@@ -84,7 +84,7 @@ func TestSetValidationAndHTTP(t *testing.T) {
 		mux := http.NewServeMux()
 		store := &fakeStore{err: tc.err}
 		Register(mux, store)
-		request := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+		request := ownedRequest(tc.method, tc.path, strings.NewReader(tc.body))
 		request.Header.Set("Content-Type", "application/json")
 		response := httptest.NewRecorder()
 		mux.ServeHTTP(response, request)

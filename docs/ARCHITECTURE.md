@@ -7,12 +7,12 @@ This document describes the implemented technical design. [PRODUCT](PRODUCT.md) 
 | Component | Responsibility | Location |
 | --- | --- | --- |
 | Next.js, TypeScript, Tailwind | Pages, drafts, accessible controls, theme, server-side API forwarding | `frontend/app/`, `frontend/components/`, `frontend/lib/` |
-| Go `net/http` | Decoding, validation, fixed owner selection, workout rules, transactions, shutdown | `backend/cmd/api/`, `backend/internal/` feature packages |
+| Go `net/http` | Decoding, validation, session-derived owner selection, workout rules, transactions, shutdown | `backend/cmd/api/`, `backend/internal/` feature packages |
 | PostgreSQL / pgx | Durable data, constraints, locks, exact numeric values | SQL in feature packages and `backend/internal/migrations/` |
 
 The browser uses relative `/api` URLs. Next's server-only allowlisted forwarding route uses runtime `API_INTERNAL_URL`; responses are uncached and preserve upstream JSON/status/Location. An unreachable Go API returns generic `502 api_unavailable`. Go uses request deadlines/server timeouts and logs diagnostic errors while returning generic persistence failures. Only Go accesses PostgreSQL; credentials stay server-side.
 
-Compose publishes only the frontend, bound to localhost. Go/PostgreSQL use the internal network; PostgreSQL 18 stores data in a named volume at `/var/lib/postgresql`. Dockerfiles and CI pin runtime versions. Rebuilds apply source changes; there are no development source mounts. One implicit owner (ID 1) is selected in Go; clients cannot supply identity. This is not authentication.
+Compose publishes only the frontend, bound to localhost. Go/PostgreSQL use the internal network; PostgreSQL 18 stores data in a named volume at `/var/lib/postgresql`. Dockerfiles and CI pin runtime versions. Rebuilds apply source changes; there are no development source mounts. Go verifies the application session and supplies its account owner to private handlers; clients cannot supply identity. Legacy owner 1 remains unclaimed. The full resource-isolation audit and release verification are tracked by #91/#92.
 
 The root layout owns shared URL-aware navigation, theme provider, and one theme-aware Sonner Toaster. `next-themes` persists theme choice; the toggle waits for mounting to avoid hydration mismatch. shadcn/ui components are committed source, with shared Tailwind tokens/class merging. shadcn’s chart primitives wrap Recharts for progress presentation; Go owns source selection. The chart is dynamically loaded only for selected-exercise Sets history. Motion entrance effects leave SSR content visible and respect reduced motion. Existing dnd-kit sensors ignore interactive descendants, support mouse/touch/keyboard, and are shared by template occurrence and session-set sorting.
 
@@ -22,7 +22,7 @@ Generated bigint IDs are JSON decimal strings to avoid JavaScript integer precis
 
 | Table | Purpose and important constraints |
 | --- | --- |
-| `owners` | Seeded internal local owner |
+| `owners` | Internal data partition; legacy seeded owner stays unclaimed, new accounts allocate distinct owners |
 | `exercises` | Owner, nonblank name, description, predefined muscle-group array; empty arrays remain valid for legacy storage |
 | `templates` | Owner, nonblank name, description, archived flag |
 | `template_exercises` | One-based position, exercise identity, positive working-set count, paired positive ordered rep bounds, nullable nonnegative numeric target RIR; repeated identities allowed |
@@ -81,7 +81,7 @@ All paths below start with `/api`. Resource IDs are positive decimal strings. JS
 | GET | `/history/sessions`, `/history/sessions/{id}` | Completed summaries (including empty workouts) or read-only snapshot |
 | GET | `/history/progress` | Requires one exercise ID; average recorded-load estimate across saved exercise sets per completed workout |
 | GET | `/history/exercises`, `/history/templates` | Completed-snapshot filter identities with latest captured names |
-| POST | `/dev/reset` | Explicitly enabled confirmed data replacement; otherwise `404` |
+| POST | `/dev/reset` | Currently unregistered pending the per-owner audit (#91); `404` |
 
 Create returns `201` and, for templates/sessions, Location; reads/updates return `200`; successful deletes/end actions return `204`. Errors use `{"error":{"code":"...","message":"...","fields":{...}}}` with fields where relevant: validation `400`, missing/foreign resource `404`, state/reference conflicts `409`, oversized body `413`, unsupported media type `415`, generic persistence `500`. Not all errors include fields. Template Delete is a UI label for archive; there is no permanent template DELETE endpoint.
 
@@ -127,7 +127,7 @@ The frontend converts average estimates to chart coordinates only; exact source 
 
 ## Temporary reset and operational safety
 
-`ENABLE_DEV_RESET` defaults false in Go and Next runtime configuration. When enabled, `/dev/reset` additionally requires `X-Confirm-Reset: replace-workout-data`. The isolated `devdata` package replaces only the selected owner's workout rows in one transaction, taking table locks to order concurrent writes. It preserves schema/migrations/owner/sequences; ordinary readers see committed data and failure rolls back. The response reports dataset counts and active-session identity. Synthetic descriptions/weights/reps exercise ordinary APIs; optional targets and recorded RIR remain unset. A deterministic technique cycle and paired week weight/rep values expose quality changes and equal-performance tie-breaking without changing dataset counts. A shared seed variation map configures eleven alternatives across ten slots in all four routines, using existing exercise identities. Historical snapshots rotate actual choices with their normal sample weights and the slot’s original set count, preserving 48 workouts/1,032 sets and the active three-set default example. Optional seeded partial counts vary independently and do not change recorded weights/full reps/technique. The feature can be removed through its registration/configuration/UI without changing normal workout rules. Enablement and lost-response handling are in README.
+The dev-data reset package and its isolated tests remain, but the API route is currently unregistered pending #91's owner audit. Production configuration rejects `ENABLE_DEV_RESET=true`; no auth migration resets, claims or copies legacy data. Normal migrations and restarts preserve records. An owner's later intentional table reset is a separate action.
 
 ## Validation responsibilities
 
@@ -137,50 +137,18 @@ The smoke script builds production images and checks one browser-origin API flow
 
 CI retains frontend formatting, Go formatting/vet/race tests with PostgreSQL, and the dependent production-stack smoke job. Next's production build checks TypeScript. After those checks pass on a push to main, a matrix job builds the existing API/frontend Dockerfiles for Linux AMD64 and ARM64 and publishes to GHCR using a job-scoped package-write token. Repository-root build contexts, separate component caches, source/revision labels, and full-commit-SHA plus latest tags are used. PRs never publish. After both components publish, a dependent release job adds matching main-<CI run number>-<full SHA> tags without rebuilding. It promotes frontend first and API last; external image automation can use the API tag as the signal that a matching pair is available. Numeric CI run order supports chronological selection even when an older run is retried. Publication itself does not deploy containers; the separate crow-kube repository owns Flux deployment. Setup and package access instructions belong in README.
 
-## Future: Google authentication and private accounts
+## Google authentication and account sessions
 
-Design for [#88](https://github.com/agersk0v/crow-fitness/issues/88), under [#87](https://github.com/agersk0v/crow-fitness/issues/87). **Not implemented:** the sections above still describe the current single-user app. The owner selected the behavior below; library and integration details remain recommendations for review.
+Go handles Google authorization-code login with `go-oidc/v3` and OAuth2, state/nonce/browser binding and S256 PKCE. Only identity/profile scopes are requested. The callback verifies the ID token and discards provider credentials after extracting verified identity. Email is metadata, never a linking key. Accounts and empty owners are created atomically under a subject-scoped transaction lock and unique subject constraint.
 
-### Selected behavior
+SCS v2 generates opaque tokens and hashes them before PostgreSQL storage. A small context-aware store uses `auth_sessions` (serialized session data, expiry and revocation flag). No JWT application session or duplicate grant table is used. Explicit SCS deadline renewal provides the rolling 30-day policy; expiry extends monotonically, while expired/revoked rows reject commits. Logout and login rotation leave tombstones long enough to reject late in-flight saves; expired session rows are retained an additional 31 days before cleanup. Login attempts are one-use five-minute rows bound to the anonymous session. Anonymous CSRF sessions last ten minutes.
 
-| Decision | First version |
-| --- | --- |
-| Login | Google sign-in handled by Go; anyone with a Google account can join |
-| Accounts | Internal account ID and verified Google subject; first login creates a private, empty account |
-| Sessions | PostgreSQL-backed sessions; browser holds a protected opaque cookie, not a JWT session |
-| Expiry | 30 days without activity; accepted use renews the window, with no fixed maximum lifetime |
-| Sign out | Revoke the current device/browser session; other devices remain signed in |
-| Environments | Login required locally and in production; automated tests use test identities, with no runtime bypass |
-| Existing records | Disposable dummy data; no claim/import workflow or automatic deletion; the owner will reset tables separately |
+Private Go routes run behind session middleware. The account is resolved from the stored account ID on each request and its owner is passed to existing stores. `auth.WithPrincipal`/`OwnerID` are the trusted boundary for the #91 audit; missing credentials never select owner 1. Public `/api/health` and `/api/ready` bypass session storage. Missing sessions return 401, rejected CSRF returns 403, and unavailable authentication storage returns 503. Existing owner-scoped resource behavior remains, with #91 responsible for its complete audit.
 
-### Authentication and ownership boundary
+`GET /api/auth/csrf` creates/returns synchronizer state; `POST /api/auth/google/start` accepts a CSRF-protected form and redirects to Google; `GET /api/auth/google/callback` consumes state and returns only a fixed local success/error redirect. `GET /api/auth/me` returns minimal account information; `POST /api/auth/logout` revokes the current session. No arbitrary return URL is accepted. Every private write requires the configured exact Origin and matching session CSRF token.
 
-```mermaid
-flowchart LR
-    Browser -->|Same-origin requests and cookie| Next[Next.js]
-    Next -->|Forward credentials| Go[Go API]
-    Go <-->|Google login only| Google
-    Go -->|Verify session and select owner| DB[PostgreSQL]
-```
+Next forwards only allowlisted session cookies, Origin/CSRF/activity headers, request bodies and independent Set-Cookie response headers; it relays upstream redirects manually. The page proxy verifies sessions without renewing them. The client boundary initializes CSRF before private components mount, adds CSRF to API writes and marks visible-page requests with `X-Crow-Activity: foreground`. Only successful authenticated requests with that marker renew the session. Logout/401 aborts pending requests, unmounts private views and broadcasts to other tabs; restored/focused pages revalidate. Private responses are uncached. The marker expresses activity, not identity, and never authorizes access.
 
-Go owns login initiation, the Google callback, application sessions, and authorization. Use established OIDC/OAuth libraries to verify Google's response, including signature, issuer, audience, expiry and nonce, with state and PKCE protecting the login flow. Google's ID token proves identity at login; it is not the application's session credential. Request only identity/profile scopes and keep secrets server-side.
+New migration 014 retains existing workout data, adds an owner-ID sequence, `accounts`, `auth_sessions` and `auth_attempts`; no account claims legacy dummy records. Session storage is shared across replicas/restarts. Cookie flags are HttpOnly, SameSite=Lax, Path=/, no Domain, Secure for HTTPS, and a `__Host-` name in production. Configuration requires `APP_ENV`, exact `PUBLIC_ORIGIN`, `GOOGLE_CLIENT_ID`, and `GOOGLE_CLIENT_SECRET`; production requires HTTPS and disabled reset. The reset route remains unregistered pending #91.
 
-Recommend `go-oidc/v3` and `golang.org/x/oauth2` for Google sign-in, with SCS v2/pgxstore for sessions. Pin supported versions and verify that the integration supports rolling expiry and reliable revocation before implementation; library defaults are not the product requirements.
-
-Next must forward the application cookie and CSRF information, preserve individual Set-Cookie headers, and relay authentication redirects without following them upstream. Go verifies the session on every private API request, including direct API calls, and derives the owner internally. Never trust browser-supplied user/owner IDs or identity headers. Use the configured public origin for callbacks and redirect validation.
-
-Associate each account with one internal owner and enforce unique Google subjects. Create account/owner records atomically so concurrent first logins cannot duplicate accounts. Keep workout data attached to existing owner-based relationships, preserving one active workout per account. Email is profile metadata, not an identity or automatic account-linking key. Future providers can map to the same internal account through a separate identity table.
-
-### Session and privacy requirements
-
-Use HttpOnly, Secure production cookies with an appropriate SameSite policy and CSRF protection for cookie-authenticated writes, including login initiation and logout. Keep all private responses uncached. Missing/expired credentials return 401; missing or foreign resources use non-disclosing 404 responses. Session-store failures must fail closed rather than fall back to owner 1. Public health/readiness endpoints remain available.
-
-Successful foreground application activity extends the 30-day window consistently in PostgreSQL and the browser; health checks, background-only polling and failed/anonymous requests do not. Expired or revoked sessions cannot be revived by concurrent renewal. Login renews the session credential; logout revokes it server-side. Clear private UI data and ignore outstanding responses after logout/account switching, including across tabs and browser navigation.
-
-Store sessions in shared PostgreSQL so restarts and multiple replicas do not require sticky routing. Exact session tables, renewal mechanics and revocation handling belong in the implementation task; avoid prescribing duplicate session state without a demonstrated need.
-
-### Implementation and release
-
-Implement Google login/session handling, complete owner isolation across every API, then deployment/setup verification. Do not allow public access until login and all ownership checks ship together. New accounts must never inherit legacy dummy records, and authentication migrations must not reset data automatically.
-
-Before release, configure the Google web client, exact public origin/callback URI, HTTPS and server-only credentials. Keep Go/DB private, disable production reset/seed access, and reject missing authentication configuration. Verify real Google login/logout, rolling expiry, concurrent login/renewal/revocation, two-account isolation, stale UI/cache handling, and replica/restart behavior using disposable data and existing checks. Update the current-behavior sections when authentication is actually implemented.
+Keep this increment private until #91 ownership verification and #92 deployment setup are complete. The Compose smoke override selects a separate Go test binary with an injected provider; production wiring has no test-issuer setting or authentication bypass. Real Google browser validation requires a configured test client and is separate from protocol tests.

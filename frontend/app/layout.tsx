@@ -1,3 +1,4 @@
+import { AuthBoundary } from "@/components/auth-boundary";
 import { Suspense } from "react";
 import { Navbar, SiteNavbar } from "@/components/site-navbar";
 import type { Metadata } from "next";
@@ -20,7 +21,7 @@ export default function RootLayout({
           <Suspense fallback={<Navbar />}>
             <SiteNavbar />
           </Suspense>
-          {children}
+          <AuthBoundary>{children}</AuthBoundary>
           <Toaster
             position="top-center"
             closeButton

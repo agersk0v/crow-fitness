@@ -32,7 +32,7 @@ func TestProgressHTTP(t *testing.T) {
 		mux := http.NewServeMux()
 		Register(mux, store)
 		response := httptest.NewRecorder()
-		mux.ServeHTTP(response, httptest.NewRequest("GET", "/api/history/progress?"+tc.query, nil))
+		mux.ServeHTTP(response, ownedRequest("GET", "/api/history/progress?"+tc.query, nil))
 		if response.Code != tc.status || strings.Contains(response.Body.String(), "private database details") {
 			t.Fatal(tc, response.Code, response.Body.String())
 		}
