@@ -81,7 +81,7 @@ All paths below start with `/api`. Resource IDs are positive decimal strings. JS
 | GET | `/history/sessions`, `/history/sessions/{id}` | Completed summaries (including empty workouts) or read-only snapshot |
 | GET | `/history/progress` | Requires one exercise ID; average recorded-load estimate across saved exercise sets per completed workout |
 | GET | `/history/exercises`, `/history/templates` | Completed-snapshot filter identities with latest captured names |
-| POST | `/dev/reset` | Development flag only; verified owner and explicit confirmation |
+| POST | `/dev/reset`, `/dev/reset-all` | Development flag only; verified owner and explicit confirmation |
 
 Create returns `201` and, for templates/sessions, Location; reads/updates return `200`; successful deletes/end actions return `204`. Errors use `{"error":{"code":"...","message":"...","fields":{...}}}` with fields where relevant: validation `400`, missing/foreign resource `404`, state/reference conflicts `409`, oversized body `413`, unsupported media type `415`, generic persistence `500`. Not all errors include fields. Template Delete is a UI label for archive; there is no permanent template DELETE endpoint.
 
@@ -127,7 +127,7 @@ The frontend converts average estimates to chart coordinates only; exact source 
 
 ## Temporary reset and operational safety
 
-The dev-data reset route is registered only when explicitly enabled in development, behind the same authentication and CSRF middleware. It requires `X-Confirm-Reset: replace-workout-data`, derives its owner from the verified principal, and atomically replaces only that owner’s rows. Production configuration rejects `ENABLE_DEV_RESET=true`; no auth migration resets, claims or copies legacy data. Normal migrations and restarts preserve records. An owner's later intentional table reset is a separate action.
+The dev-data reset route is registered only when explicitly enabled in development, behind the same authentication and CSRF middleware. It requires `X-Confirm-Reset: replace-workout-data`, derives its owner from the verified principal, and atomically replaces only that owner’s rows. `POST /api/dev/reset-all` instead requires `X-Confirm-Reset: delete-all-data-and-users` and atomically truncates all account/workout/attempt tables without reseeding or resetting identity sequences. Session payloads are cleared and revocation tombstones retained to reject late commits; the current cookie expires without session renewal. Schema and migration records remain. Production configuration rejects `ENABLE_DEV_RESET=true`; no auth migration resets, claims or copies legacy data. Normal migrations and restarts preserve records. An owner's later intentional table reset is a separate action.
 
 ## Validation responsibilities
 

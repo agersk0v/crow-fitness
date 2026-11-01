@@ -343,3 +343,89 @@ func TestAccountDummyDataReset(t *testing.T) {
 	a.expect("GET", "/api/sessions/"+session, "", 404)
 	b.expect("GET", "/api/sessions/"+previousActive, "", 404)
 }
+
+func TestFullDevelopmentReset(t *testing.T) {
+	pool := isolationPool(t)
+	manager := auth.NewWithProvider(pool, auth.Config{Origin: "http://localhost:3000"}, isolationProvider{})
+	handler := Handler(pool, manager, true)
+	a := &accountBrowser{t: t, handler: handler}
+	b := &accountBrowser{t: t, handler: handler}
+	guest := &accountBrowser{t: t, handler: handler}
+	a.login("alice")
+	b.login("bob")
+	for _, c := range []*accountBrowser{a, b} {
+		w := c.request("POST", "/api/dev/reset", "", map[string]string{"X-Confirm-Reset": "replace-workout-data"})
+		if w.Code != 200 {
+			t.Fatal(w.Code, w.Body)
+		}
+	}
+	staleA, staleB := *a.cookie, *b.cookie
+	pending := &accountBrowser{t: t, handler: handler}
+	pending.token()
+	attempt := pending.request("POST", "/api/auth/google/start", url.Values{"csrf": {pending.csrf}}.Encode(), map[string]string{"Content-Type": "application/x-www-form-urlencoded"})
+	guest.expect("POST", "/api/dev/reset-all", "", 401)
+	a.expect("POST", "/api/dev/reset-all", "", 400)
+	for _, headers := range []map[string]string{
+		{"X-Confirm-Reset": "replace-workout-data"},
+		{"X-Confirm-Reset": "delete-all-data-and-users", "X-CSRF-Token": ""},
+		{"X-Confirm-Reset": "delete-all-data-and-users", "Origin": "https://evil.example"},
+	} {
+		w := a.request("POST", "/api/dev/reset-all", "", headers)
+		if w.Code != 400 && w.Code != 403 {
+			t.Fatal(w.Code, w.Body)
+		}
+	}
+	disabled := &accountBrowser{t: t, handler: Handler(pool, manager, false), cookie: a.cookie, csrf: a.csrf}
+	disabled.expect("POST", "/api/dev/reset-all", "", 404)
+	// Force failure after TRUNCATE to prove all deletions roll back together.
+	if _, err := pool.Exec(context.Background(), `CREATE FUNCTION reject_full_reset() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'private reset failure'; END $$; CREATE TRIGGER reject_full_reset BEFORE UPDATE ON auth_sessions FOR EACH ROW EXECUTE FUNCTION reject_full_reset()`); err != nil {
+		t.Fatal(err)
+	}
+	failed := a.request("POST", "/api/dev/reset-all", "", map[string]string{"X-Confirm-Reset": "delete-all-data-and-users"})
+	if failed.Code != 500 || strings.Contains(failed.Body.String(), "private reset failure") {
+		t.Fatal(failed.Code, failed.Body)
+	}
+	var retained int
+	if err := pool.QueryRow(context.Background(), "SELECT count(*) FROM accounts").Scan(&retained); err != nil || retained != 2 {
+		t.Fatal("failed reset deleted accounts", retained, err)
+	}
+	b.expect("GET", "/api/sessions/active", "", 200)
+	if _, err := pool.Exec(context.Background(), `DROP TRIGGER reject_full_reset ON auth_sessions; DROP FUNCTION reject_full_reset()`); err != nil {
+		t.Fatal(err)
+	}
+	w := a.request("POST", "/api/dev/reset-all", "", map[string]string{"X-Confirm-Reset": "delete-all-data-and-users", "X-Crow-Activity": "foreground"})
+	if w.Code != 204 {
+		t.Fatal(w.Code, w.Body)
+	}
+	if !strings.Contains(w.Header().Get("Set-Cookie"), "Expires=") {
+		t.Fatal("cookie not expired")
+	}
+	for _, table := range []string{"owners", "accounts", "exercises", "templates", "template_exercises", "template_exercise_alternatives", "workout_sessions", "session_exercises", "session_exercise_choices", "session_sets", "auth_attempts"} {
+		var count int
+		if err := pool.QueryRow(context.Background(), "SELECT count(*) FROM "+table).Scan(&count); err != nil || count != 0 {
+			t.Fatal(table, count, err)
+		}
+	}
+	var live int
+	if err := pool.QueryRow(context.Background(), "SELECT count(*) FROM auth_sessions WHERE NOT revoked OR length(data)>0").Scan(&live); err != nil || live != 0 {
+		t.Fatal("sessions remain live", live, err)
+	}
+	a.cookie = &staleA
+	b.cookie = &staleB
+	a.expect("GET", "/api/exercises", "", 401)
+	b.expect("GET", "/api/auth/me", "", 401)
+	pending.expect("GET", attempt.Header().Get("Location"), "", 303)
+	// Re-signing in creates a fresh empty identity, without reusing deleted IDs.
+	fresh := &accountBrowser{t: t, handler: handler}
+	fresh.login("alice")
+	if fresh.account == a.account {
+		t.Fatal("account ID reused")
+	}
+	w = fresh.expect("GET", "/api/exercises?paginated=true", "", 200)
+	var page struct {
+		Total int `json:"total_items"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &page); err != nil || page.Total != 0 {
+		t.Fatal(w.Body, err)
+	}
+}

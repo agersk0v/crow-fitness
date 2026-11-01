@@ -12,7 +12,7 @@ import {
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
-function leaveAccount() {
+export function leaveAccount() {
   try {
     const channel = new BroadcastChannel("crow-auth");
     channel.postMessage("signed-out");

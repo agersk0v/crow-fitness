@@ -162,7 +162,13 @@ func (m *Manager) Middleware(next http.Handler) http.Handler {
 		if b.status == 0 {
 			b.status = 200
 		}
-		foreground := r.Header.Get(ActivityHeader) == "foreground" && id != 0 && b.status < 400 && !strings.HasPrefix(r.URL.Path, "/api/auth/google/")
+		fullReset := r.URL.Path == "/api/dev/reset-all" && b.status == http.StatusNoContent
+		// A full development reset revoked every session inside its transaction.
+		// Do not renew this now-revoked cookie or turn the committed reset into 401.
+		if fullReset {
+			m.setCookie(w, "", time.Unix(1, 0))
+		}
+		foreground := !fullReset && r.Header.Get(ActivityHeader) == "foreground" && id != 0 && b.status < 400 && !strings.HasPrefix(r.URL.Path, "/api/auth/google/")
 		if foreground && m.sessions.Status(ctx) != scs.Destroyed {
 			m.sessions.SetDeadline(ctx, time.Now().Add(Lifetime))
 		}

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState, useId } from "react";
 import { toast } from "sonner";
-import { useAuth } from "@/components/auth-boundary";
+import { leaveAccount, useAuth } from "@/components/auth-boundary";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
@@ -13,6 +13,8 @@ export function AccountDataReset() {
 }
 
 function ResetTool() {
+  const [fullReset, setFullReset] = useState(false);
+  const [confirmation, setConfirmation] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -29,11 +31,22 @@ function ResetTool() {
     setBusy(true);
     setError("");
     try {
-      const response = await fetch("/api/dev/reset", {
-        method: "POST",
-        headers: { "X-Confirm-Reset": "replace-workout-data" },
-      });
+      const response = await fetch(
+        fullReset ? "/api/dev/reset-all" : "/api/dev/reset",
+        {
+          method: "POST",
+          headers: {
+            "X-Confirm-Reset": fullReset
+              ? "delete-all-data-and-users"
+              : "replace-workout-data",
+          },
+        },
+      );
       if (!response.ok) throw new Error();
+      if (fullReset) {
+        leaveAccount();
+        return;
+      }
       window.dispatchEvent(new Event("crow-active-session"));
       setConfirming(false);
       toast.success(
@@ -55,21 +68,38 @@ function ResetTool() {
         aria-label="Testing data"
       >
         <p className="text-sm text-muted-foreground">
-          Testing tool: replaces only the signed-in account’s workout data with
-          four routines and dummy history. Other accounts are unchanged.
+          Development tools: replace your account’s workout data with dummy
+          data, or delete all accounts and workout data.
         </p>
-        <Button
-          type="button"
-          variant="destructive"
-          className="h-auto min-h-11 whitespace-normal"
-          disabled={busy}
-          onClick={() => {
-            setError("");
-            setConfirming(true);
-          }}
-        >
-          Reset my workout data and add dummy data
-        </Button>
+        <div className="flex flex-wrap gap-3">
+          <Button
+            type="button"
+            variant="destructive"
+            className="h-auto min-h-11 whitespace-normal"
+            disabled={busy}
+            onClick={() => {
+              setError("");
+              setFullReset(false);
+              setConfirming(true);
+            }}
+          >
+            Reset my workout data and add dummy data
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            className="h-auto min-h-11 whitespace-normal"
+            disabled={busy}
+            onClick={() => {
+              setError("");
+              setFullReset(true);
+              setConfirmation("");
+              setConfirming(true);
+            }}
+          >
+            Full reset: delete all data and users
+          </Button>
+        </div>
         <dialog
           ref={dialog}
           aria-labelledby={title}
@@ -81,15 +111,38 @@ function ResetTool() {
           onClose={() => setConfirming(false)}
         >
           <h2 id={title} className="text-xl font-semibold">
-            Replace your account’s workout data?
+            {fullReset
+              ? "Delete all data and users?"
+              : "Replace your account’s workout data?"}
           </h2>
-          <p className="my-4 text-muted-foreground">
-            This will remove the signed-in account’s existing exercises,
-            templates, active session, completed workouts, and sets. It will
-            create Upper 1, Lower 1, Upper 2, Lower 2, 48 dummy completed
-            workouts, 1,032 completed sets, and one active session. This cannot
-            be undone.
-          </p>
+          {fullReset ? (
+            <>
+              <p className="my-4 text-muted-foreground">
+                This deletes every account and all exercises, templates,
+                workouts and sets, including unclaimed legacy data. Everyone
+                will be signed out. No dummy data will be added. This cannot be
+                undone.
+              </p>
+              <label className="block space-y-2 mb-4">
+                Type DELETE ALL to confirm
+                <input
+                  className="block w-full rounded-md border border-border bg-background p-2"
+                  value={confirmation}
+                  onChange={(event) => setConfirmation(event.target.value)}
+                  disabled={busy}
+                  autoComplete="off"
+                />
+              </label>
+            </>
+          ) : (
+            <p className="my-4 text-muted-foreground">
+              This will remove the signed-in account’s existing exercises,
+              templates, active session, completed workouts, and sets. It will
+              create Upper 1, Lower 1, Upper 2, Lower 2, 48 dummy completed
+              workouts, 1,032 completed sets, and one active session. This
+              cannot be undone.
+            </p>
+          )}
           {error && (
             <Alert variant="destructive" className="mb-4">
               <AlertTitle>Reset could not be confirmed</AlertTitle>
@@ -109,10 +162,14 @@ function ResetTool() {
             <Button
               type="button"
               variant="destructive"
-              disabled={busy}
+              disabled={busy || (fullReset && confirmation !== "DELETE ALL")}
               onClick={() => void reset()}
             >
-              {busy ? "Replacing data…" : "Confirm reset and seed"}
+              {busy
+                ? "Resetting…"
+                : fullReset
+                  ? "Delete all data and users"
+                  : "Confirm reset and seed"}
             </Button>
           </div>
         </dialog>

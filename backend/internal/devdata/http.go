@@ -10,6 +10,7 @@ import (
 )
 
 type Store interface {
+	FullReset(context.Context) error
 	Reset(context.Context, int64, time.Time) (Result, error)
 }
 
@@ -18,6 +19,28 @@ func Register(mux *http.ServeMux, store Store, enabled bool) {
 	if !enabled {
 		return
 	}
+	mux.HandleFunc("POST /api/dev/reset-all", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Content-Type", "application/json")
+		if auth.OwnerID(r.Context()) <= 0 {
+			w.WriteHeader(401)
+			return
+		}
+		if r.Header.Get("X-Confirm-Reset") != "delete-all-data-and-users" {
+			w.WriteHeader(400)
+			json.NewEncoder(w).Encode(map[string]any{"error": map[string]string{"code": "confirmation_required", "message": "Confirm deletion of all data and users."}})
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
+		defer cancel()
+		if err := store.FullReset(ctx); err != nil {
+			slog.Error("Full development reset failed", "error", err)
+			w.WriteHeader(500)
+			json.NewEncoder(w).Encode(map[string]any{"error": map[string]string{"code": "reset_failed", "message": "Could not confirm the full reset. Refresh before trying again."}})
+			return
+		}
+		w.WriteHeader(204)
+	})
 	mux.HandleFunc("POST /api/dev/reset", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Content-Type", "application/json")

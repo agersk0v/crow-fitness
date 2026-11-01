@@ -192,4 +192,11 @@ CHECK
 curl --fail --silent --show-error -X POST "$base_url/api/auth/logout" --output "$response_file"
 code="$(curl --silent --show-error --output "$response_file" --write-out '%{http_code}' "$base_url/api/auth/me")"
 [[ "$code" == 401 ]]
-echo "Stack smoke check passed: frontend, proxied workout lifecycle, validation, readiness recovery, restart persistence, and account dummy-data reset."
+csrf="$(curl --fail --silent --show-error "$base_url/api/auth/csrf" | python3 -c 'import json,sys; print(json.load(sys.stdin)["csrf"])')"
+curl --fail --silent --show-error --location --data-urlencode "csrf=$csrf" "$base_url/api/auth/google/start" --output "$response_file"
+csrf="$(curl --fail --silent --show-error "$base_url/api/auth/csrf" | python3 -c 'import json,sys; print(json.load(sys.stdin)["csrf"])')"
+code="$(curl --silent --show-error -X POST -H 'X-Confirm-Reset: delete-all-data-and-users' "$base_url/api/dev/reset-all" --output "$response_file" --write-out '%{http_code}')"
+[[ "$code" == 204 ]]
+code="$(curl --silent --show-error "$base_url/api/auth/me" --output "$response_file" --write-out '%{http_code}')"
+[[ "$code" == 401 ]]
+echo "Stack smoke check passed: frontend, proxied workout lifecycle, validation, readiness recovery, restart persistence, account dummy-data reset, and full reset."

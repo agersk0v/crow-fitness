@@ -150,7 +150,7 @@ For PostgreSQL tests, set `TEST_DATABASE_URL` to a **separate disposable test da
 
 ## Temporary dummy-data reset
 
-For local testing, set `APP_ENV=development` and `ENABLE_DEV_RESET=true` in `.env`, then rebuild with `docker compose up --build --detach --wait --wait-timeout 180`. Sign in to the Google account you want to populate, open Home, and choose **Reset my workout data and add dummy data**. Confirmation replaces only that account’s exercises, templates, workouts and sets; other accounts and unclaimed legacy records are untouched. The active-session tab refreshes after success.
+For local testing, set `APP_ENV=development` and `ENABLE_DEV_RESET=true` in `.env`, then rebuild with `docker compose up --build --detach --wait --wait-timeout 180`. Sign in to the Google account you want to populate, open Home, and choose **Reset my workout data and add dummy data**. Confirmation replaces only that account’s exercises, templates, workouts and sets; other accounts and unclaimed legacy records are untouched. The active-session tab refreshes after success. The adjacent **Full reset: delete all data and users** button requires typing `DELETE ALL`; it deletes all accounts and workout data, signs everyone out, and adds no dummy data.
 
 Keep the flag `false` for normal use. Production startup rejects an enabled reset flag. Migrations never trigger a reset or claim legacy data.
 

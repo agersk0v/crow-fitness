@@ -292,3 +292,5 @@ func TestResetRequiresVerifiedOwner(t *testing.T) {
 		t.Fatal(w.Code, store.calls)
 	}
 }
+
+func (f *fakeStore) FullReset(context.Context) error { f.calls++; return f.err }
