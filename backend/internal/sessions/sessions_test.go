@@ -105,7 +105,7 @@ func TestHTTP(t *testing.T) {
 			store := &fakeStore{err: tc.err}
 			mux := http.NewServeMux()
 			Register(mux, store)
-			request := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+			request := ownedRequest(tc.method, tc.path, strings.NewReader(tc.body))
 			request.Header.Set("Content-Type", tc.content)
 			response := httptest.NewRecorder()
 			mux.ServeHTTP(response, request)

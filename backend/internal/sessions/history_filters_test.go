@@ -18,7 +18,7 @@ func TestHistoryFilterValidationAndCalendarDays(t *testing.T) {
 			store := &fakeStore{}
 			Register(mux, store)
 			response := httptest.NewRecorder()
-			mux.ServeHTTP(response, httptest.NewRequest("GET", path+query, nil))
+			mux.ServeHTTP(response, ownedRequest("GET", path+query, nil))
 			if response.Code != 400 || response.Header().Get("Cache-Control") != "no-store" || store.owner != 0 {
 				t.Fatal("invalid query reached store", query, response.Code)
 			}

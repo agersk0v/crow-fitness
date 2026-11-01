@@ -32,7 +32,7 @@ func TestHistoryHTTP(t *testing.T) {
 		mux := http.NewServeMux()
 		Register(mux, store)
 		response := httptest.NewRecorder()
-		mux.ServeHTTP(response, httptest.NewRequest("GET", tc.path, nil))
+		mux.ServeHTTP(response, ownedRequest("GET", tc.path, nil))
 		if response.Code != tc.status || response.Header().Get("Cache-Control") != "no-store" {
 			t.Fatal(response.Code, response.Body.String())
 		}

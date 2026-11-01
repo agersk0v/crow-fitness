@@ -4,14 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/agersk0v/crow-fitness/backend/internal/auth"
 	"io"
 	"log/slog"
 	"mime"
 	"net/http"
 	"strconv"
 	"time"
-
-	"github.com/agersk0v/crow-fitness/backend/internal/exercises"
 )
 
 func validID(id string) bool {
@@ -31,7 +30,7 @@ func Register(mux *http.ServeMux, store Store) {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
-		items, err := store.ExerciseProgress(ctx, exercises.LocalOwnerID, filter)
+		items, err := store.ExerciseProgress(ctx, auth.OwnerID(ctx), filter)
 		if err != nil {
 			operationError(w, err)
 			return
@@ -52,7 +51,7 @@ func Register(mux *http.ServeMux, store Store) {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
-		item, err := store.SelectExercise(ctx, exercises.LocalOwnerID, r.PathValue("id"), input)
+		item, err := store.SelectExercise(ctx, auth.OwnerID(ctx), r.PathValue("id"), input)
 		if err != nil {
 			operationError(w, err)
 			return
@@ -62,7 +61,7 @@ func Register(mux *http.ServeMux, store Store) {
 	mux.HandleFunc("GET /api/sessions/active", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
-		item, err := store.Active(ctx, exercises.LocalOwnerID)
+		item, err := store.Active(ctx, auth.OwnerID(ctx))
 		if err != nil {
 			operationError(w, err)
 			return
@@ -77,7 +76,7 @@ func Register(mux *http.ServeMux, store Store) {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
-		item, err := store.Get(ctx, exercises.LocalOwnerID, id)
+		item, err := store.Get(ctx, auth.OwnerID(ctx), id)
 		if err != nil {
 			operationError(w, err)
 			return
@@ -97,7 +96,7 @@ func Register(mux *http.ServeMux, store Store) {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
-		item, err := store.Start(ctx, exercises.LocalOwnerID, input.TemplateID)
+		item, err := store.Start(ctx, auth.OwnerID(ctx), input.TemplateID)
 		if err != nil {
 			operationError(w, err)
 			return
@@ -116,9 +115,9 @@ func Register(mux *http.ServeMux, store Store) {
 			defer cancel()
 			var err error
 			if action == "complete" {
-				err = store.Complete(ctx, exercises.LocalOwnerID, id)
+				err = store.Complete(ctx, auth.OwnerID(ctx), id)
 			} else {
-				err = store.End(ctx, exercises.LocalOwnerID, id)
+				err = store.End(ctx, auth.OwnerID(ctx), id)
 			}
 			if err != nil {
 				operationError(w, err)
@@ -136,7 +135,7 @@ func Register(mux *http.ServeMux, store Store) {
 			problem(w, 400, "validation_error", err.Error())
 			return
 		}
-		items, err := store.CompletedSets(ctx, exercises.LocalOwnerID, filter)
+		items, err := store.CompletedSets(ctx, auth.OwnerID(ctx), filter)
 		if err != nil {
 			operationError(w, err)
 			return
@@ -154,7 +153,7 @@ func Register(mux *http.ServeMux, store Store) {
 			problem(w, 400, "validation_error", err.Error())
 			return
 		}
-		items, err := store.CompletedSessions(ctx, exercises.LocalOwnerID, filter)
+		items, err := store.CompletedSessions(ctx, auth.OwnerID(ctx), filter)
 		if err != nil {
 			operationError(w, err)
 			return
@@ -167,7 +166,7 @@ func Register(mux *http.ServeMux, store Store) {
 	mux.HandleFunc("GET /api/history/exercises", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
-		items, err := store.HistoryExercises(ctx, exercises.LocalOwnerID)
+		items, err := store.HistoryExercises(ctx, auth.OwnerID(ctx))
 		if err != nil {
 			operationError(w, err)
 			return
@@ -177,7 +176,7 @@ func Register(mux *http.ServeMux, store Store) {
 	mux.HandleFunc("GET /api/history/templates", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
-		items, err := store.HistoryTemplates(ctx, exercises.LocalOwnerID)
+		items, err := store.HistoryTemplates(ctx, auth.OwnerID(ctx))
 		if err != nil {
 			operationError(w, err)
 			return
@@ -192,7 +191,7 @@ func Register(mux *http.ServeMux, store Store) {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
-		item, err := store.GetCompleted(ctx, exercises.LocalOwnerID, id)
+		item, err := store.GetCompleted(ctx, auth.OwnerID(ctx), id)
 		if err != nil {
 			operationError(w, err)
 			return
@@ -208,7 +207,7 @@ func Register(mux *http.ServeMux, store Store) {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
-		items, err := store.Previous(ctx, exercises.LocalOwnerID, id)
+		items, err := store.Previous(ctx, auth.OwnerID(ctx), id)
 		if err != nil {
 			operationError(w, err)
 			return
@@ -227,7 +226,7 @@ func Register(mux *http.ServeMux, store Store) {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
-		items, err := store.PersonalBests(ctx, exercises.LocalOwnerID, id)
+		items, err := store.PersonalBests(ctx, auth.OwnerID(ctx), id)
 		if err != nil {
 			operationError(w, err)
 			return
@@ -250,7 +249,7 @@ func Register(mux *http.ServeMux, store Store) {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
-		items, err := store.ReorderSets(ctx, exercises.LocalOwnerID, id, input)
+		items, err := store.ReorderSets(ctx, auth.OwnerID(ctx), id, input)
 		if err != nil {
 			operationError(w, err)
 			return
@@ -268,7 +267,7 @@ func Register(mux *http.ServeMux, store Store) {
 			ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 			defer cancel()
 			if r.Method == "DELETE" {
-				if err := store.DeleteSet(ctx, exercises.LocalOwnerID, id, setID); err != nil {
+				if err := store.DeleteSet(ctx, auth.OwnerID(ctx), id, setID); err != nil {
 					operationError(w, err)
 					return
 				}
@@ -280,7 +279,7 @@ func Register(mux *http.ServeMux, store Store) {
 			if !decode(w, r, &input) {
 				return
 			}
-			item, err := store.SaveSet(ctx, exercises.LocalOwnerID, id, setID, input)
+			item, err := store.SaveSet(ctx, auth.OwnerID(ctx), id, setID, input)
 			if err != nil {
 				operationError(w, err)
 				return

@@ -1,0 +1,8 @@
+# Test-only Go binary/provider; production uses the final runner Docker stage.
+services:
+  api:
+    build:
+      target: smoke
+    environment:
+      SMOKE_SERVER: "1"
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN}

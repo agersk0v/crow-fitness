@@ -2,7 +2,7 @@
 
 ## Project context
 
-Crow Fitness is a minimal workout tracker for one implicit user. The agreed stack is Next.js with TypeScript, a Go REST API, and PostgreSQL. Exercises belong to one internal local owner selected by Go (approved for #11). There is no authentication, login, account management, or multiple-user runtime support. Keep the application and its implementation simple.
+Crow Fitness is a minimal personal workout tracker. The agreed stack is Next.js with TypeScript, a Go REST API, and PostgreSQL. Google sign-in and PostgreSQL-backed account sessions are implemented under #90. Go selects the verified internal owner; #91 owns the full isolation audit and #92 deployment verification. Keep the increment private until both are complete. Keep the application and its implementation simple.
 
 The owner delegates implementation to agents and reviews their pull requests; do not require the owner to write code.
 

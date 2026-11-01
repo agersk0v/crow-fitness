@@ -12,11 +12,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/agersk0v/crow-fitness/backend/internal/auth"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// LocalOwnerID is selected by the server, never from browser input.
+// LocalOwnerID identifies only legacy fixtures and the currently unregistered
+// development seed tool. Runtime HTTP handlers use the authenticated principal.
 const LocalOwnerID int64 = 1
 
 var MuscleGroups = []string{"chest", "back", "shoulders", "biceps", "triceps", "forearms", "core", "glutes", "quadriceps", "hamstrings", "calves"}
@@ -122,7 +124,7 @@ func Register(mux *http.ServeMux, store Store) {
 				operationError(w, ValidationError{"paginated": "Use paginated=true for page requests."})
 				return
 			}
-			result, err := store.ListPage(ctx, LocalOwnerID, query)
+			result, err := store.ListPage(ctx, auth.OwnerID(ctx), query)
 			if err != nil {
 				operationError(w, err)
 				return
@@ -130,7 +132,7 @@ func Register(mux *http.ServeMux, store Store) {
 			write(w, 200, result)
 			return
 		}
-		items, err := store.List(ctx, LocalOwnerID)
+		items, err := store.List(ctx, auth.OwnerID(ctx))
 		if err != nil {
 			operationError(w, err)
 			return
@@ -159,9 +161,9 @@ func Register(mux *http.ServeMux, store Store) {
 		var item Exercise
 		var err error
 		if updating {
-			item, err = store.Update(ctx, LocalOwnerID, r.PathValue("id"), input)
+			item, err = store.Update(ctx, auth.OwnerID(ctx), r.PathValue("id"), input)
 		} else {
-			item, err = store.Create(ctx, LocalOwnerID, input)
+			item, err = store.Create(ctx, auth.OwnerID(ctx), input)
 		}
 		if err != nil {
 			operationError(w, err)
@@ -183,7 +185,7 @@ func Register(mux *http.ServeMux, store Store) {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
-		items, err := store.Usage(ctx, LocalOwnerID, id)
+		items, err := store.Usage(ctx, auth.OwnerID(ctx), id)
 		if err != nil {
 			operationError(w, err)
 			return
@@ -198,7 +200,7 @@ func Register(mux *http.ServeMux, store Store) {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
-		if err := store.Delete(ctx, LocalOwnerID, id); err != nil {
+		if err := store.Delete(ctx, auth.OwnerID(ctx), id); err != nil {
 			operationError(w, err)
 			return
 		}

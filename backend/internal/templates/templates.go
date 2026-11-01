@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/agersk0v/crow-fitness/backend/internal/exercises"
+	"github.com/agersk0v/crow-fitness/backend/internal/auth"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -280,7 +280,7 @@ func Register(mux *http.ServeMux, store Store) {
 			}
 			archived = values[0] == "true"
 		}
-		items, err := store.List(ctx, exercises.LocalOwnerID, archived)
+		items, err := store.List(ctx, auth.OwnerID(ctx), archived)
 		if err != nil {
 			failure(w, err)
 			return
@@ -298,7 +298,7 @@ func Register(mux *http.ServeMux, store Store) {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
-		item, err := store.Get(ctx, exercises.LocalOwnerID, id)
+		item, err := store.Get(ctx, auth.OwnerID(ctx), id)
 		if errors.Is(err, ErrNotFound) {
 			problem(w, 404, "not_found", "Template not found.", nil)
 			return
@@ -328,9 +328,9 @@ func Register(mux *http.ServeMux, store Store) {
 		var item Template
 		var err error
 		if updating {
-			item, err = store.Update(ctx, exercises.LocalOwnerID, r.PathValue("id"), input)
+			item, err = store.Update(ctx, auth.OwnerID(ctx), r.PathValue("id"), input)
 		} else {
-			item, err = store.Create(ctx, exercises.LocalOwnerID, input)
+			item, err = store.Create(ctx, auth.OwnerID(ctx), input)
 		}
 		if err != nil {
 			operationError(w, err)
@@ -364,7 +364,7 @@ func Register(mux *http.ServeMux, store Store) {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
-		item, err := store.Duplicate(ctx, exercises.LocalOwnerID, id, input.Name)
+		item, err := store.Duplicate(ctx, auth.OwnerID(ctx), id, input.Name)
 		if err != nil {
 			operationError(w, err)
 			return
@@ -381,7 +381,7 @@ func Register(mux *http.ServeMux, store Store) {
 			}
 			ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 			defer cancel()
-			item, err := store.SetArchived(ctx, exercises.LocalOwnerID, id, action == "archive")
+			item, err := store.SetArchived(ctx, auth.OwnerID(ctx), id, action == "archive")
 			if err != nil {
 				operationError(w, err)
 				return

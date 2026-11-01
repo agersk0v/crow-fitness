@@ -28,7 +28,7 @@ func TestManagementHTTP(t *testing.T) {
 	mux := http.NewServeMux()
 	Register(mux, store)
 	call := func(method, path, body string) *httptest.ResponseRecorder {
-		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req := ownedRequest(method, path, strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, req)
@@ -92,7 +92,7 @@ func TestRequiresMuscleGroupOnCreateAndUpdate(t *testing.T) {
 			if method == "PUT" {
 				path += "/1"
 			}
-			req := httptest.NewRequest(method, path, strings.NewReader(body))
+			req := ownedRequest(method, path, strings.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)

@@ -1,8 +1,7 @@
 import { PageEntrance } from "@/components/page-entrance";
-import { HomeWorkout } from "@/components/home-workout";
 import { ConnectionStatus } from "@/components/connection-status";
 
-// Read the temporary testing flag at runtime, including production Docker runs.
+// Account-specific Home content is never shared between signed-in users.
 export const dynamic = "force-dynamic";
 
 export default function Home() {
@@ -23,12 +22,11 @@ export default function Home() {
             Save your sets and complete your workout to keep the results.
           </p>
         </div>
-        <HomeWorkout resetEnabled={process.env.ENABLE_DEV_RESET === "true"} />
         <ConnectionStatus />
       </PageEntrance>
 
       <footer className="border-t border-border pt-6 text-sm text-muted-foreground">
-        One person. No accounts. Built for keeping things simple.
+        Your workouts, private to your account.
       </footer>
     </main>
   );

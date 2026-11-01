@@ -56,7 +56,14 @@ async function forward(
     path[0] === "history" &&
     path[1] === "sessions" &&
     /^[1-9][0-9]*$/.test(path[2]);
+  const auth =
+    path[0] === "auth" &&
+    ((request.method === "GET" &&
+      ["csrf", "me", "google/callback"].includes(path.slice(1).join("/"))) ||
+      (request.method === "POST" &&
+        ["logout", "google/start"].includes(path.slice(1).join("/"))));
   const allowed =
+    auth ||
     (request.method === "GET" &&
       (["health", "ready", "exercises", "templates", "sets"].includes(
         endpoint,
@@ -98,33 +105,52 @@ async function forward(
       {
         cache: "no-store",
         method: request.method,
-        headers: hasBody
-          ? {
-              "Content-Type": request.headers.get("content-type") ?? "",
-              ...(reset
-                ? {
-                    "X-Confirm-Reset":
-                      request.headers.get("x-confirm-reset") ?? "",
-                  }
-                : {}),
-            }
-          : undefined,
+        redirect: "manual",
+        headers: {
+          ...(hasBody
+            ? { "Content-Type": request.headers.get("content-type") ?? "" }
+            : {}),
+          ...(request.headers.get("origin")
+            ? { Origin: request.headers.get("origin")! }
+            : {}),
+          ...(request.headers.get("x-csrf-token")
+            ? { "X-CSRF-Token": request.headers.get("x-csrf-token")! }
+            : {}),
+          ...(request.headers.get("x-crow-activity") === "foreground"
+            ? { "X-Crow-Activity": "foreground" }
+            : {}),
+          Cookie: request.cookies
+            .getAll()
+            .filter(({ name }) =>
+              ["__Host-crow_session", "crow_session_dev"].includes(name),
+            )
+            .map(({ name, value }) => `${name}=${value}`)
+            .join("; "),
+          ...(reset
+            ? {
+                "X-Confirm-Reset": request.headers.get("x-confirm-reset") ?? "",
+              }
+            : {}),
+        },
         body: hasBody ? request.body : undefined,
         ...(hasBody ? { duplex: "half" } : {}),
-        signal: AbortSignal.timeout(reset ? 9000 : 4000),
+        signal: AbortSignal.timeout(auth ? 15000 : reset ? 9000 : 12000),
       },
     );
+    const headers = new Headers({
+      "Content-Type":
+        upstream.headers.get("content-type") ?? "application/json",
+      "Cache-Control": "private, no-store",
+    });
+    for (const cookie of upstream.headers.getSetCookie())
+      headers.append("Set-Cookie", cookie);
+    if (upstream.headers.has("Location"))
+      headers.set("Location", upstream.headers.get("Location")!);
     return new Response(
       upstream.status === 204 ? null : await upstream.text(),
       {
         status: upstream.status,
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-store",
-          ...(upstream.headers.get("Location")
-            ? { Location: upstream.headers.get("Location")! }
-            : {}),
-        },
+        headers,
       },
     );
   } catch {

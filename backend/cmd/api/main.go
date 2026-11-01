@@ -11,13 +11,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/agersk0v/crow-fitness/backend/internal/app"
+	"github.com/agersk0v/crow-fitness/backend/internal/auth"
 	"github.com/agersk0v/crow-fitness/backend/internal/config"
-	"github.com/agersk0v/crow-fitness/backend/internal/devdata"
-	"github.com/agersk0v/crow-fitness/backend/internal/exercises"
-	"github.com/agersk0v/crow-fitness/backend/internal/health"
 	"github.com/agersk0v/crow-fitness/backend/internal/migrations"
-	"github.com/agersk0v/crow-fitness/backend/internal/sessions"
-	"github.com/agersk0v/crow-fitness/backend/internal/templates"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -35,6 +32,10 @@ func main() {
 }
 
 func run() error {
+	authConfig, err := auth.ConfigFromEnv(os.Getenv)
+	if err != nil {
+		return err
+	}
 	cfg, err := config.Load(os.Getenv)
 	if err != nil {
 		return err
@@ -58,16 +59,12 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("apply migrations: %w", err)
 	}
-	mux := http.NewServeMux()
-	exercises.Register(mux, exercises.Postgres{Pool: pool})
-	templates.Register(mux, templates.Postgres{Pool: pool})
-	sessions.Register(mux, sessions.Postgres{Pool: pool})
-	devdata.Register(mux, devdata.Postgres{Pool: pool}, cfg.EnableDevReset)
-	mux.Handle("/", health.NewHandler(pool))
+	manager := auth.New(pool, authConfig)
+	go manager.Cleanup(ctx)
 
 	server := &http.Server{
 		Addr:              ":" + cfg.HTTPPort,
-		Handler:           mux,
+		Handler:           app.Handler(pool, manager),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,

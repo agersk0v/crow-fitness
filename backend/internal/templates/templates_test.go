@@ -97,7 +97,7 @@ func TestHTTP(t *testing.T) {
 			store := &fakeStore{}
 			mux := http.NewServeMux()
 			Register(mux, store)
-			req := httptest.NewRequest("POST", "/api/templates", strings.NewReader(tc.body))
+			req := ownedRequest("POST", "/api/templates", strings.NewReader(tc.body))
 			req.Header.Set("Content-Type", tc.content)
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)
@@ -119,7 +119,7 @@ func TestReadsAndStoreErrors(t *testing.T) {
 	mux := http.NewServeMux()
 	Register(mux, store)
 	call := func(method, path, body string) *httptest.ResponseRecorder {
-		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req := ownedRequest(method, path, strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, req)
