@@ -2,6 +2,10 @@
 
 This document describes the implemented technical design. [PRODUCT](PRODUCT.md) owns user-visible rules; [README](../README.md) owns setup, configuration, operational data care, and check commands. Open issues/PRs describe future changes, not deployed contracts.
 
+## Proposed changes
+
+[Google authentication and private accounts](proposals/google-authentication.md) is a design proposal for #88/#87 awaiting owner review. It does not change the single-user contracts documented below.
+
 ## Components and boundaries
 
 | Component | Responsibility | Location |
