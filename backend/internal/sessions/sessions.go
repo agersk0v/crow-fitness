@@ -61,18 +61,6 @@ func (p Postgres) Start(ctx context.Context, owner int64, templateID string) (Se
 	if err = lockOwner(ctx, tx, owner); err != nil {
 		return Session{}, err
 	}
-	var currentID string
-	err = tx.QueryRow(ctx, "SELECT id::text FROM workout_sessions WHERE owner_id=$1 AND completed_at IS NULL", owner).Scan(&currentID)
-	if err == nil {
-		current, readErr := get(ctx, tx, owner, currentID)
-		if readErr != nil {
-			return Session{}, readErr
-		}
-		return Session{}, ActiveConflict{Session: current}
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return Session{}, err
-	}
 	var name string
 	var archived bool
 	// Template replacement/archiving locks this same parent row before any changes.
@@ -85,6 +73,18 @@ func (p Postgres) Start(ctx context.Context, owner int64, templateID string) (Se
 	}
 	if archived {
 		return Session{}, ErrArchived
+	}
+	var currentID string
+	err = tx.QueryRow(ctx, "SELECT id::text FROM workout_sessions WHERE owner_id=$1 AND completed_at IS NULL", owner).Scan(&currentID)
+	if err == nil {
+		current, readErr := get(ctx, tx, owner, currentID)
+		if readErr != nil {
+			return Session{}, readErr
+		}
+		return Session{}, ActiveConflict{Session: current}
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return Session{}, err
 	}
 	var id string
 	if err = tx.QueryRow(ctx, "INSERT INTO workout_sessions(owner_id,template_id,name) VALUES ($1,$2,$3) RETURNING id::text", owner, templateID, name).Scan(&id); err != nil {
@@ -209,9 +209,23 @@ func (p Postgres) End(ctx context.Context, owner int64, id string) error {
 	if err = lockOwner(ctx, tx, owner); err != nil {
 		return err
 	}
+	if err = requireOwnedSession(ctx, tx, owner, id); err != nil {
+		return err
+	}
 	// Exact ID makes retries harmless and stale tabs unable to clear a newer workout.
 	if _, err = tx.Exec(ctx, "DELETE FROM workout_sessions WHERE owner_id=$1 AND id=$2 AND completed_at IS NULL", owner, id); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+// Lifecycle endpoints distinguish a missing/foreign workout from an owned,
+// already-completed one without revealing whether a foreign ID exists.
+func requireOwnedSession(ctx context.Context, tx pgx.Tx, owner int64, id string) error {
+	var found string
+	err := tx.QueryRow(ctx, "SELECT id::text FROM workout_sessions WHERE owner_id=$1 AND id=$2 FOR UPDATE", owner, id).Scan(&found)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	return err
 }

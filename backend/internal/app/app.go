@@ -17,7 +17,7 @@ func Handler(pool *pgxpool.Pool, manager *auth.Manager) http.Handler {
 	exercises.Register(mux, exercises.Postgres{Pool: pool})
 	templates.Register(mux, templates.Postgres{Pool: pool})
 	sessions.Register(mux, sessions.Postgres{Pool: pool})
-	// Development reset stays unregistered until its owner-scoping audit in #91.
+	// Development reset is intentionally not exposed by the application.
 	mux.Handle("/", health.NewHandler(pool))
 	return manager.Middleware(mux)
 }

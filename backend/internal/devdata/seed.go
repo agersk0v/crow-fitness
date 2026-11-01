@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/agersk0v/crow-fitness/backend/internal/exercises"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -81,7 +80,10 @@ type Result struct {
 }
 type Postgres struct{ Pool *pgxpool.Pool }
 
-func (p Postgres) Reset(ctx context.Context, now time.Time) (Result, error) {
+func (p Postgres) Reset(ctx context.Context, owner int64, now time.Time) (Result, error) {
+	if owner <= 0 {
+		return Result{}, fmt.Errorf("verified owner required")
+	}
 	tx, err := p.Pool.Begin(ctx)
 	if err != nil {
 		return Result{}, err
@@ -90,10 +92,6 @@ func (p Postgres) Reset(ctx context.Context, now time.Time) (Result, error) {
 	// EXCLUSIVE blocks writes and row-locking readers while ordinary MVCC reads
 	// can see the prior committed dataset. All replacement records commit together.
 	if _, err = tx.Exec(ctx, `LOCK TABLE owners,exercises,templates,template_exercises,workout_sessions,session_exercises,session_sets,template_exercise_alternatives,session_exercise_choices IN EXCLUSIVE MODE`); err != nil {
-		return Result{}, err
-	}
-	owner := exercises.LocalOwnerID
-	if _, err = tx.Exec(ctx, `INSERT INTO owners(id,label) VALUES($1,'Local owner') ON CONFLICT(id) DO NOTHING`, owner); err != nil {
 		return Result{}, err
 	}
 	for _, query := range []string{

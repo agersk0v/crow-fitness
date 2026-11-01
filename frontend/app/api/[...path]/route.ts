@@ -142,6 +142,8 @@ async function forward(
         upstream.headers.get("content-type") ?? "application/json",
       "Cache-Control": "private, no-store",
     });
+    if (upstream.headers.has("X-Crow-Account"))
+      headers.set("X-Crow-Account", upstream.headers.get("X-Crow-Account")!);
     for (const cookie of upstream.headers.getSetCookie())
       headers.append("Set-Cookie", cookie);
     if (upstream.headers.has("Location"))

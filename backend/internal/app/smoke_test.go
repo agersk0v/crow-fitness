@@ -23,10 +23,14 @@ func (p smokeProvider) URL(state, nonce, verifier string) string {
 	return p.origin + "/api/auth/google/callback?state=" + url.QueryEscape(state) + "&code=smoke-only"
 }
 func (p smokeProvider) Exchange(_ context.Context, code, verifier, nonce string) (auth.Identity, error) {
-	if code != "smoke-only" || verifier == "" || nonce == "" {
+	if (code != "smoke-only" && code != "smoke-other") || verifier == "" || nonce == "" {
 		return auth.Identity{}, fmt.Errorf("invalid smoke exchange")
 	}
-	return auth.Identity{Subject: "smoke-user", Name: "Smoke user"}, nil
+	subject := "smoke-user"
+	if code == "smoke-other" {
+		subject = "smoke-other-user"
+	}
+	return auth.Identity{Subject: subject, Name: "Smoke user"}, nil
 }
 func TestSmokeServer(t *testing.T) {
 	if os.Getenv("SMOKE_SERVER") != "1" {

@@ -187,6 +187,9 @@ func (m *Manager) Middleware(next http.Handler) http.Handler {
 			}
 		}
 		w.Header().Set("Cache-Control", "private, no-store")
+		if account.ID != 0 {
+			w.Header().Set("X-Crow-Account", strconv.FormatInt(account.ID, 10))
+		}
 		w.WriteHeader(b.status)
 		_, _ = w.Write(b.body.Bytes())
 	})

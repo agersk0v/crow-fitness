@@ -99,6 +99,9 @@ func (p Postgres) Complete(ctx context.Context, owner int64, id string) error {
 	if err = lockOwner(ctx, tx, owner); err != nil {
 		return err
 	}
+	if err = requireOwnedSession(ctx, tx, owner, id); err != nil {
+		return err
+	}
 	// The parent row lock orders completion against every set save/delete.
 	if _, err = tx.Exec(ctx, "UPDATE workout_sessions SET completed_at=GREATEST(clock_timestamp(),started_at) WHERE owner_id=$1 AND id=$2 AND completed_at IS NULL", owner, id); err != nil {
 		return err

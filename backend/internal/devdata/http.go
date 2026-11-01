@@ -3,13 +3,14 @@ package devdata
 import (
 	"context"
 	"encoding/json"
+	"github.com/agersk0v/crow-fitness/backend/internal/auth"
 	"log/slog"
 	"net/http"
 	"time"
 )
 
 type Store interface {
-	Reset(context.Context, time.Time) (Result, error)
+	Reset(context.Context, int64, time.Time) (Result, error)
 }
 
 func Register(mux *http.ServeMux, store Store, enabled bool) {
@@ -20,6 +21,11 @@ func Register(mux *http.ServeMux, store Store, enabled bool) {
 	mux.HandleFunc("POST /api/dev/reset", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Content-Type", "application/json")
+		owner := auth.OwnerID(r.Context())
+		if owner <= 0 {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 		// A required custom header prevents cross-origin HTML form submissions.
 		if r.Header.Get("X-Confirm-Reset") != "replace-workout-data" {
 			w.WriteHeader(400)
@@ -28,7 +34,7 @@ func Register(mux *http.ServeMux, store Store, enabled bool) {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
 		defer cancel()
-		result, err := store.Reset(ctx, time.Now())
+		result, err := store.Reset(ctx, owner, time.Now())
 		if err != nil {
 			slog.Error("Dummy data reset failed", "error", err)
 			w.WriteHeader(500)

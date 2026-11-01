@@ -121,7 +121,7 @@ export function SessionDetail({ id }: { id: string }) {
       const response = await fetch(`/api/sessions/${id}/${action}`, {
         method: "POST",
       });
-      if (!response.ok) {
+      if (!response.ok && !(action === "cancel" && response.status === 404)) {
         const body = await response.json();
         setActionError(
           body.error?.message ?? "Could not end session. Please try again.",
