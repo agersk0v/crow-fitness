@@ -149,7 +149,7 @@ func TestPrivateAccountRoutes(t *testing.T) {
 	if _, err := pool.Exec(context.Background(), "INSERT INTO exercises(owner_id,name,muscle_groups) VALUES(1,'Unclaimed legacy lift',ARRAY['core'])"); err != nil {
 		t.Fatal(err)
 	}
-	handler := Handler(pool, auth.NewWithProvider(pool, auth.Config{Origin: "http://localhost:3000"}, isolationProvider{}))
+	handler := Handler(pool, auth.NewWithProvider(pool, auth.Config{Origin: "http://localhost:3000"}, isolationProvider{}), false)
 	a := &accountBrowser{t: t, handler: handler}
 	b := &accountBrowser{t: t, handler: handler}
 	guest := &accountBrowser{t: t, handler: handler}
@@ -266,4 +266,80 @@ func TestPrivateAccountRoutes(t *testing.T) {
 	b.expect("GET", "/api/exercises", "", 401)
 	guest.expect("POST", "/api/dev/reset", "", 401)
 	a.expect("POST", "/api/dev/reset", "", 404)
+}
+
+func TestAccountDummyDataReset(t *testing.T) {
+	pool := isolationPool(t)
+	if _, err := pool.Exec(context.Background(), "INSERT INTO exercises(owner_id,name,muscle_groups) VALUES(1,'Unclaimed legacy lift',ARRAY['core'])"); err != nil {
+		t.Fatal(err)
+	}
+	handler := Handler(pool, auth.NewWithProvider(pool, auth.Config{Origin: "http://localhost:3000"}, isolationProvider{}), true)
+	a := &accountBrowser{t: t, handler: handler}
+	b := &accountBrowser{t: t, handler: handler}
+	guest := &accountBrowser{t: t, handler: handler}
+	a.login("alice")
+	b.login("bob")
+	ex := resultID(t, b.expect("POST", "/api/exercises", `{"name":"Bob original lift","muscle_groups":["chest"]}`, 201))
+	template := resultID(t, b.expect("POST", "/api/templates", fmt.Sprintf(`{"name":"Bob original routine","exercises":[{"exercise_id":%q,"set_count":1}]}`, ex), 201))
+	session := resultID(t, b.expect("POST", "/api/sessions", fmt.Sprintf(`{"template_id":%q}`, template), 201))
+	b.expect("PUT", "/api/sessions/"+session+"/sets/11111111-1111-4111-8111-111111111111", `{"exercise_position":1,"weight":"20","reps":8,"technique":"decent"}`, 200)
+	bobBefore := map[string]string{}
+	for _, path := range []string{"/api/exercises", "/api/templates", "/api/sessions/active"} {
+		bobBefore[path] = b.expect("GET", path, "", 200).Body.String()
+	}
+	identity := a.expect("GET", "/api/auth/me", "", 200).Body.String()
+	guest.expect("POST", "/api/dev/reset", "", 401)
+	a.expect("POST", "/api/dev/reset", "", 400)
+	for _, headers := range []map[string]string{
+		{"X-Confirm-Reset": "replace-workout-data", "X-CSRF-Token": ""},
+		{"X-Confirm-Reset": "replace-workout-data", "Origin": "https://evil.example"},
+	} {
+		if w := a.request("POST", "/api/dev/reset", "", headers); w.Code != 403 {
+			t.Fatal("reset CSRF accepted", w.Code)
+		}
+	}
+	var previousActive string
+	for range 2 {
+		// Browser-supplied ownership claims have no effect; the signed-in owner wins.
+		w := a.request("POST", "/api/dev/reset", `{"owner_id":1}`, map[string]string{"X-Confirm-Reset": "replace-workout-data"})
+		if w.Code != 200 {
+			t.Fatal(w.Code, w.Body)
+		}
+		var result struct {
+			Exercises, Templates int
+			Active               string `json:"active_session_id"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil || result.Exercises != 26 || result.Templates != 4 || result.Active == "" || result.Active == previousActive {
+			t.Fatal("seed result", w.Body, err)
+		}
+		previousActive = result.Active
+		for path, before := range bobBefore {
+			if after := b.expect("GET", path, "", 200).Body.String(); after != before {
+				t.Fatalf("reset changed Bob: %s", path)
+			}
+		}
+		if a.expect("GET", "/api/auth/me", "", 200).Body.String() != identity {
+			t.Fatal("reset changed identity")
+		}
+		var count int
+		if err := pool.QueryRow(context.Background(), "SELECT count(*) FROM exercises WHERE owner_id=1 AND name='Unclaimed legacy lift'").Scan(&count); err != nil || count != 1 {
+			t.Fatal("legacy data changed", count, err)
+		}
+		var page struct {
+			Total int `json:"total_items"`
+		}
+		w = a.expect("GET", "/api/exercises?paginated=true", "", 200)
+		if err := json.Unmarshal(w.Body.Bytes(), &page); err != nil || page.Total != 26 {
+			t.Fatal("account library", w.Body, err)
+		}
+		w = a.expect("GET", "/api/history/sessions", "", 200)
+		var history struct {
+			Items []json.RawMessage `json:"items"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &history); err != nil || len(history.Items) != 48 {
+			t.Fatal("account history", w.Body, err)
+		}
+	}
+	a.expect("GET", "/api/sessions/"+session, "", 404)
+	b.expect("GET", "/api/sessions/"+previousActive, "", 404)
 }

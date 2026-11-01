@@ -10,7 +10,9 @@ async function forward(
   const { path } = await params;
   const endpoint = path.join("/");
   const reset =
-    endpoint === "dev/reset" && process.env.ENABLE_DEV_RESET === "true";
+    endpoint === "dev/reset" &&
+    process.env.APP_ENV === "development" &&
+    process.env.ENABLE_DEV_RESET === "true";
   const resource =
     path.length === 2 &&
     path[0] === "exercises" &&

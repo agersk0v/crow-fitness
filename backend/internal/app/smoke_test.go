@@ -51,6 +51,6 @@ func TestSmokeServer(t *testing.T) {
 	}
 	c := auth.Config{Origin: os.Getenv("PUBLIC_ORIGIN")}
 	manager := auth.NewWithProvider(pool, c, smokeProvider{c.Origin})
-	server := &http.Server{Addr: ":" + cfg.HTTPPort, Handler: Handler(pool, manager), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second}
+	server := &http.Server{Addr: ":" + cfg.HTTPPort, Handler: Handler(pool, manager, cfg.EnableDevReset), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second}
 	t.Fatal(server.ListenAndServe())
 }

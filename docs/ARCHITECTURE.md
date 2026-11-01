@@ -81,7 +81,7 @@ All paths below start with `/api`. Resource IDs are positive decimal strings. JS
 | GET | `/history/sessions`, `/history/sessions/{id}` | Completed summaries (including empty workouts) or read-only snapshot |
 | GET | `/history/progress` | Requires one exercise ID; average recorded-load estimate across saved exercise sets per completed workout |
 | GET | `/history/exercises`, `/history/templates` | Completed-snapshot filter identities with latest captured names |
-| POST | `/dev/reset` | Intentionally unregistered; authenticated `404` |
+| POST | `/dev/reset` | Development flag only; verified owner and explicit confirmation |
 
 Create returns `201` and, for templates/sessions, Location; reads/updates return `200`; successful deletes/end actions return `204`. Errors use `{"error":{"code":"...","message":"...","fields":{...}}}` with fields where relevant: validation `400`, missing/foreign resource `404`, state/reference conflicts `409`, oversized body `413`, unsupported media type `415`, generic persistence `500`. Not all errors include fields. Template Delete is a UI label for archive; there is no permanent template DELETE endpoint.
 
@@ -127,7 +127,7 @@ The frontend converts average estimates to chart coordinates only; exact source 
 
 ## Temporary reset and operational safety
 
-The retained dev-data reset package requires an explicit verified owner and replaces only that owner's rows; its API route remains intentionally unregistered. Production configuration rejects `ENABLE_DEV_RESET=true`; no auth migration resets, claims or copies legacy data. Normal migrations and restarts preserve records. An owner's later intentional table reset is a separate action.
+The dev-data reset route is registered only when explicitly enabled in development, behind the same authentication and CSRF middleware. It requires `X-Confirm-Reset: replace-workout-data`, derives its owner from the verified principal, and atomically replaces only that owner’s rows. Production configuration rejects `ENABLE_DEV_RESET=true`; no auth migration resets, claims or copies legacy data. Normal migrations and restarts preserve records. An owner's later intentional table reset is a separate action.
 
 ## Validation responsibilities
 
@@ -149,7 +149,7 @@ Private Go routes run behind session middleware. The account is resolved from th
 
 Next forwards only allowlisted session cookies, Origin/CSRF/activity headers, request bodies and independent Set-Cookie response headers; it relays upstream redirects manually. The page proxy leaves Home and the login fallback public and verifies workout-page sessions without renewing them. The shared client boundary provides navbar login/logout beside the theme toggle, a native provider-choice dialog, and a conditional active-workout link. It leaves public Home rendered while identity loads/fails, initializes CSRF before private components mount, adds CSRF to API writes and marks visible-page requests with `X-Crow-Activity: foreground`. Only successful authenticated requests with that marker renew the session. Logout/401 aborts pending requests, unmounts private views and broadcasts to other tabs; restored/focused pages revalidate. Private responses are uncached. Focus revalidation hides private content while retaining same-account drafts, aborts pending requests, and reloads on account changes. Go labels authenticated responses with `X-Crow-Account`; the proxy forwards that trusted response metadata and the client rejects mismatched accounts. This header never authorizes requests. The marker expresses activity, not identity, and never authorizes access.
 
-New migration 014 retains existing workout data, adds an owner-ID sequence, `accounts`, `auth_sessions` and `auth_attempts`; no account claims legacy dummy records. Session storage is shared across replicas/restarts. Cookie flags are HttpOnly, SameSite=Lax, Path=/, no Domain, Secure for HTTPS, and a `__Host-` name in production. Configuration requires `APP_ENV`, exact `PUBLIC_ORIGIN`, `GOOGLE_CLIENT_ID`, and `GOOGLE_CLIENT_SECRET`; production requires HTTPS and disabled reset. The reset route remains intentionally unregistered.
+New migration 014 retains existing workout data, adds an owner-ID sequence, `accounts`, `auth_sessions` and `auth_attempts`; no account claims legacy dummy records. Session storage is shared across replicas/restarts. Cookie flags are HttpOnly, SameSite=Lax, Path=/, no Domain, Secure for HTTPS, and a `__Host-` name in production. Configuration requires `APP_ENV`, exact `PUBLIC_ORIGIN`, `GOOGLE_CLIENT_ID`, and `GOOGLE_CLIENT_SECRET`; production requires HTTPS and disabled reset. Development reset requires an explicit enable flag; production rejects it.
 
 Keep this increment private until #92 deployment setup and end-to-end Google verification are complete. The Compose smoke override selects a separate Go test binary with an injected provider; production wiring has no test-issuer setting or authentication bypass. Real Google browser validation requires a configured test client and is separate from protocol tests.
 
@@ -163,6 +163,6 @@ All private routes derive their owner from the verified session, ignoring caller
 | Templates | Lists, detail, default/alternative references, copy, archive/restore |
 | Workouts | Active limit, captured configuration, selection, set UUIDs/order, cancel/complete |
 | History | Completed detail, sets, filter options, previous/bests and progress |
-| Development reset | Explicit owner in retained seed package; no application route |
+| Development reset | Authenticated development-only route, CSRF/confirmation, verified owner only |
 
 Private writes require session CSRF and the configured Origin, including direct Go requests. Health/readiness and authentication entry points remain public. Legacy dummy records remain unclaimed; no reset or migration is performed by this audit.
