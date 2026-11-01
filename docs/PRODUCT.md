@@ -4,13 +4,13 @@ This is the authoritative description of the current app on `main`. [README](../
 
 ## Scope and navigation
 
-Crow Fitness is a minimal personal workout tracker: maintain exercises, build reusable templates, record one active workout, and inspect completed results. Google sign-in creates an internal account and a new empty owner. Go derives ownership from a verified PostgreSQL-backed session; private pages/API requests require sign-in. There is no sharing or automatic account linking. This increment remains private pending the complete isolation audit (#91) and deployment verification (#92).
+Crow Fitness is a minimal personal workout tracker: maintain exercises, build reusable templates, record one active workout, and inspect completed results. Google sign-in creates an internal account and a new empty owner. Go derives ownership from a verified PostgreSQL-backed session; workout pages and private API requests require sign-in; Home is public. There is no sharing or automatic account linking. This increment remains private pending the complete isolation audit (#91) and deployment verification (#92).
 
-Every page shares Home, Exercises, Templates, and Workout history navigation plus a light/dark toggle. Detail pages highlight their parent section; active sessions highlight Templates. Dark is the default and the browser remembers the chosen theme. Controls support keyboard focus and phone layouts; motion respects reduced-motion preferences.
+Every page shares Home, Exercises, Templates, and Workout history navigation plus a light/dark toggle. Detail pages highlight their parent section; active workouts highlight the conditional Active session tab. Dark is the default and the browser remembers the chosen theme. Controls support keyboard focus and phone layouts; motion respects reduced-motion preferences.
 
 | Route | Purpose |
 | --- | --- |
-| `/` | Connection checks and active-session continuation |
+| `/` | Public introduction and connection checks |
 | `/exercises` | Exercise library and management |
 | `/templates` | Active/archived template overviews and creation |
 | `/templates/[id]` | Edit an active template or inspect/restore an archived one |
@@ -23,9 +23,11 @@ Every page shares Home, Exercises, Templates, and Workout history navigation plu
 
 ## Sign-in and sessions
 
+Home is viewable without signing in, including while identity checks are loading or unavailable. Log in beside the theme toggle opens a provider-choice dialog containing Continue with Google. Escape/Close dismisses it without leaving the page. The `/login` fallback opens the same dialog for protected-page redirects and callback errors. Signed-in users see Log out beside the theme toggle; logout returns to public Home.
+
 Anyone with a Google account can use Continue with Google. The verified Google subject identifies the account; email changes do not create another account, and matching emails do not merge accounts. Cancelled/failed sign-in offers retry. No Google password or token is stored in the browser.
 
-An HttpOnly opaque cookie identifies a PostgreSQL-backed session. Successful foreground API use extends its expiry to 30 days from that activity, with no fixed maximum lifetime. Hidden-page/background reads and public health checks do not renew it. Sign out revokes this browser's session only; other devices stay signed in. Logout, session expiry, or account switching clears private views/drafts and requires a fresh login. Unavailable sign-in/session storage shows a retryable error rather than granting local-owner access. Login is required in development too; tests use a separate test-only fake provider.
+An HttpOnly opaque cookie identifies a PostgreSQL-backed session. Successful foreground API use extends its expiry to 30 days from that activity, with no fixed maximum lifetime. Hidden-page/background reads and public health checks do not renew it. Sign out revokes this browser's session only; other devices stay signed in. Logout, session expiry, or account switching clears private views/drafts and requires a fresh login. Unavailable sign-in/session storage shows a retryable error rather than granting local-owner access. Workout features require login in development too; tests use a separate test-only fake provider.
 
 New accounts never inherit the existing dummy records. Authentication does not reset or claim them. The temporary reset route is unavailable until its owner-scope audit is complete.
 
@@ -63,7 +65,7 @@ Switching is allowed only with no surviving saved sets in that slot. Delete all 
 
 A successful switch resets only that slot: initialize weight once from the chosen exercise’s previous first set, clear reps/RIR/partials, and set technique to Decent. Other slot drafts/blockers survive. References and their late responses follow the selected identity. Continue, set limits, missing-set warnings, and completed history use the selected choice’s captured name and targets; unperformed alternatives are not missing work.
 
-Home offers Continue session. Refresh, reopening, and database/stack restarts retain the snapshot and successfully saved sets. Continue later returns home without ending it. Unsaved browser inputs do not persist across navigation/refresh.
+The navbar shows an Active session tab only when the signed-in user has an active workout; it opens that saved session and updates after starting, completing or cancelling. Home contains no active-workout card. Refresh, reopening, and database/stack restarts retain the snapshot and successfully saved sets. Continue later returns home without ending it. Unsaved browser inputs do not persist across navigation/refresh.
 
 Cancel session confirms that the workout and **all its sets will be discarded**; Keep session/Escape leaves them intact. Completion preserves the snapshot and saved sets, records completion once, releases the active slot, and returns home. Active sets are not completed history until completion; targets, reference values, and unsaved inputs never become logged results automatically. Failed actions offer retry; stale requests cannot end a newer workout or cancel a completed one.
 

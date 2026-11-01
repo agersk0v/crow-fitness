@@ -2,7 +2,7 @@
 
 A personal workout tracker with Google sign-in and private account sessions.
 
-Create personal exercises and reusable workout templates, record one active workout, and browse completed sessions and sets. Google sign-in is required locally and in production. Keep this authentication increment private until the full isolation audit (#91) and deployment verification (#92) are complete.
+Create personal exercises and reusable workout templates, record one active workout, and browse completed sessions and sets. Google sign-in is required for workout features locally and in production; Home is public. Keep this authentication increment private until the full isolation audit (#91) and deployment verification (#92) are complete.
 
 - [Product behavior](docs/PRODUCT.md): current pages, rules, and separately identified future work.
 - [Architecture](docs/ARCHITECTURE.md): services, persistence, API contracts, and validation responsibilities.
@@ -40,7 +40,7 @@ Start the stack:
 docker compose up --build --detach --wait --wait-timeout 180
 ```
 
-The initial build downloads dependencies and takes longer than later starts. Open [http://localhost:3000](http://localhost:3000), or your configured origin, and choose **Continue with Google**. New accounts start empty; existing dummy records are never claimed automatically. Accepted foreground use extends sign-in by 30 days; Sign out revokes this browser session only. Click **Check again** if needed; both connection indicators should show **Connected**. The frontend is bound to localhost, and the API/database have no host-published ports.
+The initial build downloads dependencies and takes longer than later starts. Open [http://localhost:3000](http://localhost:3000), or your configured origin, and choose **Log in** beside the theme toggle, then **Continue with Google** in the dialog. Home is public; workout pages require sign-in. New accounts start empty; existing dummy records are never claimed automatically. Accepted foreground use extends sign-in by 30 days; Log out beside the theme toggle revokes this browser session only and returns to Home. Click **Check again** if needed; both connection indicators should show **Connected**. The frontend is bound to localhost, and the API/database have no host-published ports.
 
 After pulling code changes, run the same startup command to rebuild. This is a production-style local run, with no hot reload.
 
@@ -140,7 +140,7 @@ Publishing alone does not deploy or restart the app. The separate crow-kube repo
 
 ## Use the app
 
-Use the shared navbar for Exercises, Templates, and Workout history, and its light/dark toggle. Create tagged exercises first, then a template with planned working-set counts. Start workout opens the saved session; Home offers Continue session. Add/Save records sets in the active workout, Complete session puts them in history, and confirmed cancellation discards the workout and its sets. See [product behavior](docs/PRODUCT.md) for editing, reference, and filtering rules.
+Use the shared navbar for Exercises, Templates, and Workout history, and its light/dark toggle. Create tagged exercises first, then a template with planned working-set counts. Start workout opens the saved session; An Active session navbar tab appears while you have a workout in progress. Add/Save records sets in the active workout, Complete session puts them in history, and confirmed cancellation discards the workout and its sets. See [product behavior](docs/PRODUCT.md) for editing, reference, and filtering rules.
 
 ## Migrations and test databases
 

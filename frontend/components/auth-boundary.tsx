@@ -1,6 +1,14 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
@@ -10,7 +18,7 @@ function leaveAccount() {
     channel.postMessage("signed-out");
     channel.close();
   } catch {}
-  window.location.replace("/login");
+  window.location.replace("/");
 }
 
 export function Login() {
@@ -72,57 +80,115 @@ export function Login() {
   );
 }
 
+type AuthState = {
+  status: "loading" | "signed-out" | "signed-in" | "error";
+  activeSessionId: string | null;
+  error: string;
+  openLogin: () => void;
+  signOut: () => Promise<void>;
+  retry: () => void;
+};
+const AuthContext = createContext<AuthState>({
+  status: "loading",
+  activeSessionId: null,
+  error: "",
+  openLogin: () => {},
+  signOut: async () => {},
+  retry: () => {},
+});
+export function useAuth() {
+  return useContext(AuthContext);
+}
+
+// Shared identity/transport state surrounds both navigation and private content.
+// Public Home remains rendered even while identity is unavailable.
 export function AuthBoundary({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const publicPage = pathname === "/login";
-  const [ready, setReady] = useState(false);
-  const [name, setName] = useState("");
+  const [status, setStatus] = useState<AuthState["status"]>("loading");
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   const [csrf, setCSRF] = useState("");
+  const [loginOpen, setLoginOpen] = useState(false);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const logoutPending = useRef(false);
+  const openLogin = useCallback(() => setLoginOpen(true), []);
   useEffect(() => {
-    if (publicPage) return;
+    if (loginOpen) dialog.current?.showModal();
+    else dialog.current?.close();
+  }, [loginOpen]);
+  useEffect(() => {
+    window.dispatchEvent(new Event("crow-active-session"));
+  }, [pathname]);
+  useEffect(() => {
     const controller = new AbortController();
     let active = true;
+    let accountID = "";
+    let sessionRequest: AbortController | null = null;
     const original = window.fetch.bind(window);
     const requests = new Set<AbortController>();
     const channel = new BroadcastChannel("crow-auth");
     function clear() {
       active = false;
-      setReady(false);
-      for (const request of requests) request.abort();
-      window.location.replace("/login");
+      setStatus("signed-out");
+      setActiveSessionId(null);
+      sessionRequest?.abort();
+      requests.forEach((r) => r.abort());
+      window.location.replace("/");
     }
     channel.onmessage = clear;
-    async function initialize() {
-      setReady(false);
-      setError("");
+    async function refreshActive() {
+      if (!active || !accountID) return;
+      sessionRequest?.abort();
+      const request = new AbortController();
+      sessionRequest = request;
       try {
-        const [response, tokens] = await Promise.all([
-          original("/api/auth/me", {
-            cache: "no-store",
-            signal: controller.signal,
-            headers:
-              document.visibilityState === "visible"
-                ? { "X-Crow-Activity": "foreground" }
-                : undefined,
-          }),
-          original("/api/auth/csrf", {
-            cache: "no-store",
-            signal: controller.signal,
-          }),
-        ]);
+        const response = await original("/api/sessions/active", {
+          cache: "no-store",
+          signal: AbortSignal.any([controller.signal, request.signal]),
+        });
         if (response.status === 401) {
           clear();
           return;
         }
-        if (!response.ok || !tokens.ok) throw new Error("unavailable");
+        if (!response.ok) throw new Error();
+        const body = await response.json();
+        if (active && !request.signal.aborted)
+          setActiveSessionId(body.session?.id ?? null);
+      } catch {
+        if (active && !request.signal.aborted) setActiveSessionId(null);
+      }
+    }
+    async function initialize() {
+      setStatus("loading");
+      setError("");
+      setActiveSessionId(null);
+      try {
+        // A 401 expires an old cookie; finish it before creating CSRF state.
+        const response = await original("/api/auth/me", {
+          cache: "no-store",
+          signal: controller.signal,
+          headers:
+            document.visibilityState === "visible"
+              ? { "X-Crow-Activity": "foreground" }
+              : undefined,
+        });
+        if (!active) return;
+        if (response.status === 401) {
+          setStatus("signed-out");
+          return;
+        }
+        if (!response.ok) throw new Error();
         const account = await response.json();
+        const tokens = await original("/api/auth/csrf", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!tokens.ok) throw new Error();
         const token = await tokens.json();
         if (!active) return;
-        setName(account.name || account.email || "Signed in");
+        accountID = account.id;
         setCSRF(token.csrf);
-        // Install the authenticated transport before mounting data-fetching children.
         window.fetch = async (input, init) => {
           const url = new URL(
             input instanceof Request ? input.url : input.toString(),
@@ -134,7 +200,7 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
           )
             return original(input, init);
           const request = new Request(
-            input instanceof Request ? input : new URL(url),
+            input instanceof Request ? input : url,
             init,
           );
           const abort = new AbortController();
@@ -158,98 +224,183 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
               clear();
               throw new Error("Sign in again");
             }
+            if (
+              result.ok &&
+              request.method === "POST" &&
+              /^\/api\/sessions(?:$|\/[1-9][0-9]*\/(?:complete|cancel)$)/.test(
+                url.pathname,
+              )
+            )
+              void refreshActive();
             return result;
           } finally {
             requests.delete(abort);
           }
         };
-        setReady(true);
+        setStatus("signed-in");
+        void refreshActive();
       } catch {
-        if (active)
+        if (active) {
+          setStatus("error");
           setError("Could not verify your session. Please try again.");
+        }
       }
     }
     function validate() {
-      if (document.visibilityState !== "visible") return;
+      if (document.visibilityState !== "visible" || !accountID) return;
       void original("/api/auth/me", {
         cache: "no-store",
         signal: controller.signal,
       })
-        .then((r) => {
-          if (r.status === 401) {
-            channel.postMessage("signed-out");
-            clear();
-          } else if (!r.ok) {
-            setReady(false);
-            setError("Could not verify your session. Please try again.");
+        .then(async (response) => {
+          if (!active) return;
+          if (response.status === 401) {
+            if (accountID) clear();
+            return;
           }
+          if (!response.ok) throw new Error();
+          const account = await response.json();
+          if (!active) return;
+          if (account.id !== accountID) {
+            window.location.reload();
+            return;
+          }
+          void refreshActive();
         })
         .catch(() => {
           if (active) {
-            setReady(false);
+            setStatus("error");
+            setActiveSessionId(null);
             setError("Could not verify your session. Please try again.");
           }
         });
     }
     function onPageShow(event: PageTransitionEvent) {
       if (event.persisted) {
-        setReady(false);
-        void initialize();
+        setStatus("loading");
+        window.location.reload();
       }
     }
     document.addEventListener("visibilitychange", validate);
     window.addEventListener("pageshow", onPageShow);
+    window.addEventListener("crow-active-session", refreshActive);
     void initialize();
     return () => {
       active = false;
       controller.abort();
+      sessionRequest?.abort();
       requests.forEach((request) => request.abort());
       window.fetch = original;
       channel.close();
       document.removeEventListener("visibilitychange", validate);
       window.removeEventListener("pageshow", onPageShow);
+      window.removeEventListener("crow-active-session", refreshActive);
     };
-  }, [publicPage, retry]);
-  if (publicPage) return children;
-  if (!ready)
-    return (
-      <main className="mx-auto max-w-5xl px-6 py-8">
-        <p role={error ? "alert" : "status"}>
-          {error || "Checking your session…"}
-        </p>
-        {error && (
-          <Button onClick={() => setRetry((value) => value + 1)}>
-            Try again
-          </Button>
-        )}
-      </main>
-    );
+  }, [retry]);
+  async function signOut() {
+    if (logoutPending.current) return;
+    logoutPending.current = true;
+    setError("");
+    try {
+      const response = await fetch("/api/auth/logout", {
+        method: "POST",
+        headers: { "X-CSRF-Token": csrf },
+      });
+      if (!response.ok) throw new Error();
+      setStatus("signed-out");
+      setActiveSessionId(null);
+      leaveAccount();
+    } catch {
+      setError("Could not sign out. Please try again.");
+    } finally {
+      logoutPending.current = false;
+    }
+  }
   return (
-    <>
-      <div className="mx-auto flex max-w-5xl items-center justify-end gap-4 px-6 pt-4">
-        <span className="min-w-0 break-words text-sm">{name}</span>
+    <AuthContext.Provider
+      value={{
+        status,
+        activeSessionId,
+        error,
+        openLogin,
+        signOut,
+        retry: () => setRetry((value) => value + 1),
+      }}
+    >
+      {children}
+      <dialog
+        ref={dialog}
+        aria-labelledby="login-dialog-title"
+        onCancel={() => setLoginOpen(false)}
+        onClose={() => setLoginOpen(false)}
+        className="m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-md overflow-y-auto rounded-2xl border border-border bg-card p-6 text-foreground backdrop:bg-black/60"
+      >
+        <div className="flex items-center justify-between gap-4">
+          <h2 id="login-dialog-title" className="text-xl font-semibold">
+            Log in to Crow Fitness
+          </h2>
+          <Button variant="outline" onClick={() => setLoginOpen(false)}>
+            Close
+          </Button>
+        </div>
+        <p className="mt-3 text-sm text-muted-foreground">
+          Choose how you want to continue.
+        </p>
+        {loginOpen &&
+          (status === "loading" ? (
+            <p role="status" className="mt-4">
+              Checking your session…
+            </p>
+          ) : (
+            <Login />
+          ))}
+      </dialog>
+    </AuthContext.Provider>
+  );
+}
+export function AuthContent({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const auth = useAuth();
+  if (pathname === "/" || pathname === "/login" || auth.status === "signed-in")
+    return children;
+  return (
+    <main className="mx-auto max-w-5xl px-6 py-8">
+      <p role={auth.error ? "alert" : "status"}>
+        {auth.error ||
+          (auth.status === "loading"
+            ? "Checking your session…"
+            : "Log in to view your workouts.")}
+      </p>
+      {auth.error ? (
+        <Button onClick={auth.retry}>Try again</Button>
+      ) : auth.status === "signed-out" ? (
+        <Button onClick={auth.openLogin}>Log in</Button>
+      ) : null}
+    </main>
+  );
+}
+export function AuthControls() {
+  const auth = useAuth();
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {auth.status === "signed-in" ? (
+        <Button variant="outline" onClick={() => void auth.signOut()}>
+          Log out
+        </Button>
+      ) : (
         <Button
           variant="outline"
-          onClick={async () => {
-            setError("");
-            try {
-              const response = await fetch("/api/auth/logout", {
-                method: "POST",
-                headers: { "X-CSRF-Token": csrf },
-              });
-              if (!response.ok) throw new Error();
-              setReady(false);
-              leaveAccount();
-            } catch {
-              setError("Could not sign out. Please try again.");
-            }
-          }}
+          disabled={auth.status === "loading"}
+          onClick={auth.openLogin}
         >
-          Sign out
+          Log in
         </Button>
-        {error && <p role="alert">{error}</p>}
-      </div>
-      {children}
-    </>
+      )}
+      {auth.error && (
+        <span role="alert" className="max-w-56 text-sm">
+          {auth.error}
+        </span>
+      )}
+    </div>
   );
 }

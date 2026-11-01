@@ -59,11 +59,12 @@ wait_ready() {
 
 docker compose config --quiet
 docker compose up --build --detach --wait --wait-timeout 180
-assert_page /login 'Continue with Google'
+assert_page / 'A simple place'
+assert_page /login 'Log in to view your workouts'
 csrf="$(curl --fail --silent --show-error "$base_url/api/auth/csrf" | python3 -c 'import json,sys;print(json.load(sys.stdin)["csrf"])')"
 curl --fail --silent --show-error --location "$base_url/api/auth/google/start" --data-urlencode "csrf=$csrf" --output "$response_file"
 csrf="$(curl --fail --silent --show-error "$base_url/api/auth/csrf" | python3 -c 'import json,sys;print(json.load(sys.stdin)["csrf"])')"
-assert_page / 'Checking your session'
+assert_page / 'A simple place'
 assert_page /exercises 'Checking your session'
 assert_page /templates 'Checking your session'
 assert_response /api/health 200 ok

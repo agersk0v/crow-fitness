@@ -1,5 +1,6 @@
 "use client";
 
+import { AuthControls, useAuth } from "@/components/auth-boundary";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -15,10 +16,12 @@ export function Navbar({
   selected = "",
   historySearch = "",
   pointerControls = false,
+  activeSessionId = null,
 }: {
   selected?: string;
   historySearch?: string;
   pointerControls?: boolean;
+  activeSessionId?: string | null;
 }) {
   return (
     <header
@@ -26,7 +29,18 @@ export function Navbar({
     >
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
         <nav aria-label="Main navigation" className="flex flex-wrap gap-2">
-          {destinations.map(({ label, href, section }) => (
+          {[
+            ...destinations,
+            ...(activeSessionId
+              ? [
+                  {
+                    label: "Active session",
+                    href: `/sessions/${activeSessionId}`,
+                    section: "active",
+                  },
+                ]
+              : []),
+          ].map(({ label, href, section }) => (
             <Link
               key={section}
               href={
@@ -41,13 +55,17 @@ export function Navbar({
             </Link>
           ))}
         </nav>
-        <ThemeToggle />
+        <div className="flex items-center gap-2">
+          <AuthControls />
+          <ThemeToggle />
+        </div>
       </div>
     </header>
   );
 }
 
 export function SiteNavbar() {
+  const auth = useAuth();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const selected =
@@ -55,13 +73,18 @@ export function SiteNavbar() {
       ? "home"
       : pathname.startsWith("/exercises")
         ? "exercises"
-        : pathname.startsWith("/templates") || pathname.startsWith("/sessions")
-          ? "templates"
-          : pathname.startsWith("/history")
-            ? "history"
-            : "";
+        : pathname.startsWith("/sessions")
+          ? "active"
+          : pathname.startsWith("/templates")
+            ? "templates"
+            : pathname.startsWith("/history")
+              ? "history"
+              : "";
   return (
     <Navbar
+      activeSessionId={
+        auth.status === "signed-in" ? auth.activeSessionId : null
+      }
       selected={selected}
       pointerControls={
         pathname.startsWith("/templates") ||

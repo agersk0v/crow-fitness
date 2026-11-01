@@ -1,5 +1,4 @@
 import { PageEntrance } from "@/components/page-entrance";
-import { HomeWorkout } from "@/components/home-workout";
 import { ConnectionStatus } from "@/components/connection-status";
 
 // Account-specific Home content is never shared between signed-in users.
@@ -23,7 +22,6 @@ export default function Home() {
             Save your sets and complete your workout to keep the results.
           </p>
         </div>
-        <HomeWorkout resetEnabled={false} />
         <ConnectionStatus />
       </PageEntrance>
 

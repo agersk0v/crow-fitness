@@ -1,4 +1,4 @@
-import { AuthBoundary } from "@/components/auth-boundary";
+import { AuthBoundary, AuthContent } from "@/components/auth-boundary";
 import { Suspense } from "react";
 import { Navbar, SiteNavbar } from "@/components/site-navbar";
 import type { Metadata } from "next";
@@ -18,10 +18,12 @@ export default function RootLayout({
     <html lang="en" className="dark" suppressHydrationWarning>
       <body>
         <ThemeProvider>
-          <Suspense fallback={<Navbar />}>
-            <SiteNavbar />
-          </Suspense>
-          <AuthBoundary>{children}</AuthBoundary>
+          <AuthBoundary>
+            <Suspense fallback={<Navbar />}>
+              <SiteNavbar />
+            </Suspense>
+            <AuthContent>{children}</AuthContent>
+          </AuthBoundary>
           <Toaster
             position="top-center"
             closeButton
