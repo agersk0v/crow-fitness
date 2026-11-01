@@ -1,23 +1,25 @@
 # Proposal: Google sign-in and private accounts
 
-**Status: proposed, awaiting owner review.** Design for [#88](https://github.com/agersk0v/crow-fitness/issues/88), under [#87](https://github.com/agersk0v/crow-fitness/issues/87). Nothing in this document is implemented configuration, a migration to run, or permission to expose the existing app publicly. Merging this design records agreement only if the owner explicitly approves its decisions; implementation and release are separate work.
+**Status: product choices selected by the owner; technical proposal awaiting final review.** Design for [#88](https://github.com/agersk0v/crow-fitness/issues/88), under [#87](https://github.com/agersk0v/crow-fitness/issues/87). Nothing in this document is implemented configuration, a migration to run, or permission to expose the existing app publicly. Merging this design records agreement only if the owner explicitly approves its decisions; implementation and release are separate work.
 
-## Recommendation and decisions for review
+## Selected behavior and technical recommendations
 
 Use **Go-owned Google OpenID Connect sign-in and opaque application sessions stored in PostgreSQL**. Next.js serves the UI and forwards credentials; Go verifies them and selects the internal owner. Keep the existing workout tables and owner IDs.
 
-| Decision | Recommended first version |
+| Decision | First version |
 | --- | --- |
 | Authentication libraries | `coreos/go-oidc/v3/oidc` + `golang.org/x/oauth2`; SCS v2 with its pgx PostgreSQL store for application sessions |
 | Callback and credential authority | Go, reached through the same public Next.js origin |
 | Account identity | Internal account ID, unique Google subject, unique association to an existing/new owner ID |
 | Session | Random opaque cookie; PostgreSQL-backed SCS state plus a revocable login grant |
-| Session duration | 7-day absolute lifetime, 24-hour idle timeout; fresh Google login required afterward |
-| Existing data | Unclaimed until an operator explicitly binds a recently verified account to its owner; no first-login takeover |
+| Session duration | 30 days without activity; valid application use extends sign-in; no fixed maximum lifetime |
+| Sign out | Current device/browser session only; other devices remain signed in |
+| Registration | Anyone with a Google account can join; first sign-in creates a private, empty account |
+| Existing data | Disposable dummy data; no claiming/import workflow; the owner will reset tables separately |
 | Old local-only mode | Replace it when authentication ships; no unauthenticated fallback in the new release |
 | Deployment | One public HTTPS origin; only Next.js exposed; Go and PostgreSQL private |
 
-These are recommendations to approve together in the PR. The owner still needs to choose the production hostname, supply a Google OAuth web client during implementation, and identify the intended Google account for the later data-claim procedure. No credentials or Google subject should be posted in this PR. There are no alternative session architectures left for an implementer to choose silently.
+The owner selected Go-owned authentication, database-backed opaque-cookie sessions, a rolling 30-day inactivity timeout, current-device logout, login required in every environment, and open Google registration. These are product requirements. Library choices and implementation details below remain technical recommendations for review. The production hostname and Google OAuth client must be supplied during implementation; do not post secrets here. The owner identified the current data as dummy data and plans a separate table reset. This PR does not authorize or perform that reset.
 
 ## Current repository and alternatives
 
@@ -27,7 +29,7 @@ Inspected base: `df011f5` (main, including Exercises pagination). [README](../..
 
 | Option | Fit and operational tradeoff | Decision |
 | --- | --- | --- |
-| Go OIDC + OAuth2 + SCS/pgxstore | Mature OIDC/OAuth clients, stable server-session library, existing `net/http`/pgx stack. Go alone owns identity and DB access. Requires application integration, CSRF, and claim logic; not a turnkey account product. Libraries are Apache-2.0, BSD-3-Clause, and MIT respectively; no library subscription. We operate PostgreSQL and patch dependencies. | Recommend |
+| Go OIDC + OAuth2 + SCS/pgxstore | Mature OIDC/OAuth clients, stable server-session library, existing `net/http`/pgx stack. Go alone owns identity and DB access. Requires application integration and CSRF protection; not a turnkey account product. Libraries are Apache-2.0, BSD-3-Clause, and MIT respectively; no library subscription. We operate PostgreSQL and patch dependencies. | Recommend |
 | Better Auth in Next.js | MIT TypeScript auth framework with broader account features for future passwords/providers. Would move auth persistence into Node or require an integration layer, and Go still needs a documented verification/introspection boundary. Adds a second runtime owning authentication data. | Viable, but more integration for this Go-owned application |
 | Auth.js in Next.js | Existing OAuth/session ecosystem (ISC). Its current README recommends Better Auth for new projects. Does not remove the Go authorization/session integration problem. | Do not start a new integration here |
 
@@ -74,7 +76,7 @@ Proposed routes (not available today):
 | `GET /api/auth/me` | Valid session required; minimal account/profile information and freshly resolved owner; 401 otherwise |
 | `POST /api/auth/logout` | CSRF-protected revocation of this login grant and cookie deletion; safe repeated logout |
 | `/login` | Public Next.js login UI and generic callback failure/retry feedback |
-| `/account` | Private page showing account information, including verified identity for the operator claim procedure |
+| `/account` | Private page showing account information, with no data-claim controls |
 
 All other application pages require sign-in. Private APIs return 401 for missing/invalid/expired credentials and use non-disclosing 404 responses for missing/foreign resource IDs. A database/session-store outage returns a generic 503, never a fallback to owner 1. Public `/api/health` and `/api/ready` retain liveness/readiness behavior, without session-store writes; unknown routes remain 404. Public assets and the login page do not require identity.
 
@@ -104,15 +106,17 @@ Use SCS v2 with the pgxstore configured to a dedicated `auth_session_store` tabl
 | --- | --- |
 | Production cookie | `__Host-crow_session`; HttpOnly; Secure; SameSite=Lax; Path=/; no Domain |
 | Local HTTP cookie | `crow_session_dev`; HttpOnly; SameSite=Lax; Path=/; no Domain; only explicit loopback development |
-| Authenticated expiry | 7 days absolute from login, 24 hours idle; cookie never outlives grant's absolute expiry |
+| Authenticated expiry | 30 days since last accepted application activity; no fixed seven-day or other absolute cap |
 | Anonymous login state | 10-minute session lifetime; attempts expire after 5 minutes; never promotes itself to an owner |
-| Renewal | SCS idle expiry updates; never extend the grant's absolute deadline; renew the session token at successful login |
+| Renewal | Extend the grant, session-store expiry and browser cookie together on accepted activity; renew the session token at successful login |
 | Logout | Revoke the login grant in PostgreSQL, destroy SCS state, expire cookie, then navigate to login; other devices remain signed in |
 | Global invalidation | Increment account `auth_version`; all grants carrying older versions fail immediately on subsequent checks |
 
-Configure anonymous/authenticated session handling explicitly rather than assuming SCS defaults provide both lifetimes. Authenticated sessions contain only account ID, login-grant ID, version and CSRF state. The owner is resolved from the current account row, not cached permanently in the cookie. The grant's revocation/expiry/version checks remain mandatory even if an old concurrent response recreates SCS store data after logout. Expired/revoked credentials never become authenticated again through automatic renewal. A late Set-Cookie can cause another 401, but must not restore access.
+Accepted activity means a successful authenticated application API request; background-only polling, health checks, static assets and anonymous/failed requests do not keep a user signed in. A foreground page visit can call the session endpoint to record activity. Go atomically extends only a still-valid, nonrevoked grant to at least the accepted request time plus 30 days. Concurrent requests must not shorten expiry or revive an expired/revoked grant. Refresh the session-store expiry and persistent cookie consistently; prove the SCS integration implements a rolling lifetime rather than its default absolute-lifetime behavior. Do not introduce a seven-day cap or require regular Google login while activity continues. If the user makes no qualifying request for 30 days, require a fresh Google login. The cookie may be removed sooner by the browser or user, and revocation always takes precedence.
 
-Logout prevents requests authorized after revocation; it cannot undo a write already authorized and running. For privileged owner reassignment/recovery, quiesce application traffic as described below. Monitor session-store load: this adds database reads/writes to a pool currently limited to four connections; measure and size pools per replica within the PostgreSQL connection budget before increasing replicas. Expiry cleanup is bounded and may run on multiple replicas; expired rows are rejected even before cleanup. Keep revoked grants until their absolute expiry so late requests cannot revive them. PostgreSQL state survives restarts; a restored backup requires truncating auth sessions/attempts and invalidating grants before reopening access.
+Configure anonymous/authenticated session handling explicitly rather than assuming SCS defaults provide both lifetimes. Authenticated sessions contain only account ID, login-grant ID, version and CSRF state. The owner is resolved from the current account row, not cached permanently in the cookie. The grant's revocation/rolling-expiry/version checks remain mandatory even if an old concurrent response recreates SCS store data after logout. Expired/revoked credentials never become authenticated again through automatic renewal. A late Set-Cookie can cause another 401, but must not restore access.
+
+Logout prevents requests authorized after revocation; it cannot undo a write already authorized and running. Monitor session-store load: this adds database reads/writes to a pool currently limited to four connections; measure and size pools per replica within the PostgreSQL connection budget before increasing replicas. Expiry cleanup is bounded and may run on multiple replicas; expired rows are rejected even before cleanup. Keep revoked grants until all associated session-store entries have expired so late requests cannot revive them. PostgreSQL state survives restarts; a restored backup requires truncating auth sessions/attempts and invalidating grants before reopening access.
 
 Use a random synchronizer CSRF token bound to the server-side session. All cookie-authenticated POST/PUT/DELETE operations, including login start/logout, require both an exact `Origin` match to `PUBLIC_ORIGIN` and a matching token (header for JSON writes; hidden field for the browser login form). Reject missing/null/cross-origin Origin rather than falling back to arbitrary forwarded hosts. Rotate CSRF state at authentication changes. GET is read-only except bounded anonymous-session/attempt housekeeping; callback is protected by its one-use login protocol. Do not enable credentialed cross-origin CORS. SameSite cookies supplement these checks rather than replace them.
 
@@ -138,32 +142,26 @@ erDiagram
 | Existing `owners` | Retain all IDs/rows. Add a database sequence/default for future IDs, initialized above the locked current maximum; never allocate `max(id)+1` in application requests. Existing unclaimed owners can have no account. |
 | New `accounts` | Generated internal bigint `id`; unique nonnull `owner_id` FK; unique nonblank `google_sub`; nullable email/display name and email-verification metadata; `auth_version` bigint; creation/last-Google-login timestamps. No unique email constraint. |
 | `auth_session_store` | SCS/pgxstore schema: token primary key, serialized data, expiry; expiry index. Do not reuse `workout_sessions` or rename workout tables. |
-| `auth_login_grants` | Random grant ID, account FK, account version, login/absolute-expiry timestamps, nullable revocation timestamp; account and expiry indexes. SCS references the grant; a grant ID alone is not accepted as a credential. |
+| `auth_login_grants` | Random grant ID, account FK, account version, login/last-activity/rolling-expiry timestamps, nullable revocation timestamp; account and expiry indexes. SCS references the grant; a grant ID alone is not accepted as a credential. |
 | `auth_login_attempts` | Hashed state primary key, anonymous-session binding, nonce, PKCE verifier, validated local return path and expiry; expiry index; atomic consume. Treat contents as short-lived secrets. |
-| `auth_owner_claim_audit` | Append-only operator event: account, prior/new owner IDs, time, and operator reason/identity; never raw login credentials. No public write endpoint. |
 
 Account ID and owner ID are both internal decimal-string JSON identities. The account is the login/profile entity; the owner remains the data partition. They need not have the same numeric value. Keep the unique owner association: one account has one owner and an owner has at most one account. The optional account end of the diagram allows legacy unclaimed owners to remain valid.
 
-First login resolves the verified Google subject in a transaction. For a new subject allocate a new owner and account together. The unique subject constraint arbitrates concurrent callbacks: roll back the losing transaction (including its owner insertion), then read the winning account. Create a fresh login grant only after account resolution; never seed/copy another owner's exercise library. Existing subject sign-in updates profile metadata without changing owner. Account failure cannot produce an authenticated session.
+First login resolves the verified Google subject in a transaction. For a new subject allocate a new owner and account together. The unique subject constraint arbitrates concurrent callbacks: roll back the losing transaction (including its owner insertion), then read the winning account. Create a fresh login grant only after account resolution; never seed/copy another owner's exercise library. Registration is open to anyone who successfully completes Google sign-in; no email/domain allowlist or invitation is required. Existing subject sign-in updates profile metadata without changing owner. Account failure cannot produce an authenticated session.
 
 Workout tables and composite foreign keys remain unchanged. Keep migration 006's partial unique index for one active workout per owner, which becomes one per account. Audit every handler, including exercises/pagination/usage, templates/defaults/alternatives/copy/archive/restore, session selection/sets/order/end actions, history details/filters/options/progress, references and dev reset. Remove runtime fixed-owner fallbacks; store APIs continue receiving trusted owner IDs. Do not infer privacy merely from an unguessable resource ID.
 
 Later, a new `login_identities(account_id, issuer, subject)` table can receive the existing Google mapping with a unique `(issuer, subject)` constraint. Other verified sign-in methods would attach explicitly to the same account. That migration must preserve account IDs, owners, grants, and workout rows; email must never automatically merge identities. Password/passkey recovery and linking are separate scope.
 
-## Explicit existing-data claim and recovery
+## Existing dummy data and rollout
 
-Recommend a **future operator-only CLI**, with dry-run and explicit confirmation, not an HTTP endpoint. No claim tool or command exists yet. Do not run SQL from this proposal or bind an identity during this PR.
+The owner confirmed the existing records are disposable dummy data and intends to reset the tables separately. Do not build an owner-claim CLI, claim audit table, automatic transfer, import, or account-merging workflow. This documentation change and future ordinary auth migrations must not reset/delete data automatically.
 
-1. Before upgrading an existing database, take a backup and rehearse restore in an isolated database. Record owner IDs and counts/IDs of exercises, templates, workouts, sets and active sessions. Keep ingress private/maintenance-only throughout rollout.
-2. Run the additive migrations and the complete authenticated release. Owner 1 and its history remain unclaimed. Sign in privately using the intended Google account, verifying the selected account in Google's UI. This creates a separate, empty account/owner initially.
-3. The private `/account` page shows the internal account ID and canonical Google issuer/subject from the server's verified identity. The operator compares those exact values to the CLI's DB lookup and confirms the intended person through the controlled login. Require a recent successful Google login (within five minutes) before binding. Email/display name is informational only; possession of an email address alone is insufficient evidence.
-4. Put all replicas in maintenance, stop/drain application traffic and workers, and run the CLI dry-run against the intended database. Lock the account and both owner rows. Require an unclaimed target owner, expected current account mapping, exact verified subject, and a completely empty source owner across **all** owned tables (including archived templates, active/completed sessions, sets/tombstones). Any content or conflicting mapping aborts; merging datasets is separate work.
-5. With explicit confirmation, in one transaction change only `accounts.owner_id` to the target, increment `auth_version`, revoke the account's grants, and append a claim audit row. Keep the old empty owner row unclaimed; do not delete it or rewrite workout foreign keys. On retry, the exact already-completed binding reports success without another move; mismatched expectations fail.
-6. Compare preserved IDs/counts and active-session state, resume traffic, and require a fresh login to see the existing data. A fresh install follows ordinary new-account creation and needs no claim. Do not automatically claim an empty seeded owner 1 either.
+Every new verified Google identity gets its own empty account/owner. Any legacy owner rows still present before the owner's reset remain unclaimed and inaccessible to signed-in users; no first-login takeover or copying of dummy workouts. Preserve ordinary workout ownership relationships for all data created after authentication is enabled.
 
-For a mistaken binding, keep traffic quiesced, inspect the audit event and both datasets, revoke affected sessions/increment versions, and restore the mistaken account's previous empty-owner mapping transactionally. Bind the rightful recently verified account through the same checked procedure. Require explicit expected mappings and recheck that returning to the prior owner does not conceal or merge new data. Do not automatically transfer the mistaken account's Google subject or delete its account. If the error allowed data to be read, revocation cannot undo disclosure. If data changed while wrongly accessible, stop and plan recovery from the backup/audit with operator review; never blindly restore an entire live database or discard other users' newer workouts.
+When the owner explicitly resets the environment later, follow a separately authorized reset procedure that accounts for schema migration state and ID sequences. This proposal does not provide reset SQL or treat an existing dev reset endpoint as an authentication migration. Fresh setup and any additive upgrade must both work without depending on a reset having already occurred.
 
-Application/schema rollback means keeping maintenance/private access, retaining additive tables and a tested backup, and fixing forward where possible. Never expose the old unauthenticated binary publicly as a rollback shortcut. A pre-auth release can only be used again in the former private local environment after verifying schema compatibility and understanding any newer data; full restore is a separate reviewed operation.
+Rollback keeps the app private/under maintenance and retains additive schema where compatible. Never expose an old unauthenticated binary publicly as a recovery shortcut. Do not silently delete a newly registered user's workouts during a subsequent rollout.
 
 ## Configuration and deployment contract
 
@@ -191,9 +189,9 @@ After owner review, scope these tasks under #87 without creating them in this de
 
 1. **Authentication/session implementation:** additive schema, Google flow, SCS/grants/CSRF, forwarding, login/account UI, logout/cache clearing, and failure handling. Depends on approval here. Keep staging private.
 2. **Complete ownership enforcement:** replace every fixed owner, guard all private routes, verify two-account isolation, preserve workout rules. May be developed alongside task 1 after its principal contract is fixed. Authentication alone must not be deployed publicly.
-3. **Deployment and migration:** operator claim tool/audit, backup/restore rehearsal, real Google test-client flow, secrets/callback/ingress configuration and smoke-test adaptation. Depends on both implementations; test direct Go access as well as the Next proxy.
+3. **Deployment and migration:** fresh-install/additive-upgrade checks, real Google test-client flow, secrets/callback/ingress configuration and smoke-test adaptation. Depends on both implementations; test direct Go access as well as the Next proxy.
 
-Release only after all three pass their verification, the intended account has claimed existing data if desired, and no unauthenticated application path remains. Deploy additive migrations with ingress restricted; do not mix old unauthenticated and new authenticated pods under public traffic. Update PRODUCT/ARCHITECTURE/README around shipped contracts at implementation time, retaining this proposal as decision context rather than claiming it is current behavior.
+Release only after all three pass their verification, no unauthenticated application path remains. Deploy additive migrations with ingress restricted; do not mix old unauthenticated and new authenticated pods under public traffic. Update PRODUCT/ARCHITECTURE/README around shipped contracts at implementation time, retaining this proposal as decision context rather than claiming it is current behavior.
 
 ## Verification plan for implementation
 
@@ -201,10 +199,10 @@ Release only after all three pass their verification, the intended account has c
 | --- | --- |
 | Google/OIDC | Real test-client browser login/cancel/retry/sign-out; fake-provider tests for wrong signature/issuer/audience/nonce/azp, expired tokens, state replay/wrong browser, return-URL injection, PKCE mismatch, and provider/key-refresh outages |
 | Session/CSRF | Cookie flags and multiple Set-Cookie forwarding; JSON and login-form CSRF; missing/null/wrong Origin; fixation resistance, expiry/renewal, per-device logout with concurrent late commits, account-version invalidation and DB outage failures |
-| Replica/restart | Begin login on replica A, callback on B, private request on C; DB persistence across restart; absolute expiry not extended; no sticky-session assumption; bounded cleanup and connection load |
+| Replica/restart | Begin login on replica A, callback on B, private request on C; DB persistence across restart; rolling 30-day expiry survives restart and is extended by valid activity; no sticky-session assumption; bounded cleanup and connection load |
 | Accounts | Concurrent callbacks yield one account/owner per subject; same email/different subject stay separate; changed email preserves identity; valid unknown/foreign IDs do not leak data |
 | Isolation | Two accounts exercise every read/write/reference/history/filter/chart/page/count endpoint through Next and directly through Go, including forged headers, cross-owner UUID/ID writes, caches, and per-owner active-session conflicts |
-| Migration/claim | Existing populated owner remains inaccessible to first login; ordinary fresh install; recent verified identity requirement, empty source, conflicting claims, idempotent retry, wrong-binding recovery, unchanged workout IDs/snapshots/values and backup restore |
+| Setup/upgrade | Fresh and existing-schema setup work; legacy dummy data stays unclaimed; new accounts start empty; no reset, claim, or transfer is performed automatically |
 | Browser/data | Logout/account switching across tabs, outstanding responses, Back/Forward and restored pages, drafts, dialogs, and sign-in after expiry; no stale private content becomes visible to another account |
 | Deployment | HTTPS/callback/origin validation, disabled production reset, secret absence from frontend/assets/logs, external Go/DB unavailable, public probes work, and authenticated smoke flow using a disposable project |
 
@@ -217,7 +215,7 @@ The GitHub READMEs, licenses and pgxstore implementation below were inspected on
 - [Go OIDC README](https://github.com/coreos/go-oidc/blob/v3/README.md) and [Apache-2.0 license](https://github.com/coreos/go-oidc/blob/v3/LICENSE): provider discovery and ID-token verification layered on OAuth2.
 - [Go OAuth2](https://github.com/golang/oauth2) and [BSD license](https://github.com/golang/oauth2/blob/master/LICENSE): authorization-code client; use its PKCE support in implementation.
 - [SCS README](https://github.com/alexedwards/scs/blob/master/README.md) and [MIT license](https://github.com/alexedwards/scs/blob/master/LICENSE): stable maintenance status, token renewal, idle/absolute timeouts and PostgreSQL stores.
-- [SCS pgxstore README](https://github.com/alexedwards/scs/blob/master/pgxstore/README.md) and [implementation](https://github.com/alexedwards/scs/blob/master/pgxstore/pgxstore.go): pgx v5, store schema, configurable table name and expiry cleanup. Grant revocation and claim behavior above are application requirements, not promised SCS features.
+- [SCS pgxstore README](https://github.com/alexedwards/scs/blob/master/pgxstore/README.md) and [implementation](https://github.com/alexedwards/scs/blob/master/pgxstore/pgxstore.go): pgx v5, store schema, configurable table name and expiry cleanup. Grant revocation and rolling-renewal behavior above are application requirements, not promised SCS features.
 - [Better Auth README](https://github.com/better-auth/better-auth/blob/main/README.md): TypeScript auth framework, MIT license.
 - [Auth.js README](https://github.com/nextauthjs/next-auth/blob/main/README.md): feature set, ISC license and recommendation for new projects to consider Better Auth.
 - [Google OpenID Connect documentation](https://developers.google.com/identity/openid-connect/openid-connect): provider-specific requirements to recheck during implementation.
